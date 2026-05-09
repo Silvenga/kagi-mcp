@@ -1,0 +1,24 @@
+[package]
+name = "kagi-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+kagi-api = { path = "../kagi-api" }
+rmcp = { version = "1.6", features = ["server", "transport-io", "schemars"] }
+tokio = { workspace = true, features = ["io-std"] }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+url = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+mockall = { workspace = true }

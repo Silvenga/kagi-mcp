@@ -1,0 +1,990 @@
+openapi: 3.0.0
+servers:
+  - url: https://kagi.com/api/v1
+    description: Production api endpoint
+info:
+  title: Kagi API
+  version: v1 (Preview)
+  description: >
+    The Kagi API provides programmatic access to data that powers our search
+    results & more. 
+
+
+    Get started on the [API Dashboard](https://kagi.com/api) to set up billing,
+    manage API keys, and more.
+
+
+    ### Official Client Libraries
+
+
+    We offer the following libraries you can use to interact with the Kagi API.
+    These are generated from an OpenAPI spec. If you have a language you would
+    like to use and it's not in the list, send us a message and we will add it
+    to the list if it is supported. Or you can use the
+    [spec](https://kagi.redocly.app/_spec/openapi.yaml?download) to build your
+    own custom library.
+
+
+    - [Golang](https://github.com/kagisearch/kagi-openapi-golang)
+
+    - [Python](https://github.com/kagisearch/kagi-openapi-python)
+
+    - [TypeScript](https://github.com/kagisearch/kagi-openapi-typescript)
+
+    - [Rust](https://github.com/kagisearch/kagi-openapi-rust)
+
+
+    ### API Status
+
+
+    **The v1 API is currently in preview to early access testers.**
+
+
+    Our existing API, the "v0" beta API, is being replaced with a new version
+    that will be available publicly soon. As changes are made, we will be
+    updating the documentation below when the new features become available.
+
+
+    See the [Support and
+    Community](https://help.kagi.com/kagi/support-and-community/) section for
+    details.
+
+
+    ### Pricing
+
+
+    See our [API Pricing](https://kagi.com/api/pricing) page for standard rates.
+
+
+    ### GitHub Discussions
+
+
+    This is the preferred venue for bug reports and feature requests.
+
+
+    - [Bug Reports](https://github.com/kagisearch/kagi-docs/issues/new/choose)
+
+    - [Q&A
+    Forum](https://github.com/kagisearch/kagi-docs/discussions/categories/q-a?discussions_q=category%3AQ%26A+label%3Aproduct%3Akagi_search_api)
+
+    - [API Feature
+    Requests](https://github.com/kagisearch/kagi-docs/discussions/categories/kagi-search-api-feature-requests-ideas)
+
+
+    ### Discord
+
+
+    Join our [Discord](https://kagi.com/discord)! Good for quick questions or
+    chatting about things you've made with our APIs!
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  contact:
+    name: API Support
+    url: https://kagi.com/support
+    email: support@kagi.com
+paths:
+  /search:
+    post:
+      security:
+        - kagi: []
+      tags:
+        - Search
+      summary: Perform a web search
+      operationId: search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              description: Used to upload the search query
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  description: Search query to run.
+                workflow:
+                  type: string
+                  description: Type of results to return.
+                  default: search
+                  enum:
+                    - search
+                    - images
+                    - videos
+                    - news
+                    - podcasts
+                format:
+                  type: string
+                  description: >-
+                    **(EXPERIMENTAL)** Format to serialize the API response as.
+                    The exact contents and structure of markdown output is still
+                    being worked on - please send your feedback!
+                  default: json
+                  enum:
+                    - json
+                    - markdown
+                lens_id:
+                  type: string
+                  description: >-
+                    Lens to apply to the search. Can be a built-in lens's
+                    identifier or a lens ID as shown on
+                    https://kagi.com/settings/lenses when a lens is set to be
+                    shareable. Can be just the ID portion of the URL
+                    (`https://kagi.com/lenses/ID`) or the full URL.
+                lens:
+                  type: object
+                  description: >-
+                    Inline description of a lens to apply to the search. Options
+                    supplied by the lens take precedence over those supplied by
+                    the user in their search terms (e.g., `site:` operators),
+                    allowing you to restrict the scope of the search to return
+                    more relevant results in specific applications.
+                  properties:
+                    sites_included:
+                      type: array
+                      description: Search only these domains.
+                      items:
+                        description: domains
+                        type: string
+                    sites_excluded:
+                      type: array
+                      description: Exclude these domains from the search.
+                      items:
+                        description: domains
+                        type: string
+                    keywords_included:
+                      type: array
+                      description: Return only results containing these keywords.
+                      items:
+                        description: keywords
+                        type: string
+                    keywords_excluded:
+                      type: array
+                      description: Exclude results containing these keywords.
+                      items:
+                        description: keywords
+                        type: string
+                    file_type:
+                      type: string
+                      description: A specific file type to search for. (e.g., `pdf`)
+                    time_after:
+                      type: string
+                      description: >-
+                        Filters for web pages that have been updated or
+                        published *after* the given date.
+                      format: date
+                    time_before:
+                      type: string
+                      description: >-
+                        Filters for web pages that have been updated or
+                        published *before* the given date.
+                      format: date
+                    time_relative:
+                      type: string
+                      description: >-
+                        Filters for web pages that have been updated or
+                        published in the given interval, relative to today's
+                        date.
+                      enum:
+                        - day
+                        - week
+                        - month
+                    search_region:
+                      type: string
+                      description: >-
+                        Requests results localized to a specific region. Can be
+                        any valid [ISO-3166-1 Alpha-2 country
+                        code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#Officially_assigned_code_elements),
+                        or the special value `no_region`, that will try to get
+                        the most general results possible.
+                timeout:
+                  type: number
+                  minimum: 0.5
+                  maximum: 4
+                  description: >-
+                    Number of seconds to allow for collecting search results.
+                    Lower values will return results more quickly, but may be
+                    lower quality or inconsistent between calls. If omitted,
+                    will use the latest recommended value by Kagi.
+                page:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  description: Page number for paginated results. Must be between 1 and 10.
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 1024
+                  description: >-
+                    Maximum number of results to return. Must be between 1 and
+                    1024.
+                filters:
+                  type: object
+                  description: >-
+                    Filters to apply to search results for more targeted
+                    queries.
+                  properties:
+                    region:
+                      type: string
+                      description: >-
+                        Filter results to a specific region using an ISO 3166-1
+                        Alpha-2 country code. See
+                        https://help.kagi.com/api/regions for supported codes.
+                    after:
+                      type: string
+                      description: Filter for results published or updated after this date.
+                      format: date
+                    before:
+                      type: string
+                      description: >-
+                        Filter for results published or updated before this
+                        date.
+                      format: date
+                extract:
+                  type: object
+                  description: >
+                    Configuration for extracting page content from search
+                    results. When provided, the API will fetch and extract the
+                    content from the specified number of result pages.
+
+
+                    **NOTE: Use of this option incurs additional cost, billed at
+                    your account's rate for the Extract API**.
+
+
+                    The resulting page markdown will update the value of the
+                    `snippet` field on the respective result item.
+                  properties:
+                    count:
+                      type: integer
+                      minimum: 1
+                      maximum: 10
+                      description: >-
+                        Number of search results to extract content from. Must
+                        be between 1 and 10.
+                    timeout:
+                      type: number
+                      minimum: 0.5
+                      maximum: 4
+                      description: >-
+                        Timeout in seconds for extraction of each page. If
+                        omitted, uses the default timeout.
+                safe_search:
+                  type: boolean
+                  description: >-
+                    Whether safe search is enabled, omitting potentially NSFW
+                    content.
+                  default: true
+                personalizations:
+                  type: object
+                  description: >-
+                    Personalization rules to customize search result ranking.
+                    Allows specifying domain biases and regex-based
+                    replacements.
+                  properties:
+                    domains:
+                      type: array
+                      description: >-
+                        Domain-level personalization rules (maximum 1000 rules).
+                        Each rule can boost or lower the ranking of results from
+                        specific domains.
+                      items:
+                        type: object
+                        required:
+                          - domain
+                          - kind
+                        properties:
+                          domain:
+                            type: string
+                            description: >-
+                              Domain pattern to personalize (e.g.,
+                              "example.com"). Can also be a tld suffix like
+                              ".co.uk".
+                          kind:
+                            type: string
+                            description: Handling mode for this domain pattern
+                            enum:
+                              - block
+                              - lower
+                              - raise
+                              - pin
+                    regexes:
+                      type: array
+                      description: >-
+                        Regex-based personalization rules (maximum 1000 rules,
+                        max 1000 bytes per pattern).
+                      items:
+                        type: object
+                        properties:
+                          regex:
+                            type: string
+                            description: The regex pattern to match.
+                            example: ^https?://(www\.)?reddit\.com.*
+                          replacement:
+                            type: string
+                            description: >-
+                              The replacement string to apply when the pattern
+                              matches. Will preserve paths and query parameters
+                              if not overwritten. You can refer to capture
+                              groups with "$1", "$2", etc.
+                            example: https://old.reddit.com
+            examples:
+              basicSearch:
+                summary: Basic search query
+                description: Simple search showing how to use the search API
+                value:
+                  query: steve jobs
+                  workflow: search
+              snapSearch:
+                summary: Search with snaps
+                description: Snaps are supported for quickly searching in individual sites
+                value:
+                  query: '@r headphones'
+                  workflow: search
+              imageSearch:
+                summary: Search just for images
+                description: >-
+                  Searching just for images, or other categories is supported
+                  using the workflow parameter
+                value:
+                  query: doggo
+                  workflow: images
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                description: A response with a description and results references used
+                type: object
+                properties:
+                  meta:
+                    $ref: '#/components/schemas/meta'
+                  data:
+                    description: >-
+                      Holds all the search results for the query specified. As
+                      results have different types and sources, they are
+                      separated into different fields within this object. For
+                      example image results are stored under `data.image` while
+                      news results are stored under `data.news`. All results
+                      will have the same main structure, but additional data
+                      might be stored under the `data.{name}[].props` path.
+                      Please look at each different type of result for more
+                      information about this.
+                    type: object
+                    properties:
+                      search:
+                        description: >-
+                          Contains all search results for html pages or
+                          websites.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      image:
+                        description: Contains all search results for images.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      video:
+                        description: Contains all search results for videos.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      podcast:
+                        description: Contains all search results for podcasts.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      podcast_creator:
+                        description: Contains all search results for creators of podcasts.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      news:
+                        description: Contains all search results for news articles.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      adjacent_question:
+                        description: >-
+                          Contains results that are obtained by searching for
+                          slightly different queries. These questions are stored
+                          under the `props.question` path.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      direct_answer:
+                        description: >-
+                          If the search query was a math equation, or unit
+                          conversions, things that can be answered quickly, the
+                          result will be in here.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      interesting_news:
+                        description: >-
+                          Contains news results from publishers collected and
+                          stored in Kagi's news index.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      interesting_finds:
+                        description: >-
+                          Contains small web results from publishers collected
+                          and stored in Kagi's small web index.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      infobox:
+                        description: >-
+                          Contains detailed summary and tabulated information
+                          about a person, place, or thing.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      code:
+                        description: >-
+                          Contains all search results that link to code
+                          resources or repositories.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      package_tracking:
+                        description: >-
+                          If the search query was a package tracking number, the
+                          correct package tracking website should be present in
+                          this collection.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      public_records:
+                        description: >-
+                          Contains all search results for public records, such
+                          as government documents or public court records.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      weather:
+                        description: Contains all search results for the current weather.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      related_search:
+                        description: >-
+                          Contains a list of searches that are related to the
+                          current search, and may help narrow down the results.
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      listicle:
+                        description: >-
+                          Contains all search results that are lists of things.
+                          Results with titles like "5 things you didn't know
+                          about...", or "10 of the best headphones".
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+                      web_archive:
+                        description: >-
+                          Contains all search results for archived websites that
+                          may not be available anymore
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/searchResult'
+              examples:
+                default:
+                  summary: Response with example search objects
+                  value:
+                    meta:
+                      trace: 69c3f5c4168f66b860e951c585550f1c
+                      node: us-central1
+                      ms: 213
+                      query:
+                        raw: steve jobs
+                        terms: steve jobs
+                        workflow: search
+                        fields:
+                          - kind: token
+                            value: steve
+                            name: ''
+                            negate: false
+                          - kind: token
+                            value: jobs
+                            name: ''
+                            negate: false
+                    data:
+                      search:
+                        - url: >-
+                            https://www.billboard.com/pro/iphone-turns-10-steve-jobs-introduction-apple-ads/
+                          title: >-
+                            iPhone Turns 10: Watch Steve Jobs Introduce Apple’s
+                            ‘Revolutionary ...
+                          time: '2017-01-09T14:49:00Z'
+                          image:
+                            url: >-
+                              https://www.billboard.com/wp-content/uploads/media/Steve-Jobs-2007-iphone-billboard-1548.jpg
+                            height: 1024
+                            width: 1548
+                          props:
+                            thumbnail_image:
+                              url: >-
+                                https://tse1.mm.bing.net/th/id/OIP.etmvjdMAF91p8PbA3bH4-wHaE5?pid=Api
+                              height: 313
+                              width: 474
+                            paywalled: true
+                            sort_normalize_url: >-
+                              //billboard.com/pro/iphone-turns-10-steve-jobs-introduction-apple-ads
+                            sort_group_id: billboard.com
+                      video:
+                        - url: https://www.youtube.com/watch?v=UF8uR6Z6KLc
+                          title: Steve Jobs&#39; 2005 Stanford Commencement Address
+                          snippet: >-
+                            Steve Jobs&#39; 2005 Stanford Commencement Address ·
+                            Comments. 27K. Who is listening to this in 2025?
+                            22:10 · Go to channel. Steve Jobs&#39; 2005 ...
+                          time: '2024-11-29T03:54:26Z'
+                          image:
+                            url: >-
+                              https://i.ytimg.com/vi/UF8uR6Z6KLc/hqdefault.jpg?sqp=-oaymwEmCOADEOgC8quKqQMa8AEB-AG-AoAC8AGKAgwIABABGGUgTShAMA8=&rs=AOn4CLBQpu5eC9IARIhuqaqee1Zc53SWpw
+                            height: 480
+                            width: 360
+                          props:
+                            hires_thumbnail_url: https://i.ytimg.com/vi/UF8uR6Z6KLc/hqdefault.jpg
+                            sort_normalize_url: //youtube.com/watch?v=UF8uR6Z6KLc
+                            sort_group_id: youtube.com
+                            language: en
+                            language_probability: 0.9551553726196289
+                      web_archive:
+                        - url: >-
+                            https://web.archive.org/web/20111007174823/http://netspencer.com/stevejobs/
+                          title: steve jobs
+                          snippet: >-
+                            It is best to admit them quickly, and get on with
+                            improving your other innovations. Being the richest
+                            man in the cemetery doesn’t matter to me … Going to
+                            bed at night saying we’ve done something wonderful…
+                            that’s what matters to me. I’m convinced that about
+                            half of what separates the successful entrepreneurs
+                            from the non-successful ones is pure per..
+                          time: '2011-10-07T17:48:23Z'
+                          props:
+                            language: en
+                            language_probability: 0.9240066409111023
+                            web_archive_domain: netspencer.com
+                      infobox:
+                        - url: https://en.wikipedia.org/wiki/Steve_Jobs
+                          title: Steve Jobs
+                          snippet: >-
+                            Steven Paul Jobs (February 24, 1955 – October 5,
+                            2011) was an American businessman, inventor, and
+                            ....
+                          image:
+                            url: >-
+                              https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Steve_Jobs_Headshot_2010-CROP_%28cropped_2%29.jpg/330px-Steve_Jobs_Headshot_2010-CROP_%28cropped_2%29.jpg
+                            height: 300
+                            width: 310
+                          props:
+                            infobox:
+                              - header: Born
+                                value: >-
+                                  Steven Paul Jobs<br> February 24, 1955<br> San
+                                  Francisco, California, U.S.
+                                merged: false
+                            wikipedia.subtext: American businessman and inventor (1955–2011)
+                            wikipedia.page_id: 7412236
+                            language: en
+                            language_probability: 0.8304631114006042
+                      adjacent_question:
+                        - url: >-
+                            https://www.ceotodaymagazine.com/2025/02/steve-jobs-10-minute-rule-you-can-implement/
+                          title: >-
+                            Steve Jobs&#39; 10-Minute Rule: How Walking Boosts
+                            Brainpower
+                          snippet: >-
+                            Steve Jobs was a visionary, innovator, and
+                            problem-solver, but he also had a simple secret for
+                            overcoming mental roadblocks: The 10-Minute Rule.
+                            According to his biographer, Walter Isaacson, Jobs
+                            believed that if he couldn't solve a problem in 10
+                            minutes, he needed to step away and go for a
+                            walk—often barefoot.
+                          time: '2025-02-01T00:00:00Z'
+                          props:
+                            question: What is Steve Jobs' 10 minute rule?
+                            language: en
+                            language_probability: 0.9541819095611572
+            text/markdown:
+              schema:
+                type: string
+                description: Plain markdown search results without JSON wrapper
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorEnvelope'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '403':
+          description: Forbidden - IP address not authorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorEnvelope'
+        '429':
+          description: Rate limited or usage limit exhausted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorEnvelope'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorEnvelope'
+  /extract:
+    post:
+      security:
+        - kagi: []
+      tags:
+        - Extract
+      summary: Extract page content as markdown from URLs
+      description: >
+        Extracts markdown content from up to 10 HTTP(s) URLs. Each URL is
+        processed
+
+        and the extracted content is returned in the response.
+      operationId: extractContent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/extractRequest'
+            examples:
+              basicExtract:
+                summary: Extract from multiple URLs
+                description: Request to extract content from up to 10 web pages
+                value:
+                  pages:
+                    - url: https://example.com/article1
+                    - url: https://example.com/article2
+                  timeout: 30
+                  format: json
+      responses:
+        '200':
+          description: Successful extraction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/extractResponse'
+              examples:
+                default:
+                  summary: Successful extraction response
+                  value:
+                    meta:
+                      trace: abc123def456
+                      ms: 1250
+                      node: us-east-1
+                    data:
+                      - url: https://example.com/article
+                        markdown: |-
+                          # Article Title
+
+                          This is the extracted content...
+            text/markdown:
+              schema:
+                type: string
+                description: Plain markdown extracted content without JSON wrapper
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorEnvelope'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '403':
+          description: Forbidden - IP address not authorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorEnvelope'
+        '429':
+          description: Rate limited or usage limit exhausted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorEnvelope'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorEnvelope'
+components:
+  securitySchemes:
+    kagi:
+      type: http
+      scheme: bearer
+      description: Kagi API key from https://kagi.com/api/keys
+  schemas:
+    meta:
+      description: >-
+        This object is subject to change as it is provided for debugging
+        purposes. Fields may be added or removed as required. Don't build any
+        hard dependancies on any of this data.
+      type: object
+      properties:
+        trace:
+          type: string
+          description: >-
+            Trace ID that can be used to debug individual API requests. Provide
+            this, if needed, when contacting Kagi support.
+        id:
+          type: string
+        node:
+          type: string
+          description: The hostname of the node that fulfilled the request.
+        ms:
+          type: integer
+          description: >-
+            how long the request took to fulfill, excluding round trip to the
+            client.
+      additionalProperties: true
+    searchResult:
+      description: A search result that fulfills the query sent to the kagi API
+      type: object
+      required:
+        - url
+        - title
+      properties:
+        url:
+          description: >-
+            The location of the result. This is the direct URL to the resource
+            that matches the query
+          type: string
+          example: https://en.wikipedia.org/wiki/Steve_Jobs
+        title:
+          description: >-
+            This is the title of the resource. For HTML documents, it reflects
+            `<title>`. For videos, it is the name that would be displayed on the
+            video site.
+          type: string
+          example: Steve Jobs - Wikipedia
+        snippet:
+          description: A short summary of the contents of the resource
+          type: string
+          example: >-
+            Steven Paul Jobs (February 24, 1955 – October 5, 2011) was an
+            American businessman, inventor, and investor best known for
+            co-founding the ...
+        time:
+          description: The date when the resource was created or last updated.
+          type: string
+          example: '2024-11-29T03:54:26Z'
+        image:
+          description: >-
+            An image that goes with the main resource. It could be a video's
+            thumbnail or an HTML document's main image.
+          type: object
+          required:
+            - url
+          properties:
+            url:
+              description: >-
+                This is a URL that links directly to the image that goes with
+                the resources.
+              type: string
+              example: >-
+                https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Steve_Jobs_Headshot_2010-CROP_%28cropped_2%29.jpg/330px-Steve_Jobs_Headshot_2010-CROP_%28cropp   
+                ed_2%29.jpg
+            height:
+              description: The height of the image.
+              type: integer
+              example: 300
+            width:
+              description: The width of the image.
+              type: integer
+              example: 310
+        props:
+          type: object
+          description: Holds arbitrary result metadata
+          additionalProperties: true
+    errorDetail:
+      type: object
+      description: API error response for Extract operations
+      required:
+        - code
+        - url
+      properties:
+        code:
+          type: string
+          description: Namespaced error code
+          example: extract.invalid_url
+        url:
+          type: string
+          format: uri
+          description: URL to error documentation
+          example: https://help.kagi.com/api/errors#extract.invalid_url
+        message:
+          type: string
+          description: Human-readable error message
+          example: URL must be a valid HTTPS URL
+          nullable: true
+        location:
+          type: string
+          description: Field location where the error occurred
+          example: pages[0].url
+          nullable: true
+    errorEnvelope:
+      type: object
+      description: >-
+        API error response envelope containing metadata and an array of error
+        details
+      required:
+        - meta
+        - error
+      properties:
+        meta:
+          $ref: '#/components/schemas/meta'
+        data:
+          type: array
+          description: Empty data array when error occurs
+          items: {}
+          nullable: true
+        error:
+          type: array
+          description: Array of error detail objects describing what went wrong
+          items:
+            $ref: '#/components/schemas/errorDetail'
+    pageInput:
+      type: object
+      description: A single page to extract content from
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+          description: |
+            The HTTPS URL of the page to extract content from.
+            Must use HTTPS scheme with a valid host.
+          example: https://example.com/article
+    extractRequest:
+      type: object
+      description: Request body for content extraction
+      required:
+        - pages
+      properties:
+        pages:
+          type: array
+          description: |
+            Array of pages to extract content from. Must contain 1-10 URLs.
+            Each URL must be a valid HTTPS URL.
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/pageInput'
+        timeout:
+          type: number
+          format: float
+          description: Optional timeout in seconds for the extraction operation
+          example: 30
+        format:
+          type: string
+          description: >-
+            **(EXPERIMENTAL)** Format to serialize the API response as. The
+            exact contents and structure of markdown output is still being
+            worked on - please send your feedback!
+          enum:
+            - json
+            - markdown
+          default: json
+    pageOutput:
+      type: object
+      description: Extracted content for a single page
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+          description: The URL of the extracted page
+          example: https://example.com/article
+        markdown:
+          type: string
+          description: Extracted markdown content of the page
+          example: |-
+            # Article Title
+
+            This is the extracted content...
+          nullable: true
+    extractResponse:
+      type: object
+      description: Response containing extracted content
+      required:
+        - meta
+        - data
+      properties:
+        meta:
+          $ref: '#/components/schemas/meta'
+        data:
+          type: array
+          description: Array of extracted page content
+          items:
+            $ref: '#/components/schemas/pageOutput'
+        errors:
+          type: array
+          description: Optional array of errors that occurred during extraction
+          items:
+            $ref: '#/components/schemas/errorDetail'
+  responses:
+    unauthorized:
+      description: Access token is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorEnvelope'
+          examples:
+            default:
+              summary: Response with unauthorized error
+              value:
+                meta:
+                  id: 69c3f5c4168f66b860e951c585550f1c
+                  node: us-central1
+                  ms: 213
+                data: null
+                error:
+                  - code: '2'
+                    url: https://help.kagi.com/api/errors#unauthorized
+                    message: Unauthorized
+                    location: null
+tags:
+  - name: Search
+    x-displayName: Search API
+    description: >
+      The Search API is a feature-rich endpoint for search products and agents.
+      It gives programmable access to Kagi's premium search results pulled from
+      many different sources - including our in-house indexes - and re-ranked to
+      surface accurate answers and interesting finds. You can read about our
+      approach towards search [on our
+      blog](https://blog.kagi.com/the-many-benefits-of-paying-for-search).
+
+
+      The API supports most of the features that we offer through our web UI,
+      including [Lenses](https://help.kagi.com/kagi/features/lenses.html).
+
+
+      You can also request full markdown extraction of the top results in a
+      single API request.
+  - name: Extract
+    x-displayName: Extract API
+    description: >
+      Extract contents from web pages, currently in markdown form. This endpoint
+      accepts a list of URLs
+
+      and returns the extracted markdown content for each page.
