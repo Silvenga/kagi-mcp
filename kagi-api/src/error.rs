@@ -82,7 +82,6 @@ impl KagiErrorResponse {
 }
 
 /// Maps an HTTP status code and optional error response body to a [`KagiError`].
-#[cfg_attr(not(test), expect(dead_code))]
 pub(crate) fn from_http_status(
     status: StatusCode,
     body: Option<KagiErrorResponse>,
