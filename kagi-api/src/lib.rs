@@ -8,25 +8,14 @@
 //!
 //! ```no_run
 //! # async fn example() -> Result<(), kagi_api::KagiError> {
-//! use kagi_api::{KagiClientBuilder, SearchRequest};
+//! use kagi_api::{KagiClient, SearchRequest};
 //!
-//! let client = KagiClientBuilder::new()
-//!     .api_key("my-api-key")
+//! let client = KagiClient::builder()
+//!     .api_key("my-api-key")?
 //!     .build()?;
 //!
-//! let request = SearchRequest {
-//!     query: "rust programming".to_string(),
-//!     workflow: None,
-//!     format: None,
-//!     timeout: None,
-//!     page: None,
-//!     limit: None,
-//!     safe_search: None,
-//!     region: None,
-//!     filters: None,
-//! };
-//! let results = client.search(request).await?;
-//! println!("{}", results.meta.trace);
+//! let results = client.search(SearchRequest::new("rust programming")).await?;
+//! println!("{}", results.meta);
 //! # Ok(())
 //! # }
 //! ```
