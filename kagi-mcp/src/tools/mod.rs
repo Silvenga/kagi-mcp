@@ -25,13 +25,13 @@ pub(crate) async fn send_progress(
 pub(crate) fn map_kagi_error(error: KagiError) -> rmcp::ErrorData {
     match error {
         KagiError::InvalidRequest { message } => {
-            rmcp::ErrorData::internal_error(format!("Invalid request: {message}"), None)
+            rmcp::ErrorData::invalid_request(format!("Invalid request: {message}"), None)
         }
         KagiError::Unauthorized => {
-            rmcp::ErrorData::internal_error("Unauthorized: Invalid Kagi API key", None)
+            rmcp::ErrorData::invalid_request("Unauthorized: Invalid Kagi API key", None)
         }
         KagiError::Forbidden => {
-            rmcp::ErrorData::internal_error("Forbidden: IP address not authorized", None)
+            rmcp::ErrorData::invalid_request("Forbidden: IP address not authorized", None)
         }
         KagiError::RateLimited => {
             rmcp::ErrorData::internal_error("Rate limited. Please retry later.", None)

@@ -226,6 +226,127 @@ async fn error_500() {
 }
 
 #[tokio::test]
+async fn extract_error_400() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/extract"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(error_response_json()))
+        .mount(&server)
+        .await;
+
+    let client = KagiClientBuilder::new()
+        .api_key("test-key")
+        .base_url(server.uri())
+        .retries(0)
+        .build()
+        .unwrap();
+
+    let result = client.extract(extract_request()).await;
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, KagiError::InvalidRequest { .. }),
+        "expected InvalidRequest, got {err}"
+    );
+    assert_eq!(err.to_string(), "invalid request: Error message");
+}
+
+#[tokio::test]
+async fn extract_error_401() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/extract"))
+        .respond_with(ResponseTemplate::new(401).set_body_json(error_response_json()))
+        .mount(&server)
+        .await;
+
+    let client = KagiClientBuilder::new()
+        .api_key("test-key")
+        .base_url(server.uri())
+        .retries(0)
+        .build()
+        .unwrap();
+
+    let result = client.extract(extract_request()).await;
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, KagiError::Unauthorized),
+        "expected Unauthorized, got {err}"
+    );
+}
+
+#[tokio::test]
+async fn extract_error_403() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/extract"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(error_response_json()))
+        .mount(&server)
+        .await;
+
+    let client = KagiClientBuilder::new()
+        .api_key("test-key")
+        .base_url(server.uri())
+        .retries(0)
+        .build()
+        .unwrap();
+
+    let result = client.extract(extract_request()).await;
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, KagiError::Forbidden),
+        "expected Forbidden, got {err}"
+    );
+}
+
+#[tokio::test]
+async fn extract_error_429() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/extract"))
+        .respond_with(ResponseTemplate::new(429).set_body_json(error_response_json()))
+        .mount(&server)
+        .await;
+
+    let client = KagiClientBuilder::new()
+        .api_key("test-key")
+        .base_url(server.uri())
+        .retries(0)
+        .build()
+        .unwrap();
+
+    let result = client.extract(extract_request()).await;
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, KagiError::RateLimited),
+        "expected RateLimited, got {err}"
+    );
+}
+
+#[tokio::test]
+async fn extract_error_500() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/extract"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(error_response_json()))
+        .mount(&server)
+        .await;
+
+    let client = KagiClientBuilder::new()
+        .api_key("test-key")
+        .base_url(server.uri())
+        .retries(0)
+        .build()
+        .unwrap();
+
+    let result = client.extract(extract_request()).await;
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, KagiError::ServerError),
+        "expected ServerError, got {err}"
+    );
+}
+
+#[tokio::test]
 async fn network_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

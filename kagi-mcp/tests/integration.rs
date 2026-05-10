@@ -10,7 +10,7 @@ fn when_initialize_then_returns_server_name_kagi() {
         .build()
         .unwrap();
 
-    let server = KagiMcpServer::new(client);
+    let server = KagiMcpServer::new(client, 4.0, 10, true, None);
 
     let info = server.get_info();
 
@@ -24,7 +24,7 @@ fn when_list_tools_then_returns_search_and_extract() {
         .build()
         .unwrap();
 
-    let _server = KagiMcpServer::new(client);
+    let _server = KagiMcpServer::new(client, 4.0, 10, true, None);
 
     let tools = KagiMcpServer::tool_router().list_all();
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();

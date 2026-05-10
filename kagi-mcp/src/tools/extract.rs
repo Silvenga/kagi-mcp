@@ -18,7 +18,15 @@ pub async fn extract_handler(
     client: &dyn KagiApi,
     params: ExtractParams,
     ctx: &RequestContext<RoleServer>,
+    kagi_timeout: f64,
 ) -> Result<CallToolResult, rmcp::ErrorData> {
+    if let Err(e) = crate::validation::validate_extract_pages_count(&params.pages) {
+        return Err(rmcp::ErrorData::invalid_params(
+            format!("Pages validation failed: {e}"),
+            None,
+        ));
+    }
+
     let validated_urls = match crate::validation::validate_extract_urls(&params.pages) {
         Ok(urls) => urls,
         Err(e) => {
@@ -36,7 +44,7 @@ pub async fn extract_handler(
 
     let request = ExtractRequest {
         pages,
-        timeout: params.timeout,
+        timeout: params.timeout.or(Some(kagi_timeout)),
         format: Some("json".to_string()),
     };
 
@@ -50,28 +58,24 @@ pub async fn extract_handler(
     )
     .await;
 
+    if ctx.ct.is_cancelled() {
+        return Err(rmcp::ErrorData::new(
+            rmcp::model::ErrorCode(-32800),
+            "Cancelled",
+            None,
+        ));
+    }
+
     let result = tokio::select! {
         _ = ctx.ct.cancelled() => {
-            return Err(rmcp::ErrorData::internal_error("Cancelled", None));
+            return Err(rmcp::ErrorData::new(rmcp::model::ErrorCode(-32800), "Cancelled", None));
         }
         result = client.extract(request) => result,
     };
 
-    for i in 1..=total_pages {
-        let progress = (i as f64 / total_pages as f64) * 100.0;
-        let _ = send_progress(
-            ctx,
-            progress,
-            Some(100.0),
-            format!("Extracted {i}/{total_pages} pages."),
-        )
-        .await;
-    }
-
-    let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_string()).await;
-
     match result {
         Ok(response) => {
+            let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_string()).await;
             let output_format = params.output_format.as_deref().unwrap_or("markdown");
             let content = if output_format == "json" {
                 crate::format::format_json(&response)
@@ -92,6 +96,44 @@ mod tests {
     use kagi_api::error::KagiError;
     use kagi_api::types::{ExtractData, ExtractError, ExtractResponse, Meta};
     use kagi_api::MockKagiApi;
+
+    #[tokio::test]
+    async fn when_zero_pages_should_return_invalid_params_error_without_api_call() {
+        let mock = MockKagiApi::new();
+
+        let params = ExtractParams {
+            pages: vec![],
+            timeout: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Pages validation failed"));
+        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn when_eleven_pages_should_return_invalid_params_error_without_api_call() {
+        let mock = MockKagiApi::new();
+
+        let params = ExtractParams {
+            pages: (1..=11).map(|i| format!("https://example{i}.com")).collect(),
+            timeout: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Pages validation failed"));
+        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+    }
 
     fn make_extract_response(data: Vec<ExtractData>, errors: Vec<ExtractError>) -> ExtractResponse {
         ExtractResponse {
@@ -130,7 +172,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx).await;
+        let result = extract_handler(&mock, params, &ctx, 4.0).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -164,7 +206,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx).await;
+        let result = extract_handler(&mock, params, &ctx, 4.0).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -183,7 +225,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx).await;
+        let result = extract_handler(&mock, params, &ctx, 4.0).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -205,11 +247,12 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx).await;
+        let result = extract_handler(&mock, params, &ctx, 4.0).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Kagi API error"));
+        assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
     }
 
     #[tokio::test]
@@ -236,12 +279,71 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx).await;
+        let result = extract_handler(&mock, params, &ctx, 4.0).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Good content"));
         assert!(text.contains("https://fail.com"));
         assert!(text.contains("Server Error"));
+    }
+
+    #[tokio::test]
+    async fn when_extract_handler_called_then_config_kagi_timeout_should_be_applied() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .withf(|req| req.timeout == Some(12.5))
+            .returning(|_| {
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_string(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![]),
+                    errors: None,
+                })
+            });
+
+        let params = ExtractParams {
+            pages: vec!["https://example.com".to_string()],
+            timeout: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx, 12.5).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn when_extract_handler_called_with_explicit_timeout_then_explicit_should_override_config(
+    ) {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .withf(|req| req.timeout == Some(5.0))
+            .returning(|_| {
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_string(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![]),
+                    errors: None,
+                })
+            });
+
+        let params = ExtractParams {
+            pages: vec!["https://example.com".to_string()],
+            timeout: Some(5.0),
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx, 12.5).await;
+        assert!(result.is_ok());
     }
 }

@@ -12,6 +12,8 @@ pub enum ValidationError {
     Localhost,
     #[error("SSRF prevention: link-local addresses are not allowed ({0})")]
     LinkLocal(String),
+    #[error("Pages must be between 1 and 10, got {count}")]
+    InvalidPageCount { count: usize },
 }
 
 /// Validates a list of URLs for the extract tool.
@@ -19,6 +21,17 @@ pub enum ValidationError {
 /// Returns parsed `url::Url` objects or the first validation error encountered.
 pub fn validate_extract_urls(urls: &[String]) -> Result<Vec<url::Url>, ValidationError> {
     urls.iter().map(|u| validate_url(u)).collect()
+}
+
+/// Validates the number of pages for an extract request.
+///
+/// The Kagi Extract API accepts between 1 and 10 pages per call.
+pub fn validate_extract_pages_count(pages: &[String]) -> Result<(), ValidationError> {
+    let count = pages.len();
+    if !(1..=10).contains(&count) {
+        return Err(ValidationError::InvalidPageCount { count });
+    }
+    Ok(())
 }
 
 fn validate_url(url_str: &str) -> Result<url::Url, ValidationError> {
@@ -212,5 +225,48 @@ mod tests {
         let result = validate_extract_urls(&urls);
 
         assert!(matches!(result, Err(ValidationError::InvalidUrl(_))));
+    }
+
+    #[test]
+    fn when_extract_pages_count_is_zero_should_return_invalid_page_count_error() {
+        let pages: Vec<String> = vec![];
+
+        let result = validate_extract_pages_count(&pages);
+
+        assert_eq!(result, Err(ValidationError::InvalidPageCount { count: 0 }));
+    }
+
+    #[test]
+    fn when_extract_pages_count_is_one_should_return_ok() {
+        let pages = vec!["https://example.com".to_string()];
+
+        let result = validate_extract_pages_count(&pages);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn when_extract_pages_count_is_ten_should_return_ok() {
+        let pages = (1..=10)
+            .map(|i| format!("https://example{i}.com"))
+            .collect::<Vec<_>>();
+
+        let result = validate_extract_pages_count(&pages);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn when_extract_pages_count_is_eleven_should_return_invalid_page_count_error() {
+        let pages = (1..=11)
+            .map(|i| format!("https://example{i}.com"))
+            .collect::<Vec<_>>();
+
+        let result = validate_extract_pages_count(&pages);
+
+        assert_eq!(
+            result,
+            Err(ValidationError::InvalidPageCount { count: 11 })
+        );
     }
 }
