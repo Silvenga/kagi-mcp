@@ -112,7 +112,12 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
             has_results = true;
             output.push_str("## Podcast Creators\n\n");
             for (i, result) in results.iter().enumerate() {
-                output.push_str(&format!("{}. **[{}]({})**\n", i + 1, result.title, result.url));
+                output.push_str(&format!(
+                    "{}. **[{}]({})**\n",
+                    i + 1,
+                    result.title,
+                    result.url
+                ));
                 if let Some(snippet) = &result.snippet {
                     output.push_str(&format!("   - Snippet: {}\n", snippet));
                 }
@@ -659,7 +664,9 @@ mod tests {
                     snippet: Some("Key information.".to_string()),
                     time: None,
                     image: None,
-                    props: Some(serde_json::json!({"infobox": {"Population": "1.4B", "Capital": "Beijing"}})),
+                    props: Some(
+                        serde_json::json!({"infobox": {"Population": "1.4B", "Capital": "Beijing"}}),
+                    ),
                 }]),
                 code: None,
                 package_tracking: None,

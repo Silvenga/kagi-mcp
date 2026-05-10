@@ -1,11 +1,11 @@
+use super::{map_kagi_error, send_progress};
+use kagi_api::types::{Filters, SearchRequest};
+use kagi_api::KagiApi;
 use rmcp::model::{CallToolResult, Content};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use serde::Deserialize;
-use kagi_api::types::{Filters, SearchRequest};
-use kagi_api::KagiApi;
-use super::{map_kagi_error, send_progress};
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SearchParams {

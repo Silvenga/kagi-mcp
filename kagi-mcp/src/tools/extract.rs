@@ -1,11 +1,11 @@
+use super::{map_kagi_error, send_progress};
+use kagi_api::types::{ExtractPage, ExtractRequest};
+use kagi_api::KagiApi;
 use rmcp::model::{CallToolResult, Content};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use serde::Deserialize;
-use kagi_api::types::{ExtractPage, ExtractRequest};
-use kagi_api::KagiApi;
-use super::{map_kagi_error, send_progress};
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ExtractParams {
@@ -75,7 +75,8 @@ pub async fn extract_handler(
 
     match result {
         Ok(response) => {
-            let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_string()).await;
+            let _ =
+                send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_string()).await;
             let output_format = params.output_format.as_deref().unwrap_or("markdown");
             let content = if output_format == "json" {
                 crate::format::format_json(&response)
@@ -121,7 +122,9 @@ mod tests {
         let mock = MockKagiApi::new();
 
         let params = ExtractParams {
-            pages: (1..=11).map(|i| format!("https://example{i}.com")).collect(),
+            pages: (1..=11)
+                .map(|i| format!("https://example{i}.com"))
+                .collect(),
             timeout: None,
             output_format: None,
         };

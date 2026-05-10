@@ -1,10 +1,10 @@
 pub mod extract;
 pub mod search;
 
+use kagi_api::error::KagiError;
 use rmcp::model::ProgressNotificationParam;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
-use kagi_api::error::KagiError;
 
 pub(crate) async fn send_progress(
     ctx: &RequestContext<RoleServer>,
@@ -51,10 +51,10 @@ pub(crate) fn map_kagi_error(error: KagiError) -> rmcp::ErrorData {
 
 #[cfg(test)]
 pub(crate) async fn test_request_context() -> rmcp::service::RequestContext<rmcp::RoleServer> {
-    use std::sync::Arc;
-    use rmcp::service::serve_directly_with_ct;
-    use tokio_util::sync::CancellationToken;
     use crate::server::KagiMcpServer;
+    use rmcp::service::serve_directly_with_ct;
+    use std::sync::Arc;
+    use tokio_util::sync::CancellationToken;
 
     let (server_transport, client_transport) = tokio::io::duplex(4096);
     drop(client_transport);

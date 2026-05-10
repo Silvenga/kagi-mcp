@@ -1,13 +1,17 @@
-use std::time::Duration;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::policies::ExponentialBackoff;
-use reqwest_retry::{RetryError, RetryTransientMiddleware};
 use crate::error::{from_http_status, KagiError, KagiErrorResponse};
 use crate::types::{ExtractRequest, ExtractResponse, SearchRequest, SearchResponse};
 use crate::KagiApi;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::policies::ExponentialBackoff;
+use reqwest_retry::{RetryError, RetryTransientMiddleware};
+use std::time::Duration;
 
 const DEFAULT_BASE_URL: &str = "https://kagi.com/api";
-const DEFAULT_USER_AGENT: &str = concat!("kagi-api/", env!("CARGO_PKG_VERSION"), " (github.com/Silvenga/kagi-mcp)");
+const DEFAULT_USER_AGENT: &str = concat!(
+    "kagi-api/",
+    env!("CARGO_PKG_VERSION"),
+    " (github.com/Silvenga/kagi-mcp)"
+);
 const DEFAULT_TIMEOUT_SECS: f64 = 10.0;
 const DEFAULT_RETRIES: u32 = 3;
 
