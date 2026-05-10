@@ -4,12 +4,12 @@ An MCP (Model Context Protocol) server for the [Kagi Search API](https://kagi.co
 
 ## Features
 
-- **Search** — Web, images, videos, news, and podcasts via Kagi's premium search engine.
-- **Extract** — Clean Markdown extraction from up to 10 URLs per call.
-- **Agent-optimized** — Results are formatted as structured Markdown for easy LLM consumption. Raw JSON available on request.
-- **Async** — Built on Tokio for high-performance, non-blocking I/O.
-- **Cancellation** — Cooperative MCP cancellation aborts in-flight Kagi requests.
-- **Retries** — Automatic retries on transient failures with exponential backoff.
+- **Search** - Web, images, videos, news, and podcasts via Kagi's premium search engine.
+- **Extract** - Clean Markdown extraction from up to 10 URLs per call.
+- **Agent-optimized** - Results are formatted as structured Markdown for easy LLM consumption. Raw JSON available on request.
+- **Async** - Built on Tokio for high-performance, non-blocking I/O.
+- **Cancellation** - Cooperative MCP cancellation aborts in-flight Kagi requests.
+- **Retries** - Automatic retries on transient failures with exponential backoff.
 
 ## Installation
 
@@ -67,19 +67,19 @@ The server runs in stdio mode and is designed to be connected to an MCP client (
 Search the web using Kagi. Returns structured Markdown results optimized for LLMs.
 
 **Parameters:**
-- `query` (required) — Search query. Supports advanced operators: `site:`, `"exact phrases"`, `-negation`, etc.
-- `workflow` — Result type: `search`, `images`, `videos`, `news`, `podcasts`
-- `after`, `before` — Date filters (YYYY-MM-DD)
-- `output_format` — `markdown` (default) or `json`
+- `query` (required) - Search query. Supports advanced operators: `site:`, `"exact phrases"`, `-negation`, etc.
+- `workflow` - Result type: `search`, `images`, `videos`, `news`, `podcasts`
+- `after`, `before` - Date filters (YYYY-MM-DD)
+- `output_format` - `markdown` (default) or `json`
 
 ### `extract`
 
 Extract clean Markdown content from URLs.
 
 **Parameters:**
-- `pages` (required) — Array of 1–10 HTTPS URLs
-- `timeout` — Per-page extraction timeout
-- `output_format` — `markdown` (default) or `json`
+- `pages` (required) - Array of 1-10 HTTPS URLs
+- `timeout` - Per-page extraction timeout
+- `output_format` - `markdown` (default) or `json`
 
 
 

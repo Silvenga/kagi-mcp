@@ -1,4 +1,4 @@
-# Kagi MCP Server — Project Workspace
+# Kagi MCP Server - Project Workspace
 
 ## Workspace Structure
 
@@ -6,14 +6,14 @@
 kagi-mcp/
 ├── Cargo.toml              # Workspace root
 ├── AGENTS.md               # This file
-├── kagi-api/               # Library crate — Kagi API client
+├── kagi-api/               # Library crate | Kagi API client
 │   ├── Cargo.toml
 │   └── src/
 │       ├── lib.rs          # Module declarations
 │       ├── client.rs       # HTTP client (reqwest-based)
 │       ├── error.rs        # Domain error types (thiserror)
 │       └── types.rs        # Request/response types (serde)
-└── kagi-mcp/               # Binary crate — MCP server
+└── kagi-mcp/               # Binary crate | MCP server
     ├── Cargo.toml
     └── src/
         └── main.rs         # Entrypoint (rmcp server)
