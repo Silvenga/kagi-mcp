@@ -59,3 +59,17 @@ cargo clippy --workspace
 ### Error handling
 - Domain errors in `kagi-api` use `thiserror` for typed error enums.
 - Application-level propagation in `kagi-mcp` uses `anyhow`.
+
+## Contribution Workflow
+
+All changes must be submitted via Pull Requests.
+
+### Branching
+- Create a feature branch from `origin/master` for every change set.
+- Before starting work, fetch the latest changes and rebase your branch onto `origin/master`.
+
+### PR Lifecycle
+- Open a single PR when work is ready for review.
+- Address review feedback by committing and pushing additional changes to the same branch; they will automatically appear in the PR.
+- PRs are merged with **squash merge**.
+- The PR title must follow **Conventional Commits** style (e.g., `feat:`, `fix:`, `docs:`), because the squashed commit message is derived from the PR title.
