@@ -1,13 +1,13 @@
-use std::sync::Arc;
+use crate::tools::extract::{extract_handler, ExtractParams};
+use crate::tools::search::{search_handler, SearchConfig, SearchParams};
+use kagi_api::client::KagiClient;
+use kagi_api::KagiApi;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError};
-use kagi_api::client::KagiClient;
-use kagi_api::KagiApi;
-use crate::tools::extract::{extract_handler, ExtractParams};
-use crate::tools::search::{search_handler, SearchConfig, SearchParams};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct KagiMcpServer {
@@ -19,7 +19,13 @@ pub struct KagiMcpServer {
 }
 
 impl KagiMcpServer {
-    pub fn new(client: KagiClient, kagi_timeout: f64, limit: u32, safe_search: bool, region: Option<String>) -> Self {
+    pub fn new(
+        client: KagiClient,
+        kagi_timeout: f64,
+        limit: u32,
+        safe_search: bool,
+        region: Option<String>,
+    ) -> Self {
         Self {
             client: Arc::new(client),
             kagi_timeout,

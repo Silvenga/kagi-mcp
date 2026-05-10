@@ -264,9 +264,6 @@ mod tests {
 
         let result = validate_extract_pages_count(&pages);
 
-        assert_eq!(
-            result,
-            Err(ValidationError::InvalidPageCount { count: 11 })
-        );
+        assert_eq!(result, Err(ValidationError::InvalidPageCount { count: 11 }));
     }
 }

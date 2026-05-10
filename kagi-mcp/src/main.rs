@@ -29,7 +29,13 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .map_err(|e| anyhow::anyhow!("failed to create Kagi client: {e}"))?;
 
-    let server = KagiMcpServer::new(client, config.kagi_timeout, config.limit, config.safe_search, config.region);
+    let server = KagiMcpServer::new(
+        client,
+        config.kagi_timeout,
+        config.limit,
+        config.safe_search,
+        config.region,
+    );
 
     let transport = (tokio::io::stdin(), tokio::io::stdout());
     let service = server.serve(transport).await?;
