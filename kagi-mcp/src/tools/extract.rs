@@ -3,10 +3,8 @@ use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use serde::Deserialize;
-
 use kagi_api::types::{ExtractPage, ExtractRequest};
 use kagi_api::KagiApi;
-
 use super::{map_kagi_error, send_progress};
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]

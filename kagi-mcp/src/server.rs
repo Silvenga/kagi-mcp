@@ -1,14 +1,11 @@
 use std::sync::Arc;
-
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError};
-
 use kagi_api::client::KagiClient;
 use kagi_api::KagiApi;
-
 use crate::tools::extract::{extract_handler, ExtractParams};
 use crate::tools::search::{search_handler, SearchParams};
 

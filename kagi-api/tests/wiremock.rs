@@ -347,7 +347,7 @@ async fn user_agent_default() {
         .expect("user-agent header should be present");
     assert_eq!(
         user_agent.to_str().unwrap(),
-        "kagi-api/0.1.0 (github.com/Silvenga/kagi-mcp)"
+        concat!("kagi-api/", env!("CARGO_PKG_VERSION"), " (github.com/Silvenga/kagi-mcp)")
     );
 }
 
