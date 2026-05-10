@@ -645,8 +645,6 @@ kagi-mcp/
 |-- README.md
 |-- AGENTS.md               # Project-level agent continuity
 |-- docs/
-|   |-- SPEC.md             # Original project spec
-|   |-- RESEARCH.md         # Initial research findings
 |   |-- RESEARCH_V2.md      # This unified document
 |   |-- MCP_TOOLS_SPEC.md   # Detailed MCP tool schemas
 |   |-- openapi.yaml        # Vendored Kagi OpenAPI spec
