@@ -26,12 +26,16 @@ jobs:
           toolchain: stable
       - name: Fmt
         run: cargo fmt --all --check
+      - name: Check
+        run: cargo check --workspace
       - name: Build
-        run: cargo build
+        run: cargo build --workspace
       - name: Lint
-        run: cargo clippy --workspace --all-targets --all-features -- -A dead_code
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --workspace --all-features --no-fail-fast
+      - name: Doc
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
   build-linux:
     name: Build (Linux)
@@ -46,7 +50,7 @@ jobs:
         with:
           toolchain: stable
       - name: Build
-        run: cargo build --release
+        run: cargo build --workspace --release
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kagi-mcp-linux
@@ -65,7 +69,7 @@ jobs:
         with:
           toolchain: stable
       - name: Build
-        run: cargo build --release
+        run: cargo build --workspace --release
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kagi-mcp-windows

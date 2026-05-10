@@ -50,7 +50,7 @@ fn validate_url(url_str: &str) -> Result<url::Url, ValidationError> {
             if domain.eq_ignore_ascii_case("localhost") {
                 return Err(ValidationError::Localhost);
             }
-            // Hostnames are validated for literal patterns only — no DNS resolution per spec.
+            // Hostnames are validated for literal patterns only - no DNS resolution per spec.
         }
         url::Host::Ipv4(v4) => {
             if v4.is_loopback() || v4.is_private() {

@@ -4,26 +4,26 @@ use serde::Deserialize;
 /// Error type for Kagi API operations.
 #[derive(Debug, thiserror::Error)]
 pub enum KagiError {
-    /// HTTP 401 — Invalid or missing API key.
+    /// HTTP 401 - Invalid or missing API key.
     #[error("unauthorized: invalid or missing API key")]
     Unauthorized,
 
-    /// HTTP 403 — API key lacks permission for the requested resource.
+    /// HTTP 403 - API key lacks permission for the requested resource.
     #[error("forbidden: API key lacks permission")]
     Forbidden,
 
-    /// HTTP 429 — Request rate limit exceeded.
+    /// HTTP 429 - Request rate limit exceeded.
     #[error("rate limited: too many requests")]
     RateLimited,
 
-    /// HTTP 400 — Request parameters are invalid.
+    /// HTTP 400 - Request parameters are invalid.
     #[error("invalid request: {message}")]
     InvalidRequest {
         /// The error message from the API.
         message: String,
     },
 
-    /// HTTP 500 — Kagi server error.
+    /// HTTP 500 - Kagi server error.
     #[error("server error")]
     ServerError,
 

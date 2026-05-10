@@ -1,4 +1,4 @@
-# kagi-mcp — Unified Research & Specification
+# kagi-mcp - Unified Research & Specification
 
 > This document consolidates the original project specification, API research, MCP SDK analysis, best practices, tool schemas, and all architectural decisions into a single source of truth for implementers.
 
@@ -27,16 +27,16 @@ This project is an MCP server for the Kagi API, optimized for agent use, written
 
 This is a Cargo workspace with two crates:
 
-**`kagi-api`** — A library, generated from the OpenAPI spec and a thin wrapper to make usage easier.
+**`kagi-api`** - A library, generated from the OpenAPI spec and a thin wrapper to make usage easier.
 - Use builder pattern to create the client, setting reasonable defaults.
 - Accept a Kagi API key.
 - The base URL should be customizable, e.g. `https://kagi.com/api`.
 - Set a User-Agent header, defaulting to `kagi-api/<crate version> (github.com/Silvenga/kagi-mcp)`.
 
-**`kagi-mcp`** — The MCP server, running in STDIO mode.
+**`kagi-mcp`** - The MCP server, running in STDIO mode.
 - Use the official Rust SDK for MCP (`rmcp` and `rmcp-macros`).
 - Support MCP cancellation.
-- Exposes two tools — `search` and `extract` — with rich and efficient metadata for agent consumption.
+- Exposes two tools - `search` and `extract` - with rich and efficient metadata for agent consumption.
 - Support retries.
 - Configured with either CLI flags or env vars, using `clap` for both.
 - Research MCP to determine what rich MCP support would look like (e.g., notification during progress).
@@ -70,24 +70,24 @@ Authentication is **Bearer token** (`Authorization: Bearer <key>`).
 ### 2.2 Search API (`POST /search`)
 
 **Required parameter**
-- `query` (`string`) — the search query.
+- `query` (`string`) - the search query.
 
 **Optional parameters**
-- `workflow` (`string`, default `search`) — enum: `search`, `images`, `videos`, `news`, `podcasts`.
-- `format` (`string`, default `json`) — enum: `json`, `markdown`. The spec says JSON only for now.
-- `timeout` (`number`, min `0.5`, max `4`) — seconds to allow for collecting results.
-- `page` (`integer`, min `1`, max `10`) — pagination.
-- `limit` (`integer`, min `1`, max `1024`) — max results.
+- `workflow` (`string`, default `search`) - enum: `search`, `images`, `videos`, `news`, `podcasts`.
+- `format` (`string`, default `json`) - enum: `json`, `markdown`. The spec says JSON only for now.
+- `timeout` (`number`, min `0.5`, max `4`) - seconds to allow for collecting results.
+- `page` (`integer`, min `1`, max `10`) - pagination.
+- `limit` (`integer`, min `1`, max `1024`) - max results.
 - `safe_search` (`boolean`, default `true`).
-- `filters` (`object`) — `region` (ISO-3166-1 Alpha-2), `after` (date), `before` (date).
-- `lens_id` (`string`) — **out of scope**.
-- `lens` (`object`) — inline lens. **Out of scope**.
-- `personalizations` (`object`) — **out of scope**.
-- `extract` (`object`) — nested extraction config (`count`, `timeout`) that triggers page extraction *from search results*. **Out of scope** because it incurs extra Extract API cost and is distinct from the standalone `/extract` endpoint.
+- `filters` (`object`) - `region` (ISO-3166-1 Alpha-2), `after` (date), `before` (date).
+- `lens_id` (`string`) - **out of scope**.
+- `lens` (`object`) - inline lens. **Out of scope**.
+- `personalizations` (`object`) - **out of scope**.
+- `extract` (`object`) - nested extraction config (`count`, `timeout`) that triggers page extraction *from search results*. **Out of scope** because it incurs extra Extract API cost and is distinct from the standalone `/extract` endpoint.
 
 **Response schema (`200`)**
-- `meta` (`object`) — `trace` (string), `node` (string), `ms` (integer). Explicitly documented as unstable/debug-oriented.
-- `data` (`object`) — contains many typed arrays:
+- `meta` (`object`) - `trace` (string), `node` (string), `ms` (integer). Explicitly documented as unstable/debug-oriented.
+- `data` (`object`) - contains many typed arrays:
   - `search`, `image`, `video`, `podcast`, `podcast_creator`, `news`
   - `adjacent_question`, `direct_answer`, `interesting_news`, `interesting_finds`
   - `infobox`, `code`, `package_tracking`, `public_records`, `weather`
@@ -102,11 +102,11 @@ Each item in these arrays is a `searchResult`:
 - `props` (`object`, arbitrary additional metadata)
 
 **Error responses**
-- `400` — invalid request parameters
-- `401` — unauthorized
-- `403` — forbidden (IP not authorized)
-- `429` — rate limited
-- `500` — internal server error
+- `400` - invalid request parameters
+- `401` - unauthorized
+- `403` - forbidden (IP not authorized)
+- `429` - rate limited
+- `500` - internal server error
 
 All errors use the same envelope:
 ```json
@@ -122,16 +122,16 @@ All errors use the same envelope:
 ### 2.3 Extract API (`POST /extract`)
 
 **Required parameter**
-- `pages` (`array`) — 1–10 items, each with `url` (required, HTTPS URI).
+- `pages` (`array`) - 1-10 items, each with `url` (required, HTTPS URI).
 
 **Optional parameters**
-- `timeout` (`number`, float) — seconds.
-- `format` (`string`, default `json`) — enum: `json`, `markdown`.
+- `timeout` (`number`, float) - seconds.
+- `format` (`string`, default `json`) - enum: `json`, `markdown`.
 
 **Response schema (`200`)**
-- `meta` — same as Search.
-- `data` (`array`) — items with `url` and `markdown` (nullable string).
-- `errors` (`array`, optional) — per-URL failure details.
+- `meta` - same as Search.
+- `data` (`array`) - items with `url` and `markdown` (nullable string).
+- `errors` (`array`, optional) - per-URL failure details.
 
 Error HTTP statuses are identical to Search (`400`, `401`, `403`, `429`, `500`).
 
@@ -158,8 +158,8 @@ This project will generate a fresh client instead of depending on the official o
 
 ### 3.1 Crates & Versions
 
-- `rmcp` — core protocol implementation (current: `0.16.0`).
-- `rmcp-macros` — procedural macros for tools, prompts, resources.
+- `rmcp` - core protocol implementation (current: `0.16.0`).
+- `rmcp-macros` - procedural macros for tools, prompts, resources.
 
 ### 3.2 Server Architecture (stdio)
 
@@ -237,9 +237,9 @@ ctx.peer.notify_progress(ProgressNotificationParam {
 
 ### 3.6 Error Handling in MCP
 
-- `McpError::internal_error(message, data)` — generic server error.
-- `McpError::invalid_request(message, data)` — bad tool arguments.
-- `McpError::Cancelled` — protocol-level cancellation.
+- `McpError::internal_error(message, data)` - generic server error.
+- `McpError::invalid_request(message, data)` - bad tool arguments.
+- `McpError::Cancelled` - protocol-level cancellation.
 
 There is no native "retryable" or "rate limited" error code in the MCP spec. Kagi HTTP errors are surfaced as `internal_error` per tool call.
 
@@ -336,7 +336,7 @@ Both tools return `text` content. Default output format is **structured Markdown
 - `output_format` is synthetic (handled by MCP server, not forwarded to Kagi).
 - `page`, `limit`, `safe_search`, and `region` are configured at the server level. Defaults: `limit=10`, `safe_search=true`, `region=none`.
 
-**Output Format — Markdown (Default)**
+**Output Format - Markdown (Default)**
 
 Converts Kagi JSON response into structured Markdown. Categories with no results are omitted.
 
@@ -431,7 +431,7 @@ Package Tracking (`package_tracking`):
 - [Tracking Link](URL)
 ```
 
-**Output Format — JSON**
+**Output Format - JSON**
 
 Raw Kagi API JSON response as a pretty-printed `text` block.
 
@@ -481,7 +481,7 @@ Raw Kagi API JSON response as a pretty-printed `text` block.
 - `output_format` is handled by the MCP server.
 - **Security:** The server must validate that URLs are not private IP ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`), `localhost`, or link-local addresses.
 
-**Output Format — Markdown (Default)**
+**Output Format - Markdown (Default)**
 ```markdown
 ## Extracted Content
 
@@ -503,7 +503,7 @@ Failed extraction:
 **Extraction failed:** {error message}
 ```
 
-**Output Format — JSON**
+**Output Format - JSON**
 
 Raw Kagi API JSON response (including `meta`, `data`, `errors`) as pretty-printed JSON.
 
@@ -641,23 +641,21 @@ No `npx`-style, Docker, or crates.io publishing specified yet.
 
 ```
 kagi-mcp/
-├── Cargo.toml              # Workspace root
-├── README.md
-├── AGENTS.md               # Project-level agent continuity
-├── docs/
-│   ├── SPEC.md             # Original project spec
-│   ├── RESEARCH.md         # Initial research findings
-│   ├── RESEARCH_V2.md      # This unified document
-│   ├── MCP_TOOLS_SPEC.md   # Detailed MCP tool schemas
-│   └── openapi.yaml        # Vendored Kagi OpenAPI spec
-├── kagi-api/
-│   ├── Cargo.toml
-│   └── src/
-│       └── lib.rs          # Generated client + thin wrapper
-└── kagi-mcp/
-    ├── Cargo.toml
-    └── src/
-        └── main.rs         # MCP server executable
+|-- Cargo.toml              # Workspace root
+|-- README.md
+|-- AGENTS.md               # Project-level agent continuity
+|-- docs/
+|   |-- RESEARCH_V2.md      # This unified document
+|   |-- MCP_TOOLS_SPEC.md   # Detailed MCP tool schemas
+|   |-- openapi.yaml        # Vendored Kagi OpenAPI spec
+|-- kagi-api/
+|   |-- Cargo.toml
+|   |-- src/
+|       |-- lib.rs          # Generated client + thin wrapper
+|-- kagi-mcp/
+    |-- Cargo.toml
+    |-- src/
+        |-- main.rs         # MCP server executable
 ```
 
 ### 9.1 Server Metadata
