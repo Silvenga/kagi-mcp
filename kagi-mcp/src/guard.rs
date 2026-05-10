@@ -1,5 +1,4 @@
 /// Default maximum response size in bytes (256KB).
-#[expect(dead_code)]
 pub const DEFAULT_MAX_RESPONSE_BYTES: usize = 262_144;
 
 /// Truncates content if it exceeds the maximum byte limit.
@@ -7,7 +6,6 @@ pub const DEFAULT_MAX_RESPONSE_BYTES: usize = 262_144;
 /// If content is within the limit, returns it unchanged.
 /// If content exceeds the limit, truncates at the last valid UTF-8 boundary
 /// before the limit and appends a truncation notice.
-#[expect(dead_code)]
 pub fn truncate_response(content: &str, max_bytes: usize) -> String {
     let content_bytes = content.len();
 

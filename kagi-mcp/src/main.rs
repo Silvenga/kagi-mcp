@@ -3,6 +3,7 @@ pub mod format;
 mod guard;
 mod server;
 mod tools;
+pub(crate) mod validation;
 
 use clap::Parser;
 use config::Config;

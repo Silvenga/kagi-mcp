@@ -34,14 +34,14 @@ pub struct Filters {
 }
 
 /// A Kagi search response.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SearchResponse {
     pub meta: Meta,
     pub data: SearchData,
 }
 
 /// The data payload of a search response.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SearchData {
     pub search: Option<Vec<SearchResult>>,
     pub image: Option<Vec<SearchResult>>,
@@ -64,7 +64,7 @@ pub struct SearchData {
 }
 
 /// A single search result.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SearchResult {
     pub url: String,
     pub title: String,
@@ -89,7 +89,7 @@ pub struct Image {
 }
 
 /// Metadata returned with every API response.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Meta {
     pub trace: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -115,7 +115,7 @@ pub struct ExtractPage {
 }
 
 /// An extract response from the Kagi Extract API.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExtractResponse {
     pub meta: Meta,
     pub data: Option<Vec<ExtractData>>,
@@ -123,7 +123,7 @@ pub struct ExtractResponse {
 }
 
 /// Extracted content for a single page.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExtractData {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -131,7 +131,7 @@ pub struct ExtractData {
 }
 
 /// An error that occurred during extraction for a specific page.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExtractError {
     pub url: String,
     pub code: String,

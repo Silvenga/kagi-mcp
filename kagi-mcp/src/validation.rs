@@ -21,7 +21,6 @@ pub fn validate_extract_urls(urls: &[String]) -> Result<Vec<url::Url>, Validatio
     urls.iter().map(|u| validate_url(u)).collect()
 }
 
-#[expect(dead_code)]
 fn validate_url(url_str: &str) -> Result<url::Url, ValidationError> {
     let url = url::Url::parse(url_str).map_err(|e| ValidationError::InvalidUrl(e.to_string()))?;
 

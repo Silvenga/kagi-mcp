@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
+use rmcp::service::RequestContext;
+use rmcp::RoleServer;
 use rmcp::{tool, tool_router, ErrorData as McpError};
 
 use kagi_api::client::KagiClient;
@@ -11,7 +13,6 @@ use crate::tools::search::{search_handler, SearchParams};
 
 #[derive(Clone)]
 pub struct KagiMcpServer {
-    #[expect(dead_code)]
     pub client: Arc<KagiClient>,
 }
 
@@ -28,17 +29,19 @@ impl KagiMcpServer {
     #[tool(description = "Search the web using Kagi")]
     async fn search(
         &self,
+        ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<SearchParams>,
     ) -> Result<CallToolResult, McpError> {
-        search_handler(params).await
+        search_handler(&self.client, params, &ctx).await
     }
 
     #[tool(description = "Extract clean Markdown from URLs")]
     async fn extract(
         &self,
+        ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<ExtractParams>,
     ) -> Result<CallToolResult, McpError> {
-        extract_handler(params).await
+        extract_handler(&self.client, params, &ctx).await
     }
 }
 
