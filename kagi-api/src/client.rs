@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
-use reqwest_retry::RetryTransientMiddleware;
+use reqwest_retry::{RetryError, RetryTransientMiddleware};
 
 use crate::error::{from_http_status, KagiError, KagiErrorResponse};
 use crate::types::{ExtractRequest, ExtractResponse, SearchRequest, SearchResponse};
@@ -155,9 +155,23 @@ async fn handle_response<T: serde::de::DeserializeOwned>(
 fn map_middleware_error(error: reqwest_middleware::Error) -> KagiError {
     match error {
         reqwest_middleware::Error::Reqwest(e) => KagiError::Network { source: e },
-        reqwest_middleware::Error::Middleware(e) => KagiError::Api {
-            status: 0,
-            message: e.to_string(),
+        reqwest_middleware::Error::Middleware(e) => {
+            let message = e.to_string();
+            // reqwest-retry wraps transport errors in RetryError (via anyhow).
+            // Try to extract the underlying reqwest::Error via downcast.
+            if let Ok(retry_err) = e.downcast::<RetryError>() {
+                let inner_err = match retry_err {
+                    RetryError::WithRetries { err, .. } => err,
+                    RetryError::Error(err) => err,
+                };
+                if let reqwest_middleware::Error::Reqwest(reqwest_err) = inner_err {
+                    return KagiError::Network { source: reqwest_err };
+                }
+            }
+            KagiError::Api {
+                status: 0,
+                message,
+            }
         },
     }
 }
