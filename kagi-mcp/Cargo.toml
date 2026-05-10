@@ -7,8 +7,9 @@ authors.workspace = true
 
 [dependencies]
 kagi-api = { path = "../kagi-api" }
-rmcp = { version = "1.6", features = ["server", "transport-io", "schemars"] }
-tokio = { workspace = true, features = ["io-std"] }
+rmcp = { version = "1.6", features = ["server", "transport-io", "transport-async-rw", "schemars"] }
+tokio = { workspace = true, features = ["io-std", "io-util"] }
+tokio-util = "0.7"
 clap = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -22,3 +23,5 @@ async-trait = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
+kagi-api = { path = "../kagi-api", features = ["mock"] }
+wiremock = "0.6"

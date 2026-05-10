@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
 use rmcp::model::{CallToolResult, Content};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use rmcp::schemars;
 use serde::Deserialize;
 
-use kagi_api::client::KagiClient;
 use kagi_api::types::{Filters, SearchRequest};
+use kagi_api::KagiApi;
 
 use super::{map_kagi_error, send_progress};
 
@@ -21,7 +19,7 @@ pub struct SearchParams {
 }
 
 pub async fn search_handler(
-    client: &Arc<KagiClient>,
+    client: &dyn KagiApi,
     params: SearchParams,
     ctx: &RequestContext<RoleServer>,
 ) -> Result<CallToolResult, rmcp::ErrorData> {
@@ -79,5 +77,225 @@ fn build_filters(after: Option<String>, before: Option<String>) -> Option<Filter
         })
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kagi_api::error::KagiError;
+    use kagi_api::types::{Meta, SearchData, SearchResponse, SearchResult};
+    use kagi_api::MockKagiApi;
+
+    fn empty_search_data() -> SearchData {
+        SearchData {
+            search: None,
+            image: None,
+            video: None,
+            podcast: None,
+            podcast_creator: None,
+            news: None,
+            adjacent_question: None,
+            direct_answer: None,
+            interesting_news: None,
+            interesting_finds: None,
+            infobox: None,
+            code: None,
+            package_tracking: None,
+            public_records: None,
+            weather: None,
+            related_search: None,
+            listicle: None,
+            web_archive: None,
+        }
+    }
+
+    fn make_search_response(results: Vec<SearchResult>) -> SearchResponse {
+        SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: Some(results),
+                ..empty_search_data()
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn search_success_returns_markdown() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .returning(|_| {
+                Ok(make_search_response(vec![SearchResult {
+                    url: "https://example.com".to_string(),
+                    title: "Example".to_string(),
+                    snippet: Some("Snippet text".to_string()),
+                    time: Some("2023-01-01".to_string()),
+                    image: None,
+                    props: None,
+                }]))
+            });
+
+        let params = SearchParams {
+            query: "test query".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_ok());
+        let content = result.unwrap().content;
+        assert_eq!(content.len(), 1);
+        let text = content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Example"));
+        assert!(text.contains("https://example.com"));
+        assert!(text.contains("Snippet text"));
+    }
+
+    #[tokio::test]
+    async fn search_success_json_returns_raw_json() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .returning(|_| {
+                Ok(make_search_response(vec![SearchResult {
+                    url: "https://example.com".to_string(),
+                    title: "Example".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                }]))
+            });
+
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: Some("json".to_string()),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("\"trace\""));
+        assert!(text.contains("\"search\""));
+    }
+
+    #[tokio::test]
+    async fn search_empty_results_returns_no_results_message() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .returning(|_| {
+                Ok(SearchResponse {
+                    meta: Meta {
+                        trace: "test".to_string(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: empty_search_data(),
+                })
+            });
+
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert_eq!(text, "No results found.");
+    }
+
+    #[tokio::test]
+    async fn search_error_401_returns_unauthorized_message() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .returning(|_| Err(KagiError::Unauthorized));
+
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Unauthorized"));
+    }
+
+    #[tokio::test]
+    async fn search_error_429_returns_rate_limited_message() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .returning(|_| Err(KagiError::RateLimited));
+
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Rate limited"));
+    }
+
+    #[tokio::test]
+    async fn search_invalid_request_returns_error_message() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .returning(|_| {
+                Err(KagiError::InvalidRequest {
+                    message: "bad param".to_string(),
+                })
+            });
+
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Invalid request"));
+        assert!(err.to_string().contains("bad param"));
     }
 }

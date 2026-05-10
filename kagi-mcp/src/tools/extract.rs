@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
 use rmcp::model::{CallToolResult, Content};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use rmcp::schemars;
 use serde::Deserialize;
 
-use kagi_api::client::KagiClient;
 use kagi_api::types::{ExtractPage, ExtractRequest};
+use kagi_api::KagiApi;
 
 use super::{map_kagi_error, send_progress};
 
@@ -19,7 +17,7 @@ pub struct ExtractParams {
 }
 
 pub async fn extract_handler(
-    client: &Arc<KagiClient>,
+    client: &dyn KagiApi,
     params: ExtractParams,
     ctx: &RequestContext<RoleServer>,
 ) -> Result<CallToolResult, rmcp::ErrorData> {
@@ -89,5 +87,171 @@ pub async fn extract_handler(
             Ok(CallToolResult::success(vec![Content::text(truncated)]))
         }
         Err(e) => Err(map_kagi_error(e)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kagi_api::error::KagiError;
+    use kagi_api::types::{ExtractData, ExtractError, ExtractResponse, Meta};
+    use kagi_api::MockKagiApi;
+
+    fn make_extract_response(data: Vec<ExtractData>, errors: Vec<ExtractError>) -> ExtractResponse {
+        ExtractResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: Some(data),
+            errors: Some(errors),
+        }
+    }
+
+    #[tokio::test]
+    async fn extract_success_returns_markdown() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .returning(|_| {
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_string(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: "https://example.com".to_string(),
+                        markdown: Some("# Hello\nWorld".to_string()),
+                    }]),
+                    errors: None,
+                })
+            });
+
+        let params = ExtractParams {
+            pages: vec!["https://example.com".to_string()],
+            timeout: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("https://example.com"));
+        assert!(text.contains("Hello"));
+        assert!(text.contains("World"));
+    }
+
+    #[tokio::test]
+    async fn extract_success_json_returns_raw_json() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .returning(|_| {
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_string(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: "https://example.com".to_string(),
+                        markdown: Some("content".to_string()),
+                    }]),
+                    errors: None,
+                })
+            });
+
+        let params = ExtractParams {
+            pages: vec!["https://example.com".to_string()],
+            timeout: None,
+            output_format: Some("json".to_string()),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("\"trace\""));
+        assert!(text.contains("\"data\""));
+    }
+
+    #[tokio::test]
+    async fn extract_private_ip_rejected_without_api_call() {
+        let mock = MockKagiApi::new();
+
+        let params = ExtractParams {
+            pages: vec!["https://192.168.1.1/".to_string()],
+            timeout: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("URL validation failed"));
+        assert!(err.to_string().contains("private IP"));
+    }
+
+    #[tokio::test]
+    async fn extract_error_500_returns_server_error_message() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .returning(|_| Err(KagiError::ServerError));
+
+        let params = ExtractParams {
+            pages: vec!["https://example.com".to_string()],
+            timeout: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Kagi API error"));
+    }
+
+    #[tokio::test]
+    async fn extract_partial_failure_renders_both_data_and_errors() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .returning(|_| {
+                Ok(make_extract_response(
+                    vec![ExtractData {
+                        url: "https://ok.com".to_string(),
+                        markdown: Some("Good content".to_string()),
+                    }],
+                    vec![ExtractError {
+                        url: "https://fail.com".to_string(),
+                        code: "500".to_string(),
+                        message: Some("Server Error".to_string()),
+                    }],
+                ))
+            });
+
+        let params = ExtractParams {
+            pages: vec!["https://ok.com".to_string(), "https://fail.com".to_string()],
+            timeout: None,
+            output_format: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(&mock, params, &ctx).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Good content"));
+        assert!(text.contains("https://fail.com"));
+        assert!(text.contains("Server Error"));
     }
 }

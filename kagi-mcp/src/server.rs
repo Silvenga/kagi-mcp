@@ -4,16 +4,17 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
-use rmcp::{tool, tool_router, ErrorData as McpError};
+use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError};
 
 use kagi_api::client::KagiClient;
+use kagi_api::KagiApi;
 
 use crate::tools::extract::{extract_handler, ExtractParams};
 use crate::tools::search::{search_handler, SearchParams};
 
 #[derive(Clone)]
 pub struct KagiMcpServer {
-    pub client: Arc<KagiClient>,
+    pub client: Arc<dyn KagiApi>,
 }
 
 impl KagiMcpServer {
@@ -22,9 +23,14 @@ impl KagiMcpServer {
             client: Arc::new(client),
         }
     }
+
+    #[cfg(test)]
+    pub fn with_client(client: Arc<dyn KagiApi>) -> Self {
+        Self { client }
+    }
 }
 
-#[tool_router(server_handler)]
+#[tool_router(vis = "pub")]
 impl KagiMcpServer {
     #[tool(description = "Search the web using Kagi")]
     async fn search(
@@ -32,7 +38,7 @@ impl KagiMcpServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<SearchParams>,
     ) -> Result<CallToolResult, McpError> {
-        search_handler(&self.client, params, &ctx).await
+        search_handler(&*self.client, params, &ctx).await
     }
 
     #[tool(description = "Extract clean Markdown from URLs")]
@@ -41,9 +47,12 @@ impl KagiMcpServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<ExtractParams>,
     ) -> Result<CallToolResult, McpError> {
-        extract_handler(&self.client, params, &ctx).await
+        extract_handler(&*self.client, params, &ctx).await
     }
 }
+
+#[tool_handler(name = "Kagi", router = Self::tool_router())]
+impl rmcp::ServerHandler for KagiMcpServer {}
 
 #[cfg(test)]
 mod tests {
@@ -59,6 +68,18 @@ mod tests {
             .unwrap();
 
         let server = KagiMcpServer::new(client);
+
+        let info = server.get_info();
+        assert!(
+            info.capabilities.tools.is_some(),
+            "server should have tools capability"
+        );
+    }
+
+    #[test]
+    fn when_mock_client_provided_then_server_should_accept_it() {
+        let mock = kagi_api::MockKagiApi::new();
+        let server = KagiMcpServer::with_client(Arc::new(mock));
 
         let info = server.get_info();
         assert!(

@@ -6,6 +6,7 @@ use reqwest_retry::{RetryError, RetryTransientMiddleware};
 
 use crate::error::{from_http_status, KagiError, KagiErrorResponse};
 use crate::types::{ExtractRequest, ExtractResponse, SearchRequest, SearchResponse};
+use crate::KagiApi;
 
 const DEFAULT_BASE_URL: &str = "https://kagi.com/api";
 const DEFAULT_USER_AGENT: &str = "kagi-api/0.1.0 (github.com/Silvenga/kagi-mcp)";
@@ -97,6 +98,17 @@ impl KagiClientBuilder {
 impl Default for KagiClientBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[async_trait::async_trait]
+impl KagiApi for KagiClient {
+    async fn search(&self, request: SearchRequest) -> Result<SearchResponse, KagiError> {
+        KagiClient::search(self, request).await
+    }
+
+    async fn extract(&self, request: ExtractRequest) -> Result<ExtractResponse, KagiError> {
+        KagiClient::extract(self, request).await
     }
 }
 

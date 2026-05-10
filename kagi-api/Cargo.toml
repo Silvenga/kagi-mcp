@@ -19,7 +19,11 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
+mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
 wiremock = "0.6"
+
+[features]
+mock = ["dep:mockall"]

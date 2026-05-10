@@ -1,7 +1,7 @@
 mod config;
 pub mod format;
 mod guard;
-mod server;
+pub mod server;
 mod tools;
 pub(crate) mod validation;
 

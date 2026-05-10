@@ -51,3 +51,29 @@ pub(crate) fn map_kagi_error(error: KagiError) -> rmcp::ErrorData {
         }
     }
 }
+
+#[cfg(test)]
+pub(crate) async fn test_request_context() -> rmcp::service::RequestContext<rmcp::RoleServer> {
+    use std::sync::Arc;
+
+    use rmcp::service::serve_directly_with_ct;
+    use tokio_util::sync::CancellationToken;
+
+    use crate::server::KagiMcpServer;
+
+    let (server_transport, client_transport) = tokio::io::duplex(4096);
+    drop(client_transport);
+
+    let server = KagiMcpServer::with_client(Arc::new(kagi_api::MockKagiApi::new()));
+    let server_svc = serve_directly_with_ct(
+        server,
+        server_transport,
+        None::<rmcp::model::ClientInfo>,
+        CancellationToken::new(),
+    );
+
+    let peer = server_svc.peer().clone();
+    drop(server_svc);
+
+    rmcp::service::RequestContext::new(rmcp::model::RequestId::Number(1), peer)
+}
