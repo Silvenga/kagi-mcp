@@ -1,11 +1,7 @@
 {
   "packages": {
-    "kagi-api": {
-      "release-type": "rust"
-    },
     "kagi-mcp": {
       "release-type": "rust"
     }
-  },
-  "plugins": ["cargo-workspace"]
+  }
 }
