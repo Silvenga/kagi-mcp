@@ -61,20 +61,32 @@ mod tests {
         // Each emoji is 4 bytes. 256KB = 65536 emojis.
         // We'll create 66000 emojis (264000 bytes) which exceeds 256KB (262144 bytes).
         let emoji_count = 66_000;
-        let content: String = std::iter::repeat('😀').take(emoji_count).collect();
+        let content: String = "😀".repeat(emoji_count);
         // Total: 66_000 * 4 = 264_000 bytes > 262_144
         let result = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
 
         // Verify truncation happened
-        assert!(result.len() < content.len(), "result should be shorter than original");
+        assert!(
+            result.len() < content.len(),
+            "result should be shorter than original"
+        );
 
         // Verify the truncated content ends with a complete character (no broken UTF-8)
         assert!(result.is_char_boundary(result.len() - 1) || result.is_char_boundary(result.len()));
         // Actually, let's verify the whole string is valid UTF-8 and ends with the notice
-        assert!(result.ends_with(")_"), "result should end with truncation notice");
+        assert!(
+            result.ends_with(")_"),
+            "result should end with truncation notice"
+        );
 
         // Verify the truncated content portion is valid UTF-8 (no mid-char cut)
-        let truncated_part = result.strip_suffix("\n\n_(Content truncated. Total size: 264000 bytes)_").unwrap();
-        assert_eq!(truncated_part.len() % 4, 0, "emoji string should be truncated at char boundary (multiple of 4 bytes)");
+        let truncated_part = result
+            .strip_suffix("\n\n_(Content truncated. Total size: 264000 bytes)_")
+            .unwrap();
+        assert_eq!(
+            truncated_part.len() % 4,
+            0,
+            "emoji string should be truncated at char boundary (multiple of 4 bytes)"
+        );
     }
 }

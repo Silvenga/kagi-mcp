@@ -1,7 +1,7 @@
 use rmcp::model::{CallToolResult, Content};
+use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
-use rmcp::schemars;
 use serde::Deserialize;
 
 use kagi_api::types::{Filters, SearchRequest};
@@ -127,18 +127,16 @@ mod tests {
     #[tokio::test]
     async fn search_success_returns_markdown() {
         let mut mock = MockKagiApi::new();
-        mock.expect_search()
-            .times(1)
-            .returning(|_| {
-                Ok(make_search_response(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Example".to_string(),
-                    snippet: Some("Snippet text".to_string()),
-                    time: Some("2023-01-01".to_string()),
-                    image: None,
-                    props: None,
-                }]))
-            });
+        mock.expect_search().times(1).returning(|_| {
+            Ok(make_search_response(vec![SearchResult {
+                url: "https://example.com".to_string(),
+                title: "Example".to_string(),
+                snippet: Some("Snippet text".to_string()),
+                time: Some("2023-01-01".to_string()),
+                image: None,
+                props: None,
+            }]))
+        });
 
         let params = SearchParams {
             query: "test query".to_string(),
@@ -163,18 +161,16 @@ mod tests {
     #[tokio::test]
     async fn search_success_json_returns_raw_json() {
         let mut mock = MockKagiApi::new();
-        mock.expect_search()
-            .times(1)
-            .returning(|_| {
-                Ok(make_search_response(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Example".to_string(),
-                    snippet: None,
-                    time: None,
-                    image: None,
-                    props: None,
-                }]))
-            });
+        mock.expect_search().times(1).returning(|_| {
+            Ok(make_search_response(vec![SearchResult {
+                url: "https://example.com".to_string(),
+                title: "Example".to_string(),
+                snippet: None,
+                time: None,
+                image: None,
+                props: None,
+            }]))
+        });
 
         let params = SearchParams {
             query: "test".to_string(),
@@ -196,18 +192,16 @@ mod tests {
     #[tokio::test]
     async fn search_empty_results_returns_no_results_message() {
         let mut mock = MockKagiApi::new();
-        mock.expect_search()
-            .times(1)
-            .returning(|_| {
-                Ok(SearchResponse {
-                    meta: Meta {
-                        trace: "test".to_string(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: empty_search_data(),
-                })
-            });
+        mock.expect_search().times(1).returning(|_| {
+            Ok(SearchResponse {
+                meta: Meta {
+                    trace: "test".to_string(),
+                    node: None,
+                    ms: None,
+                },
+                data: empty_search_data(),
+            })
+        });
 
         let params = SearchParams {
             query: "test".to_string(),
@@ -274,13 +268,11 @@ mod tests {
     #[tokio::test]
     async fn search_invalid_request_returns_error_message() {
         let mut mock = MockKagiApi::new();
-        mock.expect_search()
-            .times(1)
-            .returning(|_| {
-                Err(KagiError::InvalidRequest {
-                    message: "bad param".to_string(),
-                })
-            });
+        mock.expect_search().times(1).returning(|_| {
+            Err(KagiError::InvalidRequest {
+                message: "bad param".to_string(),
+            })
+        });
 
         let params = SearchParams {
             query: "test".to_string(),

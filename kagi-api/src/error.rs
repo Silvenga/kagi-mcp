@@ -82,10 +82,7 @@ impl KagiErrorResponse {
 }
 
 /// Maps an HTTP status code and optional error response body to a [`KagiError`].
-pub(crate) fn from_http_status(
-    status: StatusCode,
-    body: Option<KagiErrorResponse>,
-) -> KagiError {
+pub(crate) fn from_http_status(status: StatusCode, body: Option<KagiErrorResponse>) -> KagiError {
     let message = body
         .as_ref()
         .map(|b| b.format_message())

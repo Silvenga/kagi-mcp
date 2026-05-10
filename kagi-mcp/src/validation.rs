@@ -67,7 +67,10 @@ mod tests {
 
     #[test]
     fn when_https_url_is_valid_should_return_parsed_url() {
-        let urls = vec!["https://example.com".to_string(), "https://kagi.com/api".to_string()];
+        let urls = vec![
+            "https://example.com".to_string(),
+            "https://kagi.com/api".to_string(),
+        ];
 
         let result = validate_extract_urls(&urls);
 
@@ -94,7 +97,10 @@ mod tests {
 
         let result = validate_extract_urls(&urls);
 
-        assert_eq!(result, Err(ValidationError::PrivateIp("10.0.0.1".to_string())));
+        assert_eq!(
+            result,
+            Err(ValidationError::PrivateIp("10.0.0.1".to_string()))
+        );
     }
 
     #[test]
@@ -103,7 +109,10 @@ mod tests {
 
         let result = validate_extract_urls(&urls);
 
-        assert_eq!(result, Err(ValidationError::PrivateIp("172.16.0.1".to_string())));
+        assert_eq!(
+            result,
+            Err(ValidationError::PrivateIp("172.16.0.1".to_string()))
+        );
     }
 
     #[test]
@@ -112,7 +121,10 @@ mod tests {
 
         let result = validate_extract_urls(&urls);
 
-        assert_eq!(result, Err(ValidationError::PrivateIp("192.168.1.1".to_string())));
+        assert_eq!(
+            result,
+            Err(ValidationError::PrivateIp("192.168.1.1".to_string()))
+        );
     }
 
     #[test]
@@ -121,7 +133,10 @@ mod tests {
 
         let result = validate_extract_urls(&urls);
 
-        assert_eq!(result, Err(ValidationError::PrivateIp("127.0.0.1".to_string())));
+        assert_eq!(
+            result,
+            Err(ValidationError::PrivateIp("127.0.0.1".to_string()))
+        );
     }
 
     #[test]
@@ -139,7 +154,10 @@ mod tests {
 
         let result = validate_extract_urls(&urls);
 
-        assert_eq!(result, Err(ValidationError::LinkLocal("169.254.0.1".to_string())));
+        assert_eq!(
+            result,
+            Err(ValidationError::LinkLocal("169.254.0.1".to_string()))
+        );
     }
 
     #[test]
@@ -148,12 +166,18 @@ mod tests {
 
         let result = validate_extract_urls(&urls);
 
-        assert_eq!(result, Err(ValidationError::LinkLocal("fe80::1".to_string())));
+        assert_eq!(
+            result,
+            Err(ValidationError::LinkLocal("fe80::1".to_string()))
+        );
     }
 
     #[test]
     fn when_multiple_urls_with_first_invalid_should_return_error() {
-        let urls = vec!["http://example.com".to_string(), "https://kagi.com".to_string()];
+        let urls = vec![
+            "http://example.com".to_string(),
+            "https://kagi.com".to_string(),
+        ];
 
         let result = validate_extract_urls(&urls);
 
@@ -162,7 +186,10 @@ mod tests {
 
     #[test]
     fn when_multiple_urls_with_second_invalid_should_return_error() {
-        let urls = vec!["https://kagi.com".to_string(), "http://example.com".to_string()];
+        let urls = vec![
+            "https://kagi.com".to_string(),
+            "http://example.com".to_string(),
+        ];
 
         let result = validate_extract_urls(&urls);
 

@@ -7,7 +7,7 @@ authors.workspace = true
 
 [dependencies]
 kagi-api = { path = "../kagi-api" }
-rmcp = { version = "1.6", features = ["server", "transport-io", "transport-async-rw", "schemars"] }
+rmcp = { version = "1.6", features = ["server", "client", "transport-io", "transport-async-rw", "schemars"] }
 tokio = { workspace = true, features = ["io-std", "io-util"] }
 tokio-util = "0.7"
 clap = { workspace = true }

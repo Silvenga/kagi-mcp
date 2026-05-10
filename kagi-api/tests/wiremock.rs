@@ -1,10 +1,10 @@
 use kagi_api::{
-    KagiClientBuilder, KagiError,
     types::{ExtractPage, ExtractRequest, SearchRequest},
+    KagiClientBuilder, KagiError,
 };
 use wiremock::{
-    Mock, MockServer, ResponseTemplate,
     matchers::{body_json, header, method, path},
+    Mock, MockServer, ResponseTemplate,
 };
 
 fn search_request() -> SearchRequest {
@@ -62,7 +62,7 @@ async fn search_happy_path() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .build()
         .unwrap();
 
@@ -92,13 +92,16 @@ async fn extract_happy_path() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .build()
         .unwrap();
 
     let response = client.extract(extract_request()).await.unwrap();
     assert_eq!(response.meta.trace, "test-trace");
-    assert_eq!(response.data.unwrap()[0].markdown, Some("# Hello".to_string()));
+    assert_eq!(
+        response.data.unwrap()[0].markdown,
+        Some("# Hello".to_string())
+    );
 }
 
 #[tokio::test]
@@ -112,7 +115,7 @@ async fn error_400() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .retries(0)
         .build()
         .unwrap();
@@ -137,7 +140,7 @@ async fn error_401() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .retries(0)
         .build()
         .unwrap();
@@ -161,7 +164,7 @@ async fn error_403() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .retries(0)
         .build()
         .unwrap();
@@ -185,7 +188,7 @@ async fn error_429() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .retries(0)
         .build()
         .unwrap();
@@ -209,7 +212,7 @@ async fn error_500() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .retries(0)
         .build()
         .unwrap();
@@ -233,7 +236,7 @@ async fn network_error() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .retries(0)
         .build()
         .unwrap();
@@ -271,7 +274,7 @@ async fn retry_on_429() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .retries(1)
         .build()
         .unwrap();
@@ -306,7 +309,7 @@ async fn retry_on_500() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .retries(1)
         .build()
         .unwrap();
@@ -330,7 +333,7 @@ async fn user_agent_default() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .build()
         .unwrap();
 
@@ -342,7 +345,10 @@ async fn user_agent_default() {
         .headers
         .get("user-agent")
         .expect("user-agent header should be present");
-    assert_eq!(user_agent.to_str().unwrap(), "kagi-api/0.1.0 (github.com/Silvenga/kagi-mcp)");
+    assert_eq!(
+        user_agent.to_str().unwrap(),
+        "kagi-api/0.1.0 (github.com/Silvenga/kagi-mcp)"
+    );
 }
 
 #[tokio::test]
@@ -359,7 +365,7 @@ async fn user_agent_custom() {
 
     let client = KagiClientBuilder::new()
         .api_key("test-key")
-        .base_url(&server.uri())
+        .base_url(server.uri())
         .user_agent("my-custom-agent/1.0")
         .build()
         .unwrap();

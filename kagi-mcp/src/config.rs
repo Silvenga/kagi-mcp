@@ -6,11 +6,7 @@ pub struct Config {
     #[arg(long, env = "KAGI_API_KEY")]
     pub api_key: String,
 
-    #[arg(
-        long,
-        env = "KAGI_BASE_URL",
-        default_value = "https://kagi.com/api"
-    )]
+    #[arg(long, env = "KAGI_BASE_URL", default_value = "https://kagi.com/api")]
     pub base_url: String,
 
     #[arg(long, env = "KAGI_TIMEOUT", default_value = "4.0")]

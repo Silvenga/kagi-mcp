@@ -154,9 +154,10 @@ async fn handle_response<T: serde::de::DeserializeOwned>(
     let status = response.status();
 
     if status.is_success() {
-        let body: T = response.json().await.map_err(|e| KagiError::Network {
-            source: e,
-        })?;
+        let body: T = response
+            .json()
+            .await
+            .map_err(|e| KagiError::Network { source: e })?;
         Ok(body)
     } else {
         let error_body = response.json::<KagiErrorResponse>().await.ok();
@@ -177,14 +178,13 @@ fn map_middleware_error(error: reqwest_middleware::Error) -> KagiError {
                     RetryError::Error(err) => err,
                 };
                 if let reqwest_middleware::Error::Reqwest(reqwest_err) = inner_err {
-                    return KagiError::Network { source: reqwest_err };
+                    return KagiError::Network {
+                        source: reqwest_err,
+                    };
                 }
             }
-            KagiError::Api {
-                status: 0,
-                message,
-            }
-        },
+            KagiError::Api { status: 0, message }
+        }
     }
 }
 
@@ -211,7 +211,10 @@ mod tests {
     fn when_default_builder_then_should_have_default_timeout() {
         let builder = KagiClientBuilder::new();
 
-        assert_eq!(builder.timeout, Duration::from_secs_f64(DEFAULT_TIMEOUT_SECS));
+        assert_eq!(
+            builder.timeout,
+            Duration::from_secs_f64(DEFAULT_TIMEOUT_SECS)
+        );
     }
 
     #[test]

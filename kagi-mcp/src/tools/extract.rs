@@ -1,7 +1,7 @@
 use rmcp::model::{CallToolResult, Content};
+use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
-use rmcp::schemars;
 use serde::Deserialize;
 
 use kagi_api::types::{ExtractPage, ExtractRequest};
@@ -33,9 +33,7 @@ pub async fn extract_handler(
 
     let pages: Vec<ExtractPage> = validated_urls
         .into_iter()
-        .map(|u| ExtractPage {
-            url: u.to_string(),
-        })
+        .map(|u| ExtractPage { url: u.to_string() })
         .collect();
 
     let request = ExtractRequest {
@@ -112,22 +110,20 @@ mod tests {
     #[tokio::test]
     async fn extract_success_returns_markdown() {
         let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(1)
-            .returning(|_| {
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_string(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: "https://example.com".to_string(),
-                        markdown: Some("# Hello\nWorld".to_string()),
-                    }]),
-                    errors: None,
-                })
-            });
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_string(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://example.com".to_string(),
+                    markdown: Some("# Hello\nWorld".to_string()),
+                }]),
+                errors: None,
+            })
+        });
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_string()],
@@ -148,22 +144,20 @@ mod tests {
     #[tokio::test]
     async fn extract_success_json_returns_raw_json() {
         let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(1)
-            .returning(|_| {
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_string(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: "https://example.com".to_string(),
-                        markdown: Some("content".to_string()),
-                    }]),
-                    errors: None,
-                })
-            });
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_string(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://example.com".to_string(),
+                    markdown: Some("content".to_string()),
+                }]),
+                errors: None,
+            })
+        });
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_string()],
@@ -223,21 +217,19 @@ mod tests {
     #[tokio::test]
     async fn extract_partial_failure_renders_both_data_and_errors() {
         let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(1)
-            .returning(|_| {
-                Ok(make_extract_response(
-                    vec![ExtractData {
-                        url: "https://ok.com".to_string(),
-                        markdown: Some("Good content".to_string()),
-                    }],
-                    vec![ExtractError {
-                        url: "https://fail.com".to_string(),
-                        code: "500".to_string(),
-                        message: Some("Server Error".to_string()),
-                    }],
-                ))
-            });
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(make_extract_response(
+                vec![ExtractData {
+                    url: "https://ok.com".to_string(),
+                    markdown: Some("Good content".to_string()),
+                }],
+                vec![ExtractError {
+                    url: "https://fail.com".to_string(),
+                    code: "500".to_string(),
+                    message: Some("Server Error".to_string()),
+                }],
+            ))
+        });
 
         let params = ExtractParams {
             pages: vec!["https://ok.com".to_string(), "https://fail.com".to_string()],

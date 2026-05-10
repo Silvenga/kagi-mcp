@@ -43,12 +43,10 @@ pub(crate) fn map_kagi_error(error: KagiError) -> rmcp::ErrorData {
         KagiError::Network { source } => {
             rmcp::ErrorData::internal_error(format!("Request failed: {source}"), None)
         }
-        KagiError::Api { status, message } => {
-            rmcp::ErrorData::internal_error(
-                format!("Kagi API error (HTTP {status}): {message}"),
-                None,
-            )
-        }
+        KagiError::Api { status, message } => rmcp::ErrorData::internal_error(
+            format!("Kagi API error (HTTP {status}): {message}"),
+            None,
+        ),
     }
 }
 

@@ -12,7 +12,12 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                 has_results = true;
                 output.push_str(&format!("## {}\n\n", title));
                 for (i, result) in results.iter().enumerate() {
-                    output.push_str(&format!("{}. **[{}]({})**\n", i + 1, result.title, result.url));
+                    output.push_str(&format!(
+                        "{}. **[{}]({})**\n",
+                        i + 1,
+                        result.title,
+                        result.url
+                    ));
                     if let Some(snippet) = &result.snippet {
                         output.push_str(&format!("   - Snippet: {}\n", snippet));
                     }
@@ -39,11 +44,19 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
             has_results = true;
             output.push_str("## Images\n\n");
             for (i, result) in results.iter().enumerate() {
-                output.push_str(&format!("{}. **[{}]({})**\n", i + 1, result.title, result.url));
+                output.push_str(&format!(
+                    "{}. **[{}]({})**\n",
+                    i + 1,
+                    result.title,
+                    result.url
+                ));
                 if let Some(image) = &result.image {
                     let width = image.width.map_or("?".to_string(), |w| w.to_string());
                     let height = image.height.map_or("?".to_string(), |h| h.to_string());
-                    output.push_str(&format!("   - Image: {} ({}x{})\n", image.url, width, height));
+                    output.push_str(&format!(
+                        "   - Image: {} ({}x{})\n",
+                        image.url, width, height
+                    ));
                 }
             }
             output.push('\n');
@@ -55,7 +68,12 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
             has_results = true;
             output.push_str("## Videos\n\n");
             for (i, result) in results.iter().enumerate() {
-                output.push_str(&format!("{}. **[{}]({})**\n", i + 1, result.title, result.url));
+                output.push_str(&format!(
+                    "{}. **[{}]({})**\n",
+                    i + 1,
+                    result.title,
+                    result.url
+                ));
                 if let Some(snippet) = &result.snippet {
                     output.push_str(&format!("   - Snippet: {}\n", snippet));
                 }
@@ -72,7 +90,12 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
             has_results = true;
             output.push_str("## Podcasts\n\n");
             for (i, result) in results.iter().enumerate() {
-                output.push_str(&format!("{}. **[{}]({})**\n", i + 1, result.title, result.url));
+                output.push_str(&format!(
+                    "{}. **[{}]({})**\n",
+                    i + 1,
+                    result.title,
+                    result.url
+                ));
                 if let Some(snippet) = &result.snippet {
                     output.push_str(&format!("   - Snippet: {}\n", snippet));
                 }
@@ -472,7 +495,8 @@ mod tests {
             }]),
         };
 
-        let expected = "## Extracted Content\n\n### https://example.com\n\n**Extraction failed:** Not Found";
+        let expected =
+            "## Extracted Content\n\n### https://example.com\n\n**Extraction failed:** Not Found";
         assert_eq!(format_extract_markdown(&response), expected);
     }
 
