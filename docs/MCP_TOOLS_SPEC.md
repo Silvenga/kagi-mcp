@@ -1,4 +1,4 @@
-# Kagi MCP Server -- Tool Specification
+# Kagi MCP Server - Tool Specification
 
 > This document defines the MCP tool schemas (input parameters and output format) for the
 > `kagi-mcp` server. It serves as the contract for future implementers and consumers.
@@ -80,7 +80,7 @@ Both tools return `text` content. The default output format is **structured Mark
 - `output_format` is a synthetic parameter handled by the MCP server, not forwarded to Kagi.
 - `page`, `limit`, `safe_search`, and `region` are configured at the server level and are not exposed as tool parameters. Defaults: `limit=10`, `safe_search=true`, `region=none`.
 
-### 1.4 Output Format -- Markdown (Default)
+### 1.4 Output Format - Markdown (Default)
 
 When `output_format` is `"markdown"`, the server converts the Kagi JSON response into structured Markdown. The output is organized by result category. Categories with no results are omitted.
 
@@ -188,7 +188,7 @@ No results found.
 - [Tracking Link](URL)
 ```
 
-### 1.5 Output Format -- JSON
+### 1.5 Output Format - JSON
 
 When `output_format` is `"json"`, the raw Kagi API JSON response is returned as a single `text` block (formatted with `serde_json::to_string_pretty`). This is useful when the caller needs programmatic access to all fields, including `props`.
 
@@ -268,7 +268,7 @@ When `output_format` is `"json"`, the raw Kagi API JSON response is returned as 
 - `output_format` is handled by the MCP server, not forwarded to Kagi.
 - **Security:** The server must validate that extracted URLs are not private IP ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`), `localhost`, or link-local addresses. This prevents SSRF against internal services.
 
-### 2.4 Output Format -- Markdown (Default)
+### 2.4 Output Format - Markdown (Default)
 
 When `output_format` is `"markdown"`, each extracted page is rendered as a Markdown section:
 
@@ -294,7 +294,7 @@ If a page fails to extract, it is rendered as:
 **Extraction failed:** {error message}
 ```
 
-### 2.5 Output Format -- JSON
+### 2.5 Output Format - JSON
 
 When `output_format` is `"json"`, the raw Kagi API JSON response (including `meta`, `data`, and `errors`) is returned as a pretty-printed JSON text block.
 
