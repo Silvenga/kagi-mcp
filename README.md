@@ -36,9 +36,12 @@ kagi-mcp --api-key "your-api-key"
 |----------------|-------------|---------|
 | `--api-key` / `KAGI_API_KEY` | Kagi API key | *required* |
 | `--base-url` / `KAGI_BASE_URL` | Kagi API base URL | `https://kagi.com/api` |
-| `--kagi-timeout` | Kagi API request timeout (seconds) | `4` |
-| `--client-timeout` | Client-side HTTP timeout (seconds) | `10` |
-| `--retries` | Number of retries for transient failures | `3` |
+| `--kagi-timeout` / `KAGI_TIMEOUT` | Kagi API request timeout (seconds) | `4` |
+| `--client-timeout` / `KAGI_CLIENT_TIMEOUT` | Client-side HTTP timeout (seconds) | `10` |
+| `--retries` / `KAGI_RETRIES` | Number of retries for transient failures | `3` |
+| `--limit` / `KAGI_LIMIT` | Default result limit for search | `10` |
+| `--safe-search` / `KAGI_SAFE_SEARCH` | Enable safe search | `true` |
+| `--region` / `KAGI_REGION` | Default region filter (ISO 3166-1 alpha-2) | *none* |
 
 ## Usage
 
