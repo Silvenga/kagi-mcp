@@ -73,3 +73,13 @@ All changes must be submitted via Pull Requests.
 - Address review feedback by committing and pushing additional changes to the same branch; they will automatically appear in the PR.
 - PRs are merged with **squash merge**.
 - The PR title must follow **Conventional Commits** style (e.g., `feat:`, `fix:`, `docs:`), because the squashed commit message is derived from the PR title.
+
+## CI/CD Maintenance
+
+After making changes to GitHub Actions workflows, run the following command to ensure all actions are pinned to their latest versions:
+
+```bash
+npx actions-up --mode patch --recursive --yes
+```
+
+This updates action references to the latest compatible versions and pins them to immutable SHAs.
