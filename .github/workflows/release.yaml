@@ -23,7 +23,7 @@ jobs:
       - uses: googleapis/release-please-action@078b9b8dda7799db29972b379561ff8e19b08e82 # v4.0.3
         id: release
         with:
-          release-type: rust
+          command: manifest
 
   upload-linux:
     name: Build (Linux)
