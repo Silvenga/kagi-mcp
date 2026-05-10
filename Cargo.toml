@@ -14,7 +14,7 @@ documentation = "https://github.com/Silvenga/kagi-mcp"
 readme = "README.md"
 keywords = ["kagi", "search", "mcp", "api"]
 categories = ["web-programming::http-client", "command-line-utilities"]
-rust-version = "1.84"
+rust-version = "1.81"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
