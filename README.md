@@ -101,6 +101,4 @@ cargo test --test integration
 KAGI_API_KEY=xxx cargo run --bin kagi-mcp
 ```
 
-## License
 
-Apache-2.0
