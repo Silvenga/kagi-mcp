@@ -45,7 +45,7 @@ kagi-mcp --api-key "your-api-key"
 
 ## Usage
 
-The server runs in **stdio mode** and is designed to be connected to an MCP client (e.g., Claude Desktop, Cursor, or any MCP-compatible host).
+The server runs in stdio mode and is designed to be connected to an MCP client (e.g., Claude Desktop, Cursor, or any MCP-compatible host).
 
 ```json
 {
@@ -67,7 +67,7 @@ The server runs in **stdio mode** and is designed to be connected to an MCP clie
 Search the web using Kagi. Returns structured Markdown results optimized for LLMs.
 
 **Parameters:**
-- `query` (required) — Search query. Supports advanced operators: `site:`, `\"exact phrases\"`, `-negation`, etc.
+- `query` (required) — Search query. Supports advanced operators: `site:`, `"exact phrases"`, `-negation`, etc.
 - `workflow` — Result type: `search`, `images`, `videos`, `news`, `podcasts`
 - `after`, `before` — Date filters (YYYY-MM-DD)
 - `output_format` — `markdown` (default) or `json`
@@ -81,24 +81,5 @@ Extract clean Markdown content from URLs.
 - `timeout` — Per-page extraction timeout
 - `output_format` — `markdown` (default) or `json`
 
-## Project Structure
-
-This is a Cargo workspace:
-
-- `kagi-api/` — Low-level Kagi API client library
-- `kagi-mcp/` — MCP server executable
-
-## Development
-
-```bash
-# Run tests
-cargo test
-
-# Run MCP integration tests
-cargo test --test integration
-
-# Run with a local API key
-KAGI_API_KEY=xxx cargo run --bin kagi-mcp
-```
 
 
