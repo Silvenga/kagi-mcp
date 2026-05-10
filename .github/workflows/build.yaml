@@ -24,9 +24,11 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@d39b183d8d7c85028c4b64a005898c879197d13e # v1.0.2
         with:
           toolchain: stable
-      - name: Check formatting
+      - name: Fmt
         run: cargo fmt --all --check
-      - name: Run clippy
+      - name: Build
+        run: cargo build
+      - name: Lint
         run: cargo clippy --workspace --all-targets --all-features -- -A dead_code
       - name: Test
         run: cargo test --workspace --all-features --no-fail-fast
