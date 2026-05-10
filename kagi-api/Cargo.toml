@@ -1,9 +1,17 @@
 [package]
 name = "kagi-api"
 version = "0.1.0"
+description = "Kagi Search and Extract API client library"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "README.md"
+keywords = ["kagi", "search", "api", "client"]
+categories = ["web-programming::http-client", "api-bindings"]
+rust-version.workspace = true
 
 [dependencies]
 reqwest = { workspace = true }
