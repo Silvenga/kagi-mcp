@@ -1,0 +1,14 @@
+{
+  "meta": {
+    "trace": "test-trace",
+    "ms": 100,
+    "node": "test-node"
+  },
+  "data": [
+    {
+      "url": "https://www.rust-lang.org",
+      "markdown": "### Performance\n\n Rust is blazingly fast and memory-efficient: with no runtime or garbage collector, it can power performance-critical services, run on embedded devices, and easily integrate with other languages.\n\n### Reliability\n\n Rust’s rich type system and ownership model guarantee memory-safety and thread-safety — enabling you to eliminate many classes of bugs at compile-time."
+    }
+  ],
+  "errors": []
+}

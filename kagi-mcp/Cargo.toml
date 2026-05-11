@@ -16,7 +16,7 @@ rust-version.workspace = true
 [dependencies]
 kagi-api = { path = "../kagi-api" }
 rmcp = { version = "1.6", features = ["server", "client", "transport-io", "transport-async-rw", "schemars"] }
-tokio = { workspace = true, features = ["io-std", "io-util"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "process", "rt"] }
 tokio-util = "0.7"
 clap = { workspace = true }
 tracing = { workspace = true }
@@ -33,3 +33,4 @@ async-trait = { workspace = true }
 mockall = { workspace = true }
 kagi-api = { path = "../kagi-api", features = ["mock"] }
 wiremock = "0.6"
+assert_cmd = "2"
