@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "trace": "test-trace",
+    "ms": 100,
+    "node": "test-node"
+  },
+  "data": {
+    "search": [
+      {
+        "url": "https://rust-lang.org/",
+        "title": "Rust Programming Language",
+        "snippet": "Rust is blazingly fast and memory-efficient: with no runtime or garbage collector, it can power performance-critical services, run on embedded devices, and ... ... Rust is a fast, reliable, and productive programming language that can run on embedded devices, web services, and more. Learn how to get started, why Rust is different, and what companies are using it in production. ... A language empowering everyone to build reliable and efficient software.In 2018, the Rust community decided to improve the programming experience for a few distinct domains (see the 2018 roadmap). For these, you can find many high-quality crates and some awesome guides on how to get started.",
+        "time": "2011-06-06T10:52:26Z",
+        "image": null,
+        "props": null
+      },
+      {
+        "url": "https://www.rust-lang.org/learn",
+        "title": "Learn",
+        "snippet": "Learn Rust Get started with Rust Affectionately nicknamed “the book,” The Rust Programming Language will give you an overview of the language from first principles. You’ll build a few projects along the way, and by the end, you’ll have a solid grasp of the language. Read the Book! ... Affectionately nicknamed “the book,” The Rust Programming Language will give you an overview of the language from first principles. You’ll build a few projects along the way, and by the end, you’ll have a solid grasp of the language.If reading multiple hundreds of pages about a language isn’t your style, then Rust By Example has you covered. ... Find out how to get started with Rust, a language for reliable and efficient software. Explore the book, the documentation, the courses, and the application domains for Rust.",
+        "time": "2014-05-22T10:52:50Z",
+        "image": null,
+        "props": null
+      }
+    ]
+  }
+}
