@@ -5,6 +5,7 @@
 //! search and extract tools via the Model Context Protocol (MCP).
 
 pub mod config;
+pub(crate) mod domain;
 pub mod format;
 mod guard;
 pub mod server;

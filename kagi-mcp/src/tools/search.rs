@@ -1,5 +1,5 @@
 use super::{map_kagi_error, send_progress};
-use kagi_api::types::{Filters, SearchRequest};
+use kagi_api::types::{Filters, SearchData, SearchRequest, SearchResult};
 use kagi_api::KagiApi;
 use rmcp::model::{CallToolResult, Content};
 use rmcp::schemars;
@@ -14,6 +14,11 @@ pub struct SearchParams {
     pub after: Option<String>,
     pub before: Option<String>,
     pub output_format: Option<String>,
+    /// Maximum number of results to return per domain group.
+    /// When set, over-fetches from Kagi and deduplicates by Kagi's
+    /// grouping key (with eTLD+1 fallback). Must be >= 1. Default:
+    /// no per-domain limit.
+    pub limit_per_domain: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -22,6 +27,8 @@ pub struct SearchConfig {
     pub limit: u32,
     pub safe_search: bool,
     pub region: Option<String>,
+    pub overfetch_multiplier: u32,
+    pub overfetch_max: u32,
 }
 
 impl Default for SearchConfig {
@@ -31,6 +38,8 @@ impl Default for SearchConfig {
             limit: 10,
             safe_search: true,
             region: None,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
         }
     }
 }
@@ -41,13 +50,28 @@ pub async fn search_handler(
     ctx: &RequestContext<RoleServer>,
     config: &SearchConfig,
 ) -> Result<CallToolResult, rmcp::ErrorData> {
+    if params.limit_per_domain == Some(0) {
+        return Err(rmcp::ErrorData::invalid_request(
+            "limit_per_domain must be >= 1",
+            None,
+        ));
+    }
+
+    let upstream_limit = match params.limit_per_domain {
+        Some(_) => {
+            let multiplied = config.limit.saturating_mul(config.overfetch_multiplier);
+            multiplied.min(config.overfetch_max).max(config.limit)
+        }
+        None => config.limit,
+    };
+
     let request = SearchRequest {
         query: params.query.clone(),
         workflow: params.workflow.clone(),
         format: Some("json".to_string()),
         timeout: Some(config.kagi_timeout),
         page: None,
-        limit: Some(config.limit),
+        limit: Some(upstream_limit),
         safe_search: Some(config.safe_search),
         region: config.region.clone(),
         filters: build_filters(params.after, params.before, config.region.clone()),
@@ -79,7 +103,10 @@ pub async fn search_handler(
     let _ = send_progress(ctx, 100.0, Some(100.0), "Query completed.".to_string()).await;
 
     match result {
-        Ok(response) => {
+        Ok(mut response) => {
+            if let Some(lpd) = params.limit_per_domain {
+                dedup_by_domain(&mut response.data, lpd, config.limit);
+            }
             let output_format = params.output_format.as_deref().unwrap_or("markdown");
             let content = if output_format == "json" {
                 crate::format::format_json(&response)
@@ -108,6 +135,48 @@ fn build_filters(
     } else {
         None
     }
+}
+
+fn dedup_by_domain(data: &mut SearchData, limit_per_domain: u32, final_limit: u32) {
+    use std::collections::HashMap;
+
+    let dedup_vec = |vec: &mut Option<Vec<SearchResult>>| {
+        if let Some(results) = vec {
+            let mut counts: HashMap<String, u32> = HashMap::new();
+            let mut kept: Vec<SearchResult> = Vec::new();
+            for result in results.drain(..) {
+                match crate::domain::extract_group_key(&result) {
+                    Some(key) => {
+                        let count = counts.entry(key).or_insert(0);
+                        if *count < limit_per_domain {
+                            *count += 1;
+                            kept.push(result);
+                        }
+                    }
+                    None => kept.push(result),
+                }
+            }
+            kept.truncate(final_limit as usize);
+            *results = kept;
+        }
+    };
+
+    dedup_vec(&mut data.search);
+    dedup_vec(&mut data.news);
+    dedup_vec(&mut data.interesting_news);
+    dedup_vec(&mut data.interesting_finds);
+    dedup_vec(&mut data.code);
+    dedup_vec(&mut data.public_records);
+    dedup_vec(&mut data.listicle);
+    dedup_vec(&mut data.web_archive);
+    dedup_vec(&mut data.image);
+    dedup_vec(&mut data.video);
+    dedup_vec(&mut data.podcast);
+    dedup_vec(&mut data.podcast_creator);
+    // The following categories are intentionally skipped because they do not
+    // represent ranked web results that benefit from per-domain deduplication:
+    // adjacent_question, direct_answer, infobox, related_search, weather,
+    // package_tracking.
 }
 
 #[cfg(test)]
@@ -174,6 +243,7 @@ mod tests {
             after: None,
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
@@ -218,6 +288,7 @@ mod tests {
             after: None,
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
@@ -251,6 +322,7 @@ mod tests {
             after: None,
             before: None,
             output_format: Some("json".to_string()),
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
@@ -282,6 +354,7 @@ mod tests {
             after: None,
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
@@ -305,6 +378,7 @@ mod tests {
             after: None,
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
@@ -329,6 +403,7 @@ mod tests {
             after: None,
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
@@ -354,6 +429,7 @@ mod tests {
             after: None,
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
@@ -379,6 +455,7 @@ mod tests {
             after: None,
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
         ctx.ct.cancel();
@@ -409,6 +486,8 @@ mod tests {
             limit: 25,
             safe_search: false,
             region: Some("us-west".to_string()),
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
         };
         let params = SearchParams {
             query: "test".to_string(),
@@ -416,6 +495,7 @@ mod tests {
             after: None,
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
@@ -440,6 +520,8 @@ mod tests {
             limit: 10,
             safe_search: true,
             region: Some("eu".to_string()),
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
         };
         let params = SearchParams {
             query: "test".to_string(),
@@ -447,10 +529,440 @@ mod tests {
             after: Some("2023-01-01".to_string()),
             before: None,
             output_format: None,
+            limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &config).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn when_limit_per_domain_is_zero_then_handler_should_return_invalid_request() {
+        let mock = MockKagiApi::new();
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: Some(0),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_REQUEST);
+        assert!(err.to_string().contains("limit_per_domain must be >= 1"));
+    }
+
+    #[tokio::test]
+    async fn when_limit_per_domain_is_some_then_upstream_request_limit_should_be_multiplied() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .withf(|req| req.limit == Some(50))
+            .returning(|_| Ok(make_search_response(vec![])));
+
+        let config = SearchConfig {
+            limit: 10,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: Some(2),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn when_limit_per_domain_is_some_with_small_max_then_upstream_should_not_drop_below_user_limit(
+    ) {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .withf(|req| req.limit == Some(12))
+            .returning(|_| Ok(make_search_response(vec![])));
+
+        let config = SearchConfig {
+            limit: 10,
+            overfetch_multiplier: 5,
+            overfetch_max: 12,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: Some(2),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn when_limit_per_domain_is_none_then_upstream_limit_should_equal_user_limit() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .withf(|req| req.limit == Some(10))
+            .returning(|_| Ok(make_search_response(vec![])));
+
+        let config = SearchConfig {
+            limit: 10,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: None,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn when_three_results_share_domain_and_lpd_is_one_then_only_first_should_remain() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(make_search_response(vec![
+                SearchResult {
+                    url: "https://example.com/1".to_string(),
+                    title: "First".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+                SearchResult {
+                    url: "https://example.com/2".to_string(),
+                    title: "Second".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+                SearchResult {
+                    url: "https://example.com/3".to_string(),
+                    title: "Third".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+            ]))
+        });
+
+        let config = SearchConfig {
+            limit: 10,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: Some("json".to_string()),
+            limit_per_domain: Some(1),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let search = parsed["data"]["search"].as_array().unwrap();
+        assert_eq!(search.len(), 1);
+        assert_eq!(search[0]["title"], "First");
+    }
+
+    #[tokio::test]
+    async fn when_limit_per_domain_applied_then_categories_should_have_independent_counters() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(SearchResponse {
+                meta: Meta {
+                    trace: "test".to_string(),
+                    node: None,
+                    ms: None,
+                },
+                data: SearchData {
+                    search: Some(vec![SearchResult {
+                        url: "https://example.com/s1".to_string(),
+                        title: "Search 1".to_string(),
+                        snippet: None,
+                        time: None,
+                        image: None,
+                        props: None,
+                    }]),
+                    news: Some(vec![SearchResult {
+                        url: "https://example.com/n1".to_string(),
+                        title: "News 1".to_string(),
+                        snippet: None,
+                        time: None,
+                        image: None,
+                        props: None,
+                    }]),
+                    ..empty_search_data()
+                },
+            })
+        });
+
+        let config = SearchConfig {
+            limit: 10,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: Some("json".to_string()),
+            limit_per_domain: Some(1),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert!(parsed["data"]["search"].as_array().unwrap().len() == 1);
+        assert!(parsed["data"]["news"].as_array().unwrap().len() == 1);
+    }
+
+    #[tokio::test]
+    async fn when_dedup_applied_then_original_order_should_be_preserved() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(make_search_response(vec![
+                SearchResult {
+                    url: "https://a.com/1".to_string(),
+                    title: "A1".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+                SearchResult {
+                    url: "https://b.com/1".to_string(),
+                    title: "B1".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+                SearchResult {
+                    url: "https://a.com/2".to_string(),
+                    title: "A2".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+            ]))
+        });
+
+        let config = SearchConfig {
+            limit: 10,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: Some("json".to_string()),
+            limit_per_domain: Some(1),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let search = parsed["data"]["search"].as_array().unwrap();
+        assert_eq!(search.len(), 2);
+        assert_eq!(search[0]["title"], "A1");
+        assert_eq!(search[1]["title"], "B1");
+    }
+
+    #[tokio::test]
+    async fn when_props_group_id_present_then_should_dedup_by_it_over_etld1() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(make_search_response(vec![
+                SearchResult {
+                    url: "https://blog.example.com/1".to_string(),
+                    title: "Blog 1".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: Some(serde_json::json!({"group_id": "blog.example.com"})),
+                },
+                SearchResult {
+                    url: "https://www.example.com/1".to_string(),
+                    title: "Main 1".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: Some(serde_json::json!({"group_id": "www.example.com"})),
+                },
+                SearchResult {
+                    url: "https://blog.example.com/2".to_string(),
+                    title: "Blog 2".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: Some(serde_json::json!({"group_id": "blog.example.com"})),
+                },
+            ]))
+        });
+
+        let config = SearchConfig {
+            limit: 10,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: Some("json".to_string()),
+            limit_per_domain: Some(1),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let search = parsed["data"]["search"].as_array().unwrap();
+        assert_eq!(search.len(), 2);
+        assert_eq!(search[0]["title"], "Blog 1");
+        assert_eq!(search[1]["title"], "Main 1");
+    }
+
+    #[tokio::test]
+    async fn when_final_count_after_dedup_exceeds_limit_then_should_truncate_to_limit() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(make_search_response(vec![
+                SearchResult {
+                    url: "https://a.com/1".to_string(),
+                    title: "A1".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+                SearchResult {
+                    url: "https://b.com/1".to_string(),
+                    title: "B1".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+                SearchResult {
+                    url: "https://c.com/1".to_string(),
+                    title: "C1".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                },
+            ]))
+        });
+
+        let config = SearchConfig {
+            limit: 2,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: Some("json".to_string()),
+            limit_per_domain: Some(1),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let search = parsed["data"]["search"].as_array().unwrap();
+        assert_eq!(search.len(), 2);
+        assert_eq!(search[0]["title"], "A1");
+        assert_eq!(search[1]["title"], "B1");
+    }
+
+    #[tokio::test]
+    async fn when_limit_per_domain_set_but_no_results_then_should_handle_gracefully() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(SearchResponse {
+                meta: Meta {
+                    trace: "test".to_string(),
+                    node: None,
+                    ms: None,
+                },
+                data: empty_search_data(),
+            })
+        });
+
+        let config = SearchConfig {
+            limit: 10,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
+            ..SearchConfig::default()
+        };
+        let params = SearchParams {
+            query: "test".to_string(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: Some(1),
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &config).await;
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert_eq!(text, "No results found.");
     }
 }

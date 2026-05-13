@@ -16,6 +16,8 @@ pub struct KagiMcpServer {
     pub limit: u32,
     pub safe_search: bool,
     pub region: Option<String>,
+    pub overfetch_multiplier: u32,
+    pub overfetch_max: u32,
 }
 
 impl KagiMcpServer {
@@ -25,6 +27,8 @@ impl KagiMcpServer {
         limit: u32,
         safe_search: bool,
         region: Option<String>,
+        overfetch_multiplier: u32,
+        overfetch_max: u32,
     ) -> Self {
         Self {
             client: Arc::new(client),
@@ -32,6 +36,8 @@ impl KagiMcpServer {
             limit,
             safe_search,
             region,
+            overfetch_multiplier,
+            overfetch_max,
         }
     }
 
@@ -43,13 +49,17 @@ impl KagiMcpServer {
             limit: 10,
             safe_search: true,
             region: None,
+            overfetch_multiplier: 5,
+            overfetch_max: 50,
         }
     }
 }
 
 #[tool_router(vis = "pub")]
 impl KagiMcpServer {
-    #[tool(description = "Search the web using Kagi")]
+    #[tool(
+        description = "Search the web via Kagi's premium search engine. Returns markdown-formatted results with sections for Web Results, News, Videos, Podcasts, Images, and related entities. Supports Kagi query operators: `site:domain`, `\"exact phrase\"`, `-negation`, `inurl:keyword`. Use `workflow` to scope results (search, images, videos, news, podcasts). Use `after` / `before` (YYYY-MM-DD) to filter by date. Set `limit_per_domain` to deduplicate same-domain results (e.g. 1 = one result per domain). Set `output_format=\"json\"` for raw structured response."
+    )]
     async fn search(
         &self,
         ctx: RequestContext<RoleServer>,
@@ -60,6 +70,8 @@ impl KagiMcpServer {
             limit: self.limit,
             safe_search: self.safe_search,
             region: self.region.clone(),
+            overfetch_multiplier: self.overfetch_multiplier,
+            overfetch_max: self.overfetch_max,
         };
         search_handler(&*self.client, params, &ctx, &config).await
     }
@@ -90,7 +102,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let server = KagiMcpServer::new(client, 4.0, 10, true, None);
+        let server = KagiMcpServer::new(client, 4.0, 10, true, None, 5, 50);
 
         let info = server.get_info();
         assert!(

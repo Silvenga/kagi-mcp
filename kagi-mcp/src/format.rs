@@ -1,5 +1,74 @@
 use kagi_api::types::{ExtractResponse, SearchResponse, SearchResult};
 
+fn decode_entities(s: &str) -> String {
+    if !s.contains('&') {
+        return s.to_string();
+    }
+    html_escape::decode_html_entities(s).into_owned()
+}
+
+fn normalize_title_whitespace(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn collapse_snippet_ellipses(s: &str) -> String {
+    // First, normalize runs of 3+ consecutive dots to space-padded `...`,
+    // which handles directly concatenated ellipsis like `......`.
+    let normalized = {
+        let mut buf = String::with_capacity(s.len());
+        let mut dot_count = 0;
+        for ch in s.chars() {
+            if ch == '.' {
+                dot_count += 1;
+            } else {
+                if dot_count >= 3 {
+                    buf.push_str(" ... ");
+                } else {
+                    for _ in 0..dot_count {
+                        buf.push('.');
+                    }
+                }
+                dot_count = 0;
+                buf.push(ch);
+            }
+        }
+        // Handle trailing dots
+        if dot_count >= 3 {
+            buf.push_str(" ... ");
+        } else {
+            for _ in 0..dot_count {
+                buf.push('.');
+            }
+        }
+        buf
+    };
+
+    // Then collapse whitespace-separated consecutive `...`
+    let mut result = Vec::new();
+    let mut prev_was_ellipsis = false;
+    for word in normalized.split_whitespace() {
+        if word == "..." {
+            if !prev_was_ellipsis {
+                result.push(word);
+                prev_was_ellipsis = true;
+            }
+        } else {
+            result.push(word);
+            prev_was_ellipsis = false;
+        }
+    }
+    result.join(" ")
+}
+
+fn trim_iso_date(s: &str) -> String {
+    let bytes = s.as_bytes();
+    if s.len() >= 11 && bytes[4] == b'-' && bytes[7] == b'-' && bytes[10] == b'T' {
+        s[..10].to_string()
+    } else {
+        s.to_string()
+    }
+}
+
 pub fn format_search_markdown(response: &SearchResponse) -> String {
     let mut output = String::new();
     let data = &response.data;
@@ -15,14 +84,17 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                     output.push_str(&format!(
                         "{}. **[{}]({})**\n",
                         i + 1,
-                        result.title,
+                        decode_entities(&normalize_title_whitespace(&result.title)),
                         result.url
                     ));
                     if let Some(snippet) = &result.snippet {
-                        output.push_str(&format!("   - Snippet: {}\n", snippet));
+                        output.push_str(&format!(
+                            "   - Snippet: {}\n",
+                            decode_entities(&collapse_snippet_ellipses(snippet))
+                        ));
                     }
                     if let Some(time) = &result.time {
-                        output.push_str(&format!("   - Published: {}\n", time));
+                        output.push_str(&format!("   - Published: {}\n", trim_iso_date(time)));
                     }
                 }
                 output.push('\n');
@@ -31,13 +103,13 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
     };
 
     format_general("Web Results", &data.search);
-    format_general("Web Results", &data.news);
-    format_general("Web Results", &data.interesting_news);
-    format_general("Web Results", &data.interesting_finds);
-    format_general("Web Results", &data.code);
-    format_general("Web Results", &data.public_records);
-    format_general("Web Results", &data.listicle);
-    format_general("Web Results", &data.web_archive);
+    format_general("News", &data.news);
+    format_general("Interesting News", &data.interesting_news);
+    format_general("Interesting Finds", &data.interesting_finds);
+    format_general("Code Results", &data.code);
+    format_general("Public Records", &data.public_records);
+    format_general("Listicles", &data.listicle);
+    format_general("Web Archive", &data.web_archive);
 
     if let Some(results) = &data.image {
         if !results.is_empty() {
@@ -47,7 +119,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                 output.push_str(&format!(
                     "{}. **[{}]({})**\n",
                     i + 1,
-                    result.title,
+                    decode_entities(&normalize_title_whitespace(&result.title)),
                     result.url
                 ));
                 if let Some(image) = &result.image {
@@ -71,14 +143,17 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                 output.push_str(&format!(
                     "{}. **[{}]({})**\n",
                     i + 1,
-                    result.title,
+                    decode_entities(&normalize_title_whitespace(&result.title)),
                     result.url
                 ));
                 if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!("   - Snippet: {}\n", snippet));
+                    output.push_str(&format!(
+                        "   - Snippet: {}\n",
+                        decode_entities(&collapse_snippet_ellipses(snippet))
+                    ));
                 }
                 if let Some(time) = &result.time {
-                    output.push_str(&format!("   - Published: {}\n", time));
+                    output.push_str(&format!("   - Published: {}\n", trim_iso_date(time)));
                 }
             }
             output.push('\n');
@@ -93,14 +168,17 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                 output.push_str(&format!(
                     "{}. **[{}]({})**\n",
                     i + 1,
-                    result.title,
+                    decode_entities(&normalize_title_whitespace(&result.title)),
                     result.url
                 ));
                 if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!("   - Snippet: {}\n", snippet));
+                    output.push_str(&format!(
+                        "   - Snippet: {}\n",
+                        decode_entities(&collapse_snippet_ellipses(snippet))
+                    ));
                 }
                 if let Some(time) = &result.time {
-                    output.push_str(&format!("   - Published: {}\n", time));
+                    output.push_str(&format!("   - Published: {}\n", trim_iso_date(time)));
                 }
             }
             output.push('\n');
@@ -115,14 +193,17 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                 output.push_str(&format!(
                     "{}. **[{}]({})**\n",
                     i + 1,
-                    result.title,
+                    decode_entities(&normalize_title_whitespace(&result.title)),
                     result.url
                 ));
                 if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!("   - Snippet: {}\n", snippet));
+                    output.push_str(&format!(
+                        "   - Snippet: {}\n",
+                        decode_entities(&collapse_snippet_ellipses(snippet))
+                    ));
                 }
                 if let Some(time) = &result.time {
-                    output.push_str(&format!("   - Published: {}\n", time));
+                    output.push_str(&format!("   - Published: {}\n", trim_iso_date(time)));
                 }
             }
             output.push('\n');
@@ -140,9 +221,14 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                     .and_then(|p| p.get("question"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("Unknown Question");
+                let question = decode_entities(&normalize_title_whitespace(question));
                 output.push_str(&format!("{}. **{}**\n", i + 1, question));
                 if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!("    - [Answer]({}): {}\n", result.url, snippet));
+                    output.push_str(&format!(
+                        "    - [Answer]({}): {}\n",
+                        result.url,
+                        decode_entities(&collapse_snippet_ellipses(snippet))
+                    ));
                 }
             }
             output.push('\n');
@@ -155,7 +241,10 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
             output.push_str("## Direct Answer\n\n");
             for result in results {
                 if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!("{}\n\n", snippet));
+                    output.push_str(&format!(
+                        "{}\n\n",
+                        decode_entities(&collapse_snippet_ellipses(snippet))
+                    ));
                 }
             }
         }
@@ -166,9 +255,16 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
             has_results = true;
             output.push_str("## Infobox\n\n");
             for result in results {
-                output.push_str(&format!("**[{}]({})**\n\n", result.title, result.url));
+                output.push_str(&format!(
+                    "**[{}]({})**\n\n",
+                    decode_entities(&normalize_title_whitespace(&result.title)),
+                    result.url
+                ));
                 if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!("{}\n\n", snippet));
+                    output.push_str(&format!(
+                        "{}\n\n",
+                        decode_entities(&collapse_snippet_ellipses(snippet))
+                    ));
                 }
                 if let Some(props) = &result.props {
                     if let Some(infobox) = props.get("infobox") {
@@ -194,7 +290,10 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
             has_results = true;
             output.push_str("## Related Searches\n\n");
             for result in results {
-                output.push_str(&format!("- {}\n", result.title));
+                output.push_str(&format!(
+                    "- {}\n",
+                    decode_entities(&normalize_title_whitespace(&result.title))
+                ));
             }
             output.push('\n');
         }
@@ -206,7 +305,10 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
             output.push_str("## Weather\n\n");
             for result in results {
                 if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!("{}\n", snippet));
+                    output.push_str(&format!(
+                        "{}\n",
+                        decode_entities(&collapse_snippet_ellipses(snippet))
+                    ));
                 }
             }
             output.push('\n');
@@ -903,5 +1005,450 @@ mod tests {
         });
         let expected = "{\n  \"key\": \"value\"\n}";
         assert_eq!(format_json(&data), expected);
+    }
+
+    #[test]
+    fn when_decode_entities_with_known_entities_then_should_decode_them() {
+        let result = decode_entities("foo &amp; bar &quot;baz&quot; &lt;qux&gt;");
+
+        assert_eq!(result, "foo & bar \"baz\" <qux>");
+    }
+
+    #[test]
+    fn when_decode_entities_with_no_entities_then_should_return_unchanged() {
+        let result = decode_entities("hello world");
+
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn when_decode_entities_with_numeric_entity_then_should_decode_it() {
+        let result = decode_entities("it&#39;s");
+
+        assert_eq!(result, "it's");
+    }
+
+    #[test]
+    fn when_normalize_title_with_double_space_then_should_collapse_to_single() {
+        let result = normalize_title_whitespace("hello   world");
+
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn when_normalize_title_with_leading_trailing_whitespace_then_should_trim() {
+        let result = normalize_title_whitespace("  hello world  ");
+
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn when_normalize_title_with_tabs_and_newlines_then_should_collapse() {
+        let result = normalize_title_whitespace("hello\t\tworld\nfoo\r\nbar");
+
+        assert_eq!(result, "hello world foo bar");
+    }
+
+    #[test]
+    fn when_collapse_ellipses_with_multiple_runs_then_should_collapse_to_one() {
+        let result = collapse_snippet_ellipses("foo ... ... ... bar");
+
+        assert_eq!(result, "foo ... bar");
+    }
+
+    #[test]
+    fn when_collapse_ellipses_with_single_run_then_should_preserve() {
+        let result = collapse_snippet_ellipses("foo ... bar");
+
+        assert_eq!(result, "foo ... bar");
+    }
+
+    #[test]
+    fn when_collapse_ellipses_with_leading_trailing_then_should_preserve() {
+        let result = collapse_snippet_ellipses("... foo");
+
+        assert_eq!(result, "... foo");
+    }
+
+    #[test]
+    fn when_collapse_ellipses_with_trailing_then_should_preserve() {
+        let result = collapse_snippet_ellipses("foo ...");
+
+        assert_eq!(result, "foo ...");
+    }
+
+    #[test]
+    fn when_collapse_ellipses_with_directly_concatenated_then_should_collapse_to_one() {
+        let result = collapse_snippet_ellipses("foo......bar");
+
+        assert_eq!(result, "foo ... bar");
+    }
+
+    #[test]
+    fn when_collapse_ellipses_with_mixed_separators_then_should_collapse_to_one() {
+        let result = collapse_snippet_ellipses("foo ... ...... ... bar");
+
+        assert_eq!(result, "foo ... bar");
+    }
+
+    #[test]
+    fn when_trim_iso_date_with_full_timestamp_then_should_return_date_only() {
+        let result = trim_iso_date("2011-06-06T10:52:26Z");
+
+        assert_eq!(result, "2011-06-06");
+    }
+
+    #[test]
+    fn when_trim_iso_date_with_already_date_only_then_should_return_unchanged() {
+        let result = trim_iso_date("2023-01-01");
+
+        assert_eq!(result, "2023-01-01");
+    }
+
+    #[test]
+    fn when_trim_iso_date_with_non_iso_string_then_should_return_unchanged() {
+        let result = trim_iso_date("not-a-date");
+
+        assert_eq!(result, "not-a-date");
+    }
+
+    #[test]
+    fn when_format_search_with_html_entities_in_title_then_should_decode() {
+        let response = SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: Some(vec![SearchResult {
+                    url: "https://example.com".to_string(),
+                    title: "Foo &amp; Bar &quot;baz&quot;".to_string(),
+                    snippet: None,
+                    time: None,
+                    image: None,
+                    props: None,
+                }]),
+                image: None,
+                video: None,
+                podcast: None,
+                podcast_creator: None,
+                news: None,
+                adjacent_question: None,
+                direct_answer: None,
+                interesting_news: None,
+                interesting_finds: None,
+                infobox: None,
+                code: None,
+                package_tracking: None,
+                public_records: None,
+                weather: None,
+                related_search: None,
+                listicle: None,
+                web_archive: None,
+            },
+        };
+
+        let expected = "## Web Results\n\n1. **[Foo & Bar \"baz\"](https://example.com)**";
+        assert_eq!(format_search_markdown(&response), expected);
+    }
+
+    #[test]
+    fn when_format_search_with_html_entities_in_snippet_then_should_decode() {
+        let response = SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: Some(vec![SearchResult {
+                    url: "https://example.com".to_string(),
+                    title: "Example".to_string(),
+                    snippet: Some("It&#39;s great &amp; amazing.".to_string()),
+                    time: None,
+                    image: None,
+                    props: None,
+                }]),
+                image: None,
+                video: None,
+                podcast: None,
+                podcast_creator: None,
+                news: None,
+                adjacent_question: None,
+                direct_answer: None,
+                interesting_news: None,
+                interesting_finds: None,
+                infobox: None,
+                code: None,
+                package_tracking: None,
+                public_records: None,
+                weather: None,
+                related_search: None,
+                listicle: None,
+                web_archive: None,
+            },
+        };
+
+        let expected = "## Web Results\n\n1. **[Example](https://example.com)**\n   - Snippet: It's great & amazing.";
+        assert_eq!(format_search_markdown(&response), expected);
+    }
+
+    #[test]
+    fn when_format_search_with_iso_timestamp_in_time_then_should_render_date_only() {
+        let response = SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: Some(vec![SearchResult {
+                    url: "https://example.com".to_string(),
+                    title: "Example".to_string(),
+                    snippet: None,
+                    time: Some("2024-03-15T10:30:00Z".to_string()),
+                    image: None,
+                    props: None,
+                }]),
+                image: None,
+                video: None,
+                podcast: None,
+                podcast_creator: None,
+                news: None,
+                adjacent_question: None,
+                direct_answer: None,
+                interesting_news: None,
+                interesting_finds: None,
+                infobox: None,
+                code: None,
+                package_tracking: None,
+                public_records: None,
+                weather: None,
+                related_search: None,
+                listicle: None,
+                web_archive: None,
+            },
+        };
+
+        let expected =
+            "## Web Results\n\n1. **[Example](https://example.com)**\n   - Published: 2024-03-15";
+        assert_eq!(format_search_markdown(&response), expected);
+    }
+
+    #[test]
+    fn when_format_search_with_ellipsis_run_in_snippet_then_should_collapse() {
+        let response = SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: Some(vec![SearchResult {
+                    url: "https://example.com".to_string(),
+                    title: "Example".to_string(),
+                    snippet: Some("foo ... ... ... bar".to_string()),
+                    time: None,
+                    image: None,
+                    props: None,
+                }]),
+                image: None,
+                video: None,
+                podcast: None,
+                podcast_creator: None,
+                news: None,
+                adjacent_question: None,
+                direct_answer: None,
+                interesting_news: None,
+                interesting_finds: None,
+                infobox: None,
+                code: None,
+                package_tracking: None,
+                public_records: None,
+                weather: None,
+                related_search: None,
+                listicle: None,
+                web_archive: None,
+            },
+        };
+
+        let expected =
+            "## Web Results\n\n1. **[Example](https://example.com)**\n   - Snippet: foo ... bar";
+        assert_eq!(format_search_markdown(&response), expected);
+    }
+
+    #[test]
+    fn when_format_search_has_news_then_section_header_should_be_news_not_web_results() {
+        let response = SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: None,
+                image: None,
+                video: None,
+                podcast: None,
+                podcast_creator: None,
+                news: Some(vec![SearchResult {
+                    url: "https://example.com/news".to_string(),
+                    title: "News Item".to_string(),
+                    snippet: Some("Breaking news.".to_string()),
+                    time: None,
+                    image: None,
+                    props: None,
+                }]),
+                adjacent_question: None,
+                direct_answer: None,
+                interesting_news: None,
+                interesting_finds: None,
+                infobox: None,
+                code: None,
+                package_tracking: None,
+                public_records: None,
+                weather: None,
+                related_search: None,
+                listicle: None,
+                web_archive: None,
+            },
+        };
+
+        let expected =
+            "## News\n\n1. **[News Item](https://example.com/news)**\n   - Snippet: Breaking news.";
+        assert_eq!(format_search_markdown(&response), expected);
+    }
+
+    #[test]
+    fn when_format_search_has_code_then_section_header_should_be_code_results() {
+        let response = SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: None,
+                image: None,
+                video: None,
+                podcast: None,
+                podcast_creator: None,
+                news: None,
+                adjacent_question: None,
+                direct_answer: None,
+                interesting_news: None,
+                interesting_finds: None,
+                infobox: None,
+                code: Some(vec![SearchResult {
+                    url: "https://example.com/code".to_string(),
+                    title: "Code Snippet".to_string(),
+                    snippet: Some("fn main() {}".to_string()),
+                    time: None,
+                    image: None,
+                    props: None,
+                }]),
+                package_tracking: None,
+                public_records: None,
+                weather: None,
+                related_search: None,
+                listicle: None,
+                web_archive: None,
+            },
+        };
+
+        let expected = "## Code Results\n\n1. **[Code Snippet](https://example.com/code)**\n   - Snippet: fn main() {}";
+        assert_eq!(format_search_markdown(&response), expected);
+    }
+
+    #[test]
+    fn when_format_search_has_listicle_then_section_header_should_be_listicles() {
+        let response = SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: None,
+                image: None,
+                video: None,
+                podcast: None,
+                podcast_creator: None,
+                news: None,
+                adjacent_question: None,
+                direct_answer: None,
+                interesting_news: None,
+                interesting_finds: None,
+                infobox: None,
+                code: None,
+                package_tracking: None,
+                public_records: None,
+                weather: None,
+                related_search: None,
+                listicle: Some(vec![SearchResult {
+                    url: "https://example.com/list".to_string(),
+                    title: "Top 10 Things".to_string(),
+                    snippet: Some("A listicle.".to_string()),
+                    time: None,
+                    image: None,
+                    props: None,
+                }]),
+                web_archive: None,
+            },
+        };
+
+        let expected = "## Listicles\n\n1. **[Top 10 Things](https://example.com/list)**\n   - Snippet: A listicle.";
+        assert_eq!(format_search_markdown(&response), expected);
+    }
+
+    #[test]
+    fn when_format_search_has_all_8_web_categories_then_each_should_have_distinct_header() {
+        let mk = |title: &str| SearchResult {
+            url: "https://example.com".to_string(),
+            title: title.to_string(),
+            snippet: None,
+            time: None,
+            image: None,
+            props: None,
+        };
+
+        let response = SearchResponse {
+            meta: Meta {
+                trace: "test".to_string(),
+                node: None,
+                ms: None,
+            },
+            data: SearchData {
+                search: Some(vec![mk("Web")]),
+                image: None,
+                video: None,
+                podcast: None,
+                podcast_creator: None,
+                news: Some(vec![mk("News")]),
+                adjacent_question: None,
+                direct_answer: None,
+                interesting_news: Some(vec![mk("Interesting News")]),
+                interesting_finds: Some(vec![mk("Interesting Finds")]),
+                infobox: None,
+                code: Some(vec![mk("Code")]),
+                package_tracking: None,
+                public_records: Some(vec![mk("Public Records")]),
+                weather: None,
+                related_search: None,
+                listicle: Some(vec![mk("Listicle")]),
+                web_archive: Some(vec![mk("Web Archive")]),
+            },
+        };
+
+        let markdown = format_search_markdown(&response);
+        assert!(markdown.contains("## Web Results"));
+        assert!(markdown.contains("## News"));
+        assert!(markdown.contains("## Interesting News"));
+        assert!(markdown.contains("## Interesting Finds"));
+        assert!(markdown.contains("## Code Results"));
+        assert!(markdown.contains("## Public Records"));
+        assert!(markdown.contains("## Listicles"));
+        assert!(markdown.contains("## Web Archive"));
     }
 }
