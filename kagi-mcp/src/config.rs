@@ -32,6 +32,12 @@ pub struct Config {
 
     #[arg(long, env = "KAGI_REGION")]
     pub region: Option<String>,
+
+    #[arg(long, env = "KAGI_OVERFETCH_MULTIPLIER", default_value = "5")]
+    pub overfetch_multiplier: u32,
+
+    #[arg(long, env = "KAGI_OVERFETCH_MAX", default_value = "50")]
+    pub overfetch_max: u32,
 }
 
 #[cfg(test)]
@@ -50,6 +56,8 @@ mod tests {
         assert_eq!(config.limit, 10);
         assert!(config.safe_search);
         assert_eq!(config.region, None);
+        assert_eq!(config.overfetch_multiplier, 5);
+        assert_eq!(config.overfetch_max, 50);
     }
 
     #[test]
@@ -72,6 +80,10 @@ mod tests {
             "false",
             "--region",
             "us-west",
+            "--overfetch-multiplier",
+            "10",
+            "--overfetch-max",
+            "100",
         ])
         .unwrap();
 
@@ -83,11 +95,38 @@ mod tests {
         assert_eq!(config.limit, 25);
         assert!(!config.safe_search);
         assert_eq!(config.region.as_deref(), Some("us-west"));
+        assert_eq!(config.overfetch_multiplier, 10);
+        assert_eq!(config.overfetch_max, 100);
     }
 
     #[test]
     fn when_missing_api_key_then_parse_should_fail() {
         let result = Config::try_parse_from(["kagi-mcp"]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn when_overfetch_multiplier_from_env_then_should_apply() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--overfetch-multiplier",
+            "15",
+        ])
+        .unwrap();
+
+        assert_eq!(config.overfetch_multiplier, 15);
+        assert_eq!(config.overfetch_max, 50);
+    }
+
+    #[test]
+    fn when_overfetch_max_from_env_then_should_apply() {
+        let config =
+            Config::try_parse_from(["kagi-mcp", "--api-key", "test-key", "--overfetch-max", "75"])
+                .unwrap();
+
+        assert_eq!(config.overfetch_multiplier, 5);
+        assert_eq!(config.overfetch_max, 75);
     }
 }

@@ -42,6 +42,8 @@ kagi-mcp --api-key "your-api-key"
 | `--limit` / `KAGI_LIMIT` | Default result limit for search | `10` |
 | `--safe-search` / `KAGI_SAFE_SEARCH` | Enable safe search | `true` |
 | `--region` / `KAGI_REGION` | Default region filter (ISO 3166-1 alpha-2) | *none* |
+| `--overfetch-multiplier` / `KAGI_OVERFETCH_MULTIPLIER` | Over-fetch multiplier when `limit_per_domain` is set | `5` |
+| `--overfetch-max` / `KAGI_OVERFETCH_MAX` | Absolute cap on over-fetch request size | `50` |
 
 ## Usage
 
@@ -71,6 +73,7 @@ Search the web using Kagi. Returns structured Markdown results optimized for LLM
 - `workflow` - Result type: `search`, `images`, `videos`, `news`, `podcasts`
 - `after`, `before` - Date filters (YYYY-MM-DD)
 - `output_format` - `markdown` (default) or `json`
+- `limit_per_domain` - Max results per domain group. When set, the server over-fetches from Kagi and deduplicates using Kagi's grouping key (with eTLD+1 domain fallback). Useful to avoid same-domain clutter. Must be >= 1.
 
 ### `extract`
 
@@ -81,5 +84,14 @@ Extract clean Markdown content from URLs.
 - `timeout` - Per-page extraction timeout
 - `output_format` - `markdown` (default) or `json`
 
+## Agent-Optimized Output
+
+This server formats Kagi responses for efficient LLM consumption. The following details explain how the output differs from raw Kagi JSON.
+
+- **Clean Markdown** — HTML entities decoded (`&#39;` → `'`), title whitespace normalized, snippet ellipsis runs collapsed (`... ... ...` → `...`), ISO timestamps trimmed to `YYYY-MM-DD`.
+- **Distinct section headers** — 8 separate result categories now use distinct Markdown headers (Web Results, News, Interesting News, Interesting Finds, Code Results, Public Records, Listicles, Web Archive) — previously all collapsed under "Web Results" causing ambiguous numbering.
+- **Domain grouping via `limit_per_domain`** — agents can request at most N results per domain (using Kagi's `props.group_id` with eTLD+1 fallback). The server over-fetches from Kagi to compensate, preserving the user's final result count. Configurable via `KAGI_OVERFETCH_MULTIPLIER` and `KAGI_OVERFETCH_MAX`.
+- **Actionable truncation notice** — when output exceeds the byte limit, the trailing notice suggests narrowing the query, reducing `limit`, or switching to `output_format="json"`.
+- **Expanded tool description** — the MCP `search` tool description now lists supported operators, workflow values, date filter format, and the new `limit_per_domain` parameter — so agents can select and parameterize the tool correctly without a separate docs lookup.
 
 

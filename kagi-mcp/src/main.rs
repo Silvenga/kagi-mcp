@@ -1,4 +1,5 @@
 mod config;
+pub(crate) mod domain;
 pub mod format;
 mod guard;
 pub mod server;
@@ -35,6 +36,8 @@ async fn main() -> anyhow::Result<()> {
         config.limit,
         config.safe_search,
         config.region,
+        config.overfetch_multiplier,
+        config.overfetch_max,
     );
 
     let transport = (tokio::io::stdin(), tokio::io::stdout());

@@ -28,6 +28,8 @@ url = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+html-escape = "0.2.13"
+publicsuffix = { version = "2.3.0", default-features = false }
 
 [dev-dependencies]
 mockall = { workspace = true }

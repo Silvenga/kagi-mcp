@@ -1,0 +1,105 @@
+{
+  "meta": {
+    "trace": "abc123def456",
+    "node": "us-west-1",
+    "ms": 187
+  },
+  "data": {
+    "search": [
+      {
+        "url": "https://www.rust-lang.org/learn",
+        "title": "Learn Rust - Rust Programming Language",
+        "snippet": "A comprehensive guide to learning Rust, from beginner to advanced. Includes the official book, rustlings exercises, and &#39;many&#39; community resources.",
+        "time": "2025-12-01",
+        "props": {
+          "group_id": "rust-lang.org",
+          "language": "en",
+          "language_probability": 0.99
+        }
+      },
+      {
+        "url": "https://www.rust-lang.org/install",
+        "title": "Install Rust - Rust Programming Language",
+        "snippet": "Install rustup, the official Rust toolchain installer. Works on Linux, macOS, and Windows.",
+        "time": "2025-11-15",
+        "props": {
+          "group_id": "rust-lang.org",
+          "language": "en",
+          "language_probability": 0.98
+        }
+      },
+      {
+        "url": "https://doc.rust-lang.org/book/",
+        "title": "The Rust Programming Language Book",
+        "snippet": "The official guide to Rust, covering ownership, types, generics, concurrency, and more. Often called &#39;the book&#39; by the community.",
+        "time": "2025-10-20",
+        "props": {
+          "group_id": "rust-lang.org",
+          "language": "en",
+          "language_probability": 0.99
+        }
+      },
+      {
+        "url": "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+        "title": "Rust (programming language) - Wikipedia",
+        "snippet": "Rust is a multi-paradigm, general-purpose programming language emphasizing performance, type safety, and concurrency.",
+        "time": "2025-12-10",
+        "image": {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/d/d5/Rust_programming_language_black_logo.svg",
+          "height": 200,
+          "width": 200
+        },
+        "props": {
+          "group_id": "en.wikipedia.org",
+          "language": "en",
+          "language_probability": 0.95
+        }
+      }
+    ],
+    "video": [
+      {
+        "url": "https://www.youtube.com/watch?v=ygL_xcavzX4",
+        "title": "Rust Crash Course | Rust Programming Tutorial for Beginners",
+        "snippet": "A complete Rust tutorial covering variables, ownership, structs, enums, error handling, and more in a single video.",
+        "time": "2025-09-14",
+        "image": {
+          "url": "https://i.ytimg.com/vi/ygL_xcavzX4/hqdefault.jpg",
+          "height": 360,
+          "width": 480
+        },
+        "props": {
+          "group_id": "youtube.com",
+          "language": "en",
+          "language_probability": 0.97
+        }
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=MsocPEZBd-M",
+        "title": "Rust for Beginners - Learn Rust in 2 Hours",
+        "snippet": "A fast-paced introduction to Rust for programmers coming from Python, JavaScript, or Go.",
+        "time": "2025-08-22",
+        "image": {
+          "url": "https://i.ytimg.com/vi/MsocPEZBd-M/hqdefault.jpg",
+          "height": 360,
+          "width": 480
+        },
+        "props": {
+          "group_id": "youtube.com",
+          "language": "en",
+          "language_probability": 0.91
+        }
+      }
+    ],
+    "adjacent_question": [
+      {
+        "url": "https://www.rust-lang.org/faq",
+        "title": "Frequently Asked Questions · Rust",
+        "snippet": "Answers to common questions about Rust, including its design decisions, use cases, and &#39;community guidelines&#39;.",
+        "time": "2025-07-10",
+        "props": {
+          "question": "What are the downsides of using Rust?"
+        }
+      }
+    ]
+  }
+}
