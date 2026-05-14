@@ -136,7 +136,10 @@ struct PackageTrackingItem {
     url: String,
 }
 
-fn build_general_section(title: &str, results: &Option<Vec<SearchResult>>) -> Option<GeneralSection> {
+fn build_general_section(
+    title: &str,
+    results: &Option<Vec<SearchResult>>,
+) -> Option<GeneralSection> {
     let results = results.as_ref()?;
     if results.is_empty() {
         return None;
@@ -213,7 +216,9 @@ fn build_image_items(
     results: &Option<Vec<SearchResult>>,
     has_results: &mut bool,
 ) -> Vec<ImageItem> {
-    let Some(results) = results else { return Vec::new() };
+    let Some(results) = results else {
+        return Vec::new();
+    };
     if results.is_empty() {
         return Vec::new();
     }
@@ -236,7 +241,10 @@ fn build_image_items(
                 index: i + 1,
                 title: decode_entities(&normalize_title_whitespace(&r.title)),
                 url: r.url.clone(),
-                image_url: r.image.as_ref().map_or(String::new(), |img| img.url.clone()),
+                image_url: r
+                    .image
+                    .as_ref()
+                    .map_or(String::new(), |img| img.url.clone()),
                 width,
                 height,
             }
@@ -248,7 +256,9 @@ fn build_related_question_items(
     results: &Option<Vec<SearchResult>>,
     has_results: &mut bool,
 ) -> Vec<RelatedQuestionItem> {
-    let Some(results) = results else { return Vec::new() };
+    let Some(results) = results else {
+        return Vec::new();
+    };
     if results.is_empty() {
         return Vec::new();
     }
@@ -280,7 +290,9 @@ fn build_direct_answer_items(
     results: &Option<Vec<SearchResult>>,
     has_results: &mut bool,
 ) -> Vec<DirectAnswerItem> {
-    let Some(results) = results else { return Vec::new() };
+    let Some(results) = results else {
+        return Vec::new();
+    };
     if results.is_empty() {
         return Vec::new();
     }
@@ -299,7 +311,9 @@ fn build_infobox_items(
     results: &Option<Vec<SearchResult>>,
     has_results: &mut bool,
 ) -> Vec<InfoboxItem> {
-    let Some(results) = results else { return Vec::new() };
+    let Some(results) = results else {
+        return Vec::new();
+    };
     if results.is_empty() {
         return Vec::new();
     }
@@ -338,7 +352,9 @@ fn build_related_search_items(
     results: &Option<Vec<SearchResult>>,
     has_results: &mut bool,
 ) -> Vec<RelatedSearchItem> {
-    let Some(results) = results else { return Vec::new() };
+    let Some(results) = results else {
+        return Vec::new();
+    };
     if results.is_empty() {
         return Vec::new();
     }
@@ -355,7 +371,9 @@ fn build_weather_items(
     results: &Option<Vec<SearchResult>>,
     has_results: &mut bool,
 ) -> Vec<WeatherItem> {
-    let Some(results) = results else { return Vec::new() };
+    let Some(results) = results else {
+        return Vec::new();
+    };
     if results.is_empty() {
         return Vec::new();
     }
@@ -374,16 +392,16 @@ fn build_package_tracking_items(
     results: &Option<Vec<SearchResult>>,
     has_results: &mut bool,
 ) -> Vec<PackageTrackingItem> {
-    let Some(results) = results else { return Vec::new() };
+    let Some(results) = results else {
+        return Vec::new();
+    };
     if results.is_empty() {
         return Vec::new();
     }
     *has_results = true;
     results
         .iter()
-        .map(|r| PackageTrackingItem {
-            url: r.url.clone(),
-        })
+        .map(|r| PackageTrackingItem { url: r.url.clone() })
         .collect()
 }
 
@@ -429,7 +447,10 @@ pub fn format_extract_markdown(response: &ExtractResponse) -> String {
             has_content = true;
             error_items.push(ExtractErrorItem {
                 url: error.url.clone(),
-                message: error.message.clone().unwrap_or_else(|| "Unknown error".to_owned()),
+                message: error
+                    .message
+                    .clone()
+                    .unwrap_or_else(|| "Unknown error".to_owned()),
             });
         }
     }
