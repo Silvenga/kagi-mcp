@@ -1,64 +1,6 @@
-//! Domain-level types and grouping semantics for the Kagi MCP server.
-//!
-//! # The `props` field on `SearchResult`
-//!
-//! Every `SearchResult` carries an optional `props: Option<serde_json::Value>`
-//! field (see `kagi_api::types::SearchResult`). This opaque JSON object is
-//! populated by the Kagi API with per-result metadata that varies across
-//! result categories (`search`, `video`, `adjacent_question`, etc.).
-//!
-//! ## `group_id` — Grouping key
-//!
-//! **Field name:** `"group_id"`
-//!
-//! **Type:** JSON string whose value is typically the authoritative domain
-//! for the result.
-//!
-//! **Examples:**
-//! - `"rust-lang.org"`
-//! - `"en.wikipedia.org"`
-//! - `"youtube.com"`
-//! - `"github.com"`
-//!
-//! **Where it appears:**
-//! - `search` results — nearly always present in `props`.
-//! - `video` results — present; usually the video platform domain (e.g.
-//!   `"youtube.com"`, `"vimeo.com"`).
-//! - `adjacent_question` results — **absent** from `props`. These carry
-//!   a `"question"` key instead.
-//!
-//! **Purpose:** Multiple search results can originate from the same domain.
-//! `group_id` is the signal that allows callers to group / deduplicate
-//! results by source domain in post-processing.
-//!
-//! ## Companion fields (NOT used for grouping)
-//!
-//! The following fields sometimes coexist with `group_id` inside `props` but
-//! are **not** used for any grouping or classification logic. They are
-//! documented here for completeness so readers are not surprised when they
-//! observe extra keys via introspection or debugging.
-//!
-//! | Field                 | Type    | Example    | Notes                                      |
-//! |-----------------------|---------|------------|--------------------------------------------|
-//! | `language`            | string  | `"en"`     | ISO 639-1 language code. Present on most   |
-//! |                       |         |            | results.                                    |
-//! | `language_probability`| float   | `0.98`     | Confidence of the language detection.      |
-//! |                       |         |            | Sometimes absent when confidence is low.   |
-//!
-//! ## Example `props` JSON (sanitized)
-//!
-//! ```json
-//! {
-//!   "group_id": "rust-lang.org",
-//!   "language": "en",
-//!   "language_probability": 0.99
-//! }
-//! ```
-
+use publicsuffix::{List, Psl};
 use std::str::from_utf8;
 use std::sync::LazyLock;
-
-use publicsuffix::{List, Psl};
 use url::Url;
 
 /// Minimal public suffix data for eTLD+1 extraction.
@@ -123,12 +65,10 @@ pub(crate) fn extract_group_key(result: &kagi_api::SearchResult) -> Option<Strin
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use kagi_api::SearchResult;
     use std::fs;
     use std::path::Path;
-
-    use kagi_api::SearchResult;
-
-    use super::*;
 
     #[test]
     fn when_props_has_group_id_then_extract_should_return_it() {

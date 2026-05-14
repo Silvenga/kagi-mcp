@@ -26,7 +26,6 @@ fn extract_request() -> ExtractRequest {
         pages: vec![ExtractPage {
             url: "https://example.com".to_owned(),
         }],
-        timeout: None,
         format: None,
     }
 }
@@ -42,7 +41,7 @@ fn error_response_json() -> serde_json::Value {
 }
 
 #[tokio::test]
-async fn search_happy_path() {
+async fn when_search_succeeds_then_should_return_results() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -72,7 +71,7 @@ async fn search_happy_path() {
 }
 
 #[tokio::test]
-async fn extract_happy_path() {
+async fn when_extract_succeeds_then_should_return_content() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/extract"))
@@ -105,7 +104,7 @@ async fn extract_happy_path() {
 }
 
 #[tokio::test]
-async fn error_400() {
+async fn when_search_returns_400_then_should_return_invalid_request_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -130,7 +129,7 @@ async fn error_400() {
 }
 
 #[tokio::test]
-async fn error_401() {
+async fn when_search_returns_401_then_should_return_unauthorized_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -154,7 +153,7 @@ async fn error_401() {
 }
 
 #[tokio::test]
-async fn error_403() {
+async fn when_search_returns_403_then_should_return_forbidden_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -178,7 +177,7 @@ async fn error_403() {
 }
 
 #[tokio::test]
-async fn error_429() {
+async fn when_search_returns_429_then_should_return_rate_limited_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -202,7 +201,7 @@ async fn error_429() {
 }
 
 #[tokio::test]
-async fn error_500() {
+async fn when_search_returns_500_then_should_return_server_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -226,7 +225,7 @@ async fn error_500() {
 }
 
 #[tokio::test]
-async fn extract_error_400() {
+async fn when_extract_returns_400_then_should_return_invalid_request_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/extract"))
@@ -251,7 +250,7 @@ async fn extract_error_400() {
 }
 
 #[tokio::test]
-async fn extract_error_401() {
+async fn when_extract_returns_401_then_should_return_unauthorized_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/extract"))
@@ -275,7 +274,7 @@ async fn extract_error_401() {
 }
 
 #[tokio::test]
-async fn extract_error_403() {
+async fn when_extract_returns_403_then_should_return_forbidden_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/extract"))
@@ -299,7 +298,7 @@ async fn extract_error_403() {
 }
 
 #[tokio::test]
-async fn extract_error_429() {
+async fn when_extract_returns_429_then_should_return_rate_limited_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/extract"))
@@ -323,7 +322,7 @@ async fn extract_error_429() {
 }
 
 #[tokio::test]
-async fn extract_error_500() {
+async fn when_extract_returns_500_then_should_return_server_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/extract"))
@@ -347,7 +346,7 @@ async fn extract_error_500() {
 }
 
 #[tokio::test]
-async fn network_error() {
+async fn when_search_returns_invalid_json_then_should_return_network_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -371,7 +370,7 @@ async fn network_error() {
 }
 
 #[tokio::test]
-async fn retry_on_429() {
+async fn when_search_returns_429_once_then_retry_should_succeed() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -406,7 +405,7 @@ async fn retry_on_429() {
 }
 
 #[tokio::test]
-async fn retry_on_500() {
+async fn when_search_returns_500_once_then_retry_should_succeed() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -441,7 +440,7 @@ async fn retry_on_500() {
 }
 
 #[tokio::test]
-async fn user_agent_default() {
+async fn when_default_user_agent_then_should_send_default_value() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
@@ -477,7 +476,7 @@ async fn user_agent_default() {
 }
 
 #[tokio::test]
-async fn user_agent_custom() {
+async fn when_custom_user_agent_then_should_send_custom_value() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))

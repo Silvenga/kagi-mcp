@@ -103,8 +103,6 @@ pub struct Meta {
 pub struct ExtractRequest {
     pub pages: Vec<ExtractPage>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
 }
 

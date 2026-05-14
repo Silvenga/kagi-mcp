@@ -26,7 +26,7 @@ pub struct SearchParams {
 
 #[derive(Clone, Debug)]
 pub struct SearchConfig {
-    pub kagi_timeout: f64,
+    pub search_timeout: f64,
     pub limit: u32,
     pub safe_search: bool,
     pub region: Option<String>,
@@ -37,7 +37,7 @@ pub struct SearchConfig {
 impl Default for SearchConfig {
     fn default() -> Self {
         Self {
-            kagi_timeout: 4.0,
+            search_timeout: 4.0,
             limit: 10,
             safe_search: true,
             region: None,
@@ -72,7 +72,7 @@ pub async fn search_handler(
         query: params.query.clone(),
         workflow: params.workflow.clone(),
         format: Some("json".to_owned()),
-        timeout: Some(config.kagi_timeout),
+        timeout: Some(config.search_timeout),
         page: None,
         limit: Some(upstream_limit),
         safe_search: Some(config.safe_search),
@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_success_returns_markdown() {
+    async fn when_search_succeeds_then_should_return_markdown() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
             Ok(make_search_response(vec![SearchResult {
@@ -301,7 +301,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_success_json_returns_raw_json() {
+    async fn when_search_succeeds_with_json_format_then_should_return_raw_json() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
             Ok(make_search_response(vec![SearchResult {
@@ -333,7 +333,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_empty_results_returns_no_results_message() {
+    async fn when_search_has_no_results_then_should_return_no_results_message() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
             Ok(SearchResponse {
@@ -364,7 +364,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_error_401_returns_unauthorized_message() {
+    async fn when_search_returns_401_then_should_return_unauthorized_message() {
         let mut mock = MockKagiApi::new();
         mock.expect_search()
             .times(1)
@@ -389,7 +389,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_error_429_returns_rate_limited_message() {
+    async fn when_search_returns_429_then_should_return_rate_limited_message() {
         let mut mock = MockKagiApi::new();
         mock.expect_search()
             .times(1)
@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_invalid_request_returns_error_message() {
+    async fn when_search_returns_invalid_request_then_should_return_error_message() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
             Err(KagiError::InvalidRequest {
@@ -480,7 +480,7 @@ mod tests {
             .returning(|_| Ok(make_search_response(vec![])));
 
         let config = SearchConfig {
-            kagi_timeout: 8.5,
+            search_timeout: 8.5,
             limit: 25,
             safe_search: false,
             region: Some("us-west".to_owned()),
@@ -514,7 +514,7 @@ mod tests {
             .returning(|_| Ok(make_search_response(vec![])));
 
         let config = SearchConfig {
-            kagi_timeout: 4.0,
+            search_timeout: 4.0,
             limit: 10,
             safe_search: true,
             region: Some("eu".to_owned()),

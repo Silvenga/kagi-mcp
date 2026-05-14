@@ -57,8 +57,9 @@ But you likely want to configure it in your MCP client:
 |--------------------------------------------------------|------------------------------------------------------|------------------------|
 | `--api-key` / `KAGI_API_KEY`                           | Kagi API key                                         | *required*             |
 | `--base-url` / `KAGI_BASE_URL`                         | Kagi API base URL                                    | `https://kagi.com/api` |
-| `--kagi-timeout` / `KAGI_TIMEOUT`                      | Kagi API request timeout (seconds)                   | `4`                    |
-| `--client-timeout` / `KAGI_CLIENT_TIMEOUT`             | Client-side HTTP timeout (seconds)                   | `10`                   |
+| `--search-timeout` / `KAGI_SEARCH_TIMEOUT`             | Search API request timeout (seconds)                 | `4`                    |
+| `--extract-timeout` / `KAGI_EXTRACT_TIMEOUT`           | Extract API request timeout (seconds)                | `30`                   |
+| `--client-timeout` / `KAGI_CLIENT_TIMEOUT`             | Client-side HTTP timeout (seconds)                   | `32`                   |
 | `--retries` / `KAGI_RETRIES`                           | Number of retries for transient failures             | `3`                    |
 | `--limit` / `KAGI_LIMIT`                               | Default result limit for search                      | `10`                   |
 | `--safe-search` / `KAGI_SAFE_SEARCH`                   | Enable safe search                                   | `true`                 |
@@ -88,5 +89,8 @@ Extract clean Markdown content from URLs.
 **Parameters:**
 
 - `pages` (required) - Array of 1-10 HTTPS URLs
-- `timeout` - Per-page extraction timeout
 - `output_format` - `markdown` (default) or `json`
+
+## Known Issues
+
+- The Kagi Extract API uses a cumulative timeout, not per-page. If the cumulative timeout is exceeded during a multi-page extraction, a blank result may be returned. This has been reported to Kagi.
