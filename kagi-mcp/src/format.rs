@@ -136,34 +136,6 @@ struct PackageTrackingItem {
     url: String,
 }
 
-fn build_general_section(
-    title: &str,
-    results: &Option<Vec<SearchResult>>,
-) -> Option<GeneralSection> {
-    let results = results.as_ref()?;
-    if results.is_empty() {
-        return None;
-    }
-    let items = results
-        .iter()
-        .enumerate()
-        .map(|(i, r)| GeneralItem {
-            index: i + 1,
-            title: decode_entities(&normalize_title_whitespace(&r.title)),
-            url: r.url.clone(),
-            snippet: r
-                .snippet
-                .as_ref()
-                .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
-            time: r.time.as_ref().map(|t| trim_iso_date(t)),
-        })
-        .collect();
-    Some(GeneralSection {
-        title: title.to_owned(),
-        items,
-    })
-}
-
 pub fn format_search_markdown(response: &SearchResponse) -> String {
     let data = &response.data;
     let mut has_results = false;
@@ -171,9 +143,27 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
     let mut general_sections = Vec::new();
 
     let mut add_general = |title: &str, results: &Option<Vec<SearchResult>>| {
-        if let Some(section) = build_general_section(title, results) {
-            has_results = true;
-            general_sections.push(section);
+        if let Some(results) = results.as_ref() {
+            if !results.is_empty() {
+                has_results = true;
+                general_sections.push(GeneralSection {
+                    title: title.to_owned(),
+                    items: results
+                        .iter()
+                        .enumerate()
+                        .map(|(i, r)| GeneralItem {
+                            index: i + 1,
+                            title: decode_entities(&normalize_title_whitespace(&r.title)),
+                            url: r.url.clone(),
+                            snippet: r
+                                .snippet
+                                .as_ref()
+                                .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+                            time: r.time.as_ref().map(|t| trim_iso_date(t)),
+                        })
+                        .collect(),
+                });
+            }
         }
     };
 
@@ -189,13 +179,156 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
     add_general("Podcasts", &data.podcast);
     add_general("Podcast Creators", &data.podcast_creator);
 
-    let image_results = build_image_items(&data.image, &mut has_results);
-    let related_questions = build_related_question_items(&data.adjacent_question, &mut has_results);
-    let direct_answers = build_direct_answer_items(&data.direct_answer, &mut has_results);
-    let infoboxes = build_infobox_items(&data.infobox, &mut has_results);
-    let related_searches = build_related_search_items(&data.related_search, &mut has_results);
-    let weather = build_weather_items(&data.weather, &mut has_results);
-    let package_tracking = build_package_tracking_items(&data.package_tracking, &mut has_results);
+    let image_results = match &data.image {
+        Some(results) if !results.is_empty() => {
+            has_results = true;
+            results
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    let width = r
+                        .image
+                        .as_ref()
+                        .and_then(|img| img.width)
+                        .map_or_else(|| "?".to_owned(), |w| w.to_string());
+                    let height = r
+                        .image
+                        .as_ref()
+                        .and_then(|img| img.height)
+                        .map_or_else(|| "?".to_owned(), |h| h.to_string());
+                    ImageItem {
+                        index: i + 1,
+                        title: decode_entities(&normalize_title_whitespace(&r.title)),
+                        url: r.url.clone(),
+                        image_url: r
+                            .image
+                            .as_ref()
+                            .map_or(String::new(), |img| img.url.clone()),
+                        width,
+                        height,
+                    }
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
+    let related_questions = match &data.adjacent_question {
+        Some(results) if !results.is_empty() => {
+            has_results = true;
+            results
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    let question = r
+                        .props
+                        .as_ref()
+                        .and_then(|p| p.get("question"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown Question");
+                    RelatedQuestionItem {
+                        index: i + 1,
+                        question: decode_entities(&normalize_title_whitespace(question)),
+                        url: r.url.clone(),
+                        snippet: r
+                            .snippet
+                            .as_ref()
+                            .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+                    }
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
+    let direct_answers = match &data.direct_answer {
+        Some(results) if !results.is_empty() => {
+            has_results = true;
+            results
+                .iter()
+                .filter_map(|r| {
+                    r.snippet.as_ref().map(|s| DirectAnswerItem {
+                        snippet: decode_entities(&collapse_snippet_ellipses(s)),
+                    })
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
+    let infoboxes = match &data.infobox {
+        Some(results) if !results.is_empty() => {
+            has_results = true;
+            results
+                .iter()
+                .map(|r| {
+                    let mut properties = Vec::new();
+                    if let Some(props) = &r.props {
+                        if let Some(infobox) = props.get("infobox") {
+                            if let Some(obj) = infobox.as_object() {
+                                for (key, value) in obj {
+                                    let val_str = value
+                                        .as_str()
+                                        .map(|s| s.to_owned())
+                                        .unwrap_or_else(|| value.to_string());
+                                    properties.push((key.clone(), val_str));
+                                }
+                            }
+                        }
+                    }
+                    InfoboxItem {
+                        title: decode_entities(&normalize_title_whitespace(&r.title)),
+                        url: r.url.clone(),
+                        snippet: r
+                            .snippet
+                            .as_ref()
+                            .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+                        properties,
+                    }
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
+    let related_searches = match &data.related_search {
+        Some(results) if !results.is_empty() => {
+            has_results = true;
+            results
+                .iter()
+                .map(|r| RelatedSearchItem {
+                    title: decode_entities(&normalize_title_whitespace(&r.title)),
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
+    let weather = match &data.weather {
+        Some(results) if !results.is_empty() => {
+            has_results = true;
+            results
+                .iter()
+                .filter_map(|r| {
+                    r.snippet.as_ref().map(|s| WeatherItem {
+                        snippet: decode_entities(&collapse_snippet_ellipses(s)),
+                    })
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+
+    let package_tracking = match &data.package_tracking {
+        Some(results) if !results.is_empty() => {
+            has_results = true;
+            results
+                .iter()
+                .map(|r| PackageTrackingItem { url: r.url.clone() })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
 
     let template = SearchResultsTemplate {
         general_sections,
@@ -210,199 +343,6 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
     };
 
     template.render().unwrap().trim_end().to_owned()
-}
-
-fn build_image_items(
-    results: &Option<Vec<SearchResult>>,
-    has_results: &mut bool,
-) -> Vec<ImageItem> {
-    let Some(results) = results else {
-        return Vec::new();
-    };
-    if results.is_empty() {
-        return Vec::new();
-    }
-    *has_results = true;
-    results
-        .iter()
-        .enumerate()
-        .map(|(i, r)| {
-            let width = r
-                .image
-                .as_ref()
-                .and_then(|img| img.width)
-                .map_or_else(|| "?".to_owned(), |w| w.to_string());
-            let height = r
-                .image
-                .as_ref()
-                .and_then(|img| img.height)
-                .map_or_else(|| "?".to_owned(), |h| h.to_string());
-            ImageItem {
-                index: i + 1,
-                title: decode_entities(&normalize_title_whitespace(&r.title)),
-                url: r.url.clone(),
-                image_url: r
-                    .image
-                    .as_ref()
-                    .map_or(String::new(), |img| img.url.clone()),
-                width,
-                height,
-            }
-        })
-        .collect()
-}
-
-fn build_related_question_items(
-    results: &Option<Vec<SearchResult>>,
-    has_results: &mut bool,
-) -> Vec<RelatedQuestionItem> {
-    let Some(results) = results else {
-        return Vec::new();
-    };
-    if results.is_empty() {
-        return Vec::new();
-    }
-    *has_results = true;
-    results
-        .iter()
-        .enumerate()
-        .map(|(i, r)| {
-            let question = r
-                .props
-                .as_ref()
-                .and_then(|p| p.get("question"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown Question");
-            RelatedQuestionItem {
-                index: i + 1,
-                question: decode_entities(&normalize_title_whitespace(question)),
-                url: r.url.clone(),
-                snippet: r
-                    .snippet
-                    .as_ref()
-                    .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
-            }
-        })
-        .collect()
-}
-
-fn build_direct_answer_items(
-    results: &Option<Vec<SearchResult>>,
-    has_results: &mut bool,
-) -> Vec<DirectAnswerItem> {
-    let Some(results) = results else {
-        return Vec::new();
-    };
-    if results.is_empty() {
-        return Vec::new();
-    }
-    *has_results = true;
-    results
-        .iter()
-        .filter_map(|r| {
-            r.snippet.as_ref().map(|s| DirectAnswerItem {
-                snippet: decode_entities(&collapse_snippet_ellipses(s)),
-            })
-        })
-        .collect()
-}
-
-fn build_infobox_items(
-    results: &Option<Vec<SearchResult>>,
-    has_results: &mut bool,
-) -> Vec<InfoboxItem> {
-    let Some(results) = results else {
-        return Vec::new();
-    };
-    if results.is_empty() {
-        return Vec::new();
-    }
-    *has_results = true;
-    results
-        .iter()
-        .map(|r| {
-            let mut properties = Vec::new();
-            if let Some(props) = &r.props {
-                if let Some(infobox) = props.get("infobox") {
-                    if let Some(obj) = infobox.as_object() {
-                        for (key, value) in obj {
-                            let val_str = value
-                                .as_str()
-                                .map(|s| s.to_owned())
-                                .unwrap_or_else(|| value.to_string());
-                            properties.push((key.clone(), val_str));
-                        }
-                    }
-                }
-            }
-            InfoboxItem {
-                title: decode_entities(&normalize_title_whitespace(&r.title)),
-                url: r.url.clone(),
-                snippet: r
-                    .snippet
-                    .as_ref()
-                    .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
-                properties,
-            }
-        })
-        .collect()
-}
-
-fn build_related_search_items(
-    results: &Option<Vec<SearchResult>>,
-    has_results: &mut bool,
-) -> Vec<RelatedSearchItem> {
-    let Some(results) = results else {
-        return Vec::new();
-    };
-    if results.is_empty() {
-        return Vec::new();
-    }
-    *has_results = true;
-    results
-        .iter()
-        .map(|r| RelatedSearchItem {
-            title: decode_entities(&normalize_title_whitespace(&r.title)),
-        })
-        .collect()
-}
-
-fn build_weather_items(
-    results: &Option<Vec<SearchResult>>,
-    has_results: &mut bool,
-) -> Vec<WeatherItem> {
-    let Some(results) = results else {
-        return Vec::new();
-    };
-    if results.is_empty() {
-        return Vec::new();
-    }
-    *has_results = true;
-    results
-        .iter()
-        .filter_map(|r| {
-            r.snippet.as_ref().map(|s| WeatherItem {
-                snippet: decode_entities(&collapse_snippet_ellipses(s)),
-            })
-        })
-        .collect()
-}
-
-fn build_package_tracking_items(
-    results: &Option<Vec<SearchResult>>,
-    has_results: &mut bool,
-) -> Vec<PackageTrackingItem> {
-    let Some(results) = results else {
-        return Vec::new();
-    };
-    if results.is_empty() {
-        return Vec::new();
-    }
-    *has_results = true;
-    results
-        .iter()
-        .map(|r| PackageTrackingItem { url: r.url.clone() })
-        .collect()
 }
 
 #[derive(Template)]
@@ -1807,7 +1747,7 @@ mod tests {
     }
 
     #[test]
-    fn when_search_has_image_with_missing_dimentions_then_markdown_should_use_question_mark() {
+    fn when_search_has_image_with_missing_dimensions_then_markdown_should_use_question_mark() {
         let response = make_response(SearchData {
             image: Some(vec![SearchResult {
                 url: "https://example.com/page".to_owned(),

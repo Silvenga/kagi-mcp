@@ -65,12 +65,10 @@ pub(crate) fn extract_group_key(result: &kagi_api::SearchResult) -> Option<Strin
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use kagi_api::SearchResult;
     use std::fs;
     use std::path::Path;
-
-    use kagi_api::SearchResult;
-
-    use super::*;
 
     #[test]
     fn when_props_has_group_id_then_extract_should_return_it() {

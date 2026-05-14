@@ -22,6 +22,9 @@ pub struct KagiMcpServer {
 }
 
 impl KagiMcpServer {
+    // Allow >7 args because each timeout is a distinct API parameter that must be
+    // configurable independently; bundling them would hurt readability.
+    #[expect(clippy::too_many_arguments, reason = "each timeout is a distinct API parameter")]
     pub fn new(
         client: KagiClient,
         search_timeout: f64,
