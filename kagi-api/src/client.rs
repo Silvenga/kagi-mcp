@@ -4,6 +4,7 @@ use crate::KagiApi;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::{RetryError, RetryTransientMiddleware};
+use serde::de::DeserializeOwned;
 use std::time::Duration;
 
 const DEFAULT_BASE_URL: &str = "https://kagi.com/api";
@@ -150,9 +151,7 @@ impl KagiClient {
     }
 }
 
-async fn handle_response<T: serde::de::DeserializeOwned>(
-    response: reqwest::Response,
-) -> Result<T, KagiError> {
+async fn handle_response<T: DeserializeOwned>(response: reqwest::Response) -> Result<T, KagiError> {
     let status = response.status();
 
     if status.is_success() {

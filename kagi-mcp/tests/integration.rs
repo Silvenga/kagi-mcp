@@ -1,8 +1,10 @@
 mod common;
 
 use common::spawn_server;
-use rmcp::model::CallToolRequestParams;
+use rmcp::model::{CallToolRequestParams, ErrorCode};
+use rmcp::service::ServiceError;
 use serde_json::json;
+use std::time::Duration;
 use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
@@ -130,7 +132,7 @@ async fn when_extract_with_private_ip_then_returns_validation_error() {
     let result = harness.running.peer().call_tool(params).await;
 
     match result {
-        Err(rmcp::service::ServiceError::McpError(err)) => {
+        Err(ServiceError::McpError(err)) => {
             assert!(
                 err.to_string().contains("URL validation failed"),
                 "error should mention URL validation, got: {err}"
@@ -157,14 +159,14 @@ async fn when_extract_with_zero_pages_then_returns_invalid_params_error() {
     let result = harness.running.peer().call_tool(params).await;
 
     match result {
-        Err(rmcp::service::ServiceError::McpError(err)) => {
+        Err(ServiceError::McpError(err)) => {
             assert!(
                 err.to_string().contains("Pages validation failed"),
                 "error should mention Pages validation, got: {err}"
             );
             assert_eq!(
                 err.code,
-                rmcp::model::ErrorCode::INVALID_PARAMS,
+                ErrorCode::INVALID_PARAMS,
                 "error code should be INVALID_PARAMS"
             );
         }
@@ -185,7 +187,7 @@ async fn when_search_times_out_then_returns_network_error() {
                 .set_body_string(include_str!(
                     "../../docs/test-fixtures/search-response.json"
                 ))
-                .set_delay(std::time::Duration::from_secs(2)),
+                .set_delay(Duration::from_secs(2)),
         )
         .mount(&mock_server)
         .await;
@@ -202,7 +204,7 @@ async fn when_search_times_out_then_returns_network_error() {
     let result = harness.running.peer().call_tool(params).await;
 
     match result {
-        Err(rmcp::service::ServiceError::McpError(err)) => {
+        Err(ServiceError::McpError(err)) => {
             assert!(
                 err.to_string().contains("Request failed")
                     || err.to_string().contains("timeout")
@@ -227,7 +229,7 @@ async fn when_extract_times_out_then_returns_network_error() {
                 .set_body_string(include_str!(
                     "../../docs/test-fixtures/extract-response.json"
                 ))
-                .set_delay(std::time::Duration::from_secs(2)),
+                .set_delay(Duration::from_secs(2)),
         )
         .mount(&mock_server)
         .await;
@@ -247,7 +249,7 @@ async fn when_extract_times_out_then_returns_network_error() {
     let result = harness.running.peer().call_tool(params).await;
 
     match result {
-        Err(rmcp::service::ServiceError::McpError(err)) => {
+        Err(ServiceError::McpError(err)) => {
             assert!(
                 err.to_string().contains("Request failed")
                     || err.to_string().contains("timeout")

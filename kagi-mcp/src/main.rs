@@ -11,13 +11,15 @@ use config::Config;
 use kagi_api::client::KagiClientBuilder;
 use rmcp::ServiceExt;
 use server::KagiMcpServer;
+use std::io::stderr;
+use tokio::io::{stdin, stdout};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(std::io::stderr)
+        .with_writer(stderr)
         .init();
 
     let config = Config::parse();
@@ -40,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         config.overfetch_max,
     );
 
-    let transport = (tokio::io::stdin(), tokio::io::stdout());
+    let transport = (stdin(), stdout());
     let service = server.serve(transport).await?;
     service.waiting().await?;
 

@@ -1,7 +1,10 @@
 use super::{map_kagi_error, send_progress};
+use crate::domain::extract_group_key;
+use crate::format::{format_json, format_search_markdown};
+use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use kagi_api::types::{Filters, SearchData, SearchRequest, SearchResult};
 use kagi_api::KagiApi;
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
@@ -49,9 +52,9 @@ pub async fn search_handler(
     params: SearchParams,
     ctx: &RequestContext<RoleServer>,
     config: &SearchConfig,
-) -> Result<CallToolResult, rmcp::ErrorData> {
+) -> Result<CallToolResult, ErrorData> {
     if params.limit_per_domain == Some(0) {
-        return Err(rmcp::ErrorData::invalid_request(
+        return Err(ErrorData::invalid_request(
             "limit_per_domain must be >= 1",
             None,
         ));
@@ -86,16 +89,12 @@ pub async fn search_handler(
     .await;
 
     if ctx.ct.is_cancelled() {
-        return Err(rmcp::ErrorData::new(
-            rmcp::model::ErrorCode(-32800),
-            "Cancelled",
-            None,
-        ));
+        return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
     }
 
     let result = tokio::select! {
         _ = ctx.ct.cancelled() => {
-            return Err(rmcp::ErrorData::new(rmcp::model::ErrorCode(-32800), "Cancelled", None));
+            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
         }
         result = client.search(request) => result,
     };
@@ -109,12 +108,11 @@ pub async fn search_handler(
             }
             let output_format = params.output_format.as_deref().unwrap_or("markdown");
             let content = if output_format == "json" {
-                crate::format::format_json(&response)
+                format_json(&response)
             } else {
-                crate::format::format_search_markdown(&response)
+                format_search_markdown(&response)
             };
-            let truncated =
-                crate::guard::truncate_response(&content, crate::guard::DEFAULT_MAX_RESPONSE_BYTES);
+            let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
             Ok(CallToolResult::success(vec![Content::text(truncated)]))
         }
         Err(e) => Err(map_kagi_error(e)),
@@ -145,7 +143,7 @@ fn dedup_by_domain(data: &mut SearchData, limit_per_domain: u32, final_limit: u3
             let mut counts: HashMap<String, u32> = HashMap::new();
             let mut kept: Vec<SearchResult> = Vec::new();
             for result in results.drain(..) {
-                match crate::domain::extract_group_key(&result) {
+                match extract_group_key(&result) {
                     Some(key) => {
                         let count = counts.entry(key).or_insert(0);
                         if *count < limit_per_domain {
@@ -387,7 +385,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Unauthorized"));
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
     }
 
     #[tokio::test]
@@ -439,7 +437,7 @@ mod tests {
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Invalid request"));
         assert!(err.to_string().contains("bad param"));
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
     }
 
     #[tokio::test]
@@ -554,7 +552,7 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
         assert!(err.to_string().contains("limit_per_domain must be >= 1"));
     }
 

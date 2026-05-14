@@ -55,6 +55,7 @@
 //! }
 //! ```
 
+use std::str::from_utf8;
 use std::sync::LazyLock;
 
 use publicsuffix::{List, Psl};
@@ -103,7 +104,7 @@ pub(crate) fn extract_group_key(result: &kagi_api::SearchResult) -> Option<Strin
             let list = &*PSL_LIST;
             match list.domain(domain.as_bytes()) {
                 Some(parsed) => {
-                    let registrable = core::str::from_utf8(parsed.as_bytes())
+                    let registrable = from_utf8(parsed.as_bytes())
                         .expect("domain from URL parsing is valid UTF-8");
                     Some(registrable.to_owned())
                 }
@@ -122,6 +123,9 @@ pub(crate) fn extract_group_key(result: &kagi_api::SearchResult) -> Option<Strin
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::Path;
+
     use kagi_api::SearchResult;
 
     use super::*;
@@ -314,9 +318,9 @@ mod tests {
 
     #[test]
     fn when_loading_fixture_then_all_records_should_have_a_group_key() {
-        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let fixture_path = manifest_dir.join("tests/fixtures/search_response_with_group_id.json");
-        let data = std::fs::read_to_string(fixture_path).expect("fixture file exists");
+        let data = fs::read_to_string(fixture_path).expect("fixture file exists");
         let response: kagi_api::SearchResponse =
             serde_json::from_str(&data).expect("fixture is valid JSON");
 
