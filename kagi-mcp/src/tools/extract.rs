@@ -13,7 +13,6 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ExtractParams {
     pub pages: Vec<String>,
-    pub timeout: Option<f64>,
     pub output_format: Option<String>,
 }
 
@@ -21,7 +20,7 @@ pub async fn extract_handler(
     client: &dyn KagiApi,
     params: ExtractParams,
     ctx: &RequestContext<RoleServer>,
-    kagi_timeout: f64,
+    _extract_timeout: f64,
 ) -> Result<CallToolResult, ErrorData> {
     if let Err(e) = validate_extract_pages_count(&params.pages) {
         return Err(ErrorData::invalid_params(
@@ -47,7 +46,6 @@ pub async fn extract_handler(
 
     let request = ExtractRequest {
         pages,
-        timeout: params.timeout.or(Some(kagi_timeout)),
         format: Some("json".to_owned()),
     };
 
@@ -102,12 +100,11 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec![],
-            timeout: None,
             output_format: None,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+        let result = extract_handler(&mock, params, &ctx, 30.0).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -123,12 +120,11 @@ mod tests {
             pages: (1..=11)
                 .map(|i| format!("https://example{i}.com"))
                 .collect(),
-            timeout: None,
             output_format: None,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+        let result = extract_handler(&mock, params, &ctx, 30.0).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -168,12 +164,11 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            timeout: None,
             output_format: None,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+        let result = extract_handler(&mock, params, &ctx, 30.0).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -202,12 +197,11 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            timeout: None,
             output_format: Some("json".to_owned()),
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+        let result = extract_handler(&mock, params, &ctx, 30.0).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -221,12 +215,11 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://192.168.1.1/".to_owned()],
-            timeout: None,
             output_format: None,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+        let result = extract_handler(&mock, params, &ctx, 30.0).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -243,12 +236,11 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            timeout: None,
             output_format: None,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+        let result = extract_handler(&mock, params, &ctx, 30.0).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -275,12 +267,11 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://ok.com".to_owned(), "https://fail.com".to_owned()],
-            timeout: None,
             output_format: None,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 4.0).await;
+        let result = extract_handler(&mock, params, &ctx, 30.0).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -290,11 +281,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn when_extract_handler_called_then_config_kagi_timeout_should_be_applied() {
+    async fn when_extract_handler_called_then_config_extract_timeout_should_be_applied() {
         let mut mock = MockKagiApi::new();
         mock.expect_extract()
             .times(1)
-            .withf(|req| req.timeout == Some(12.5))
+            .withf(|req| req.pages.len() == 1)
             .returning(|_| {
                 Ok(ExtractResponse {
                     meta: Meta {
@@ -309,42 +300,11 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            timeout: None,
             output_format: None,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 12.5).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn when_extract_handler_called_with_explicit_timeout_then_explicit_should_override_config(
-    ) {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(1)
-            .withf(|req| req.timeout == Some(5.0))
-            .returning(|_| {
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_owned(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![]),
-                    errors: None,
-                })
-            });
-
-        let params = ExtractParams {
-            pages: vec!["https://example.com".to_owned()],
-            timeout: Some(5.0),
-            output_format: None,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(&mock, params, &ctx, 12.5).await;
+        let result = extract_handler(&mock, params, &ctx, 30.0).await;
         assert!(result.is_ok());
     }
 }

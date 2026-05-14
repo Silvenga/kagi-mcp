@@ -12,7 +12,8 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct KagiMcpServer {
     pub client: Arc<dyn KagiApi>,
-    pub kagi_timeout: f64,
+    pub search_timeout: f64,
+    pub extract_timeout: f64,
     pub limit: u32,
     pub safe_search: bool,
     pub region: Option<String>,
@@ -23,7 +24,8 @@ pub struct KagiMcpServer {
 impl KagiMcpServer {
     pub fn new(
         client: KagiClient,
-        kagi_timeout: f64,
+        search_timeout: f64,
+        extract_timeout: f64,
         limit: u32,
         safe_search: bool,
         region: Option<String>,
@@ -32,7 +34,8 @@ impl KagiMcpServer {
     ) -> Self {
         Self {
             client: Arc::new(client),
-            kagi_timeout,
+            search_timeout,
+            extract_timeout,
             limit,
             safe_search,
             region,
@@ -45,7 +48,8 @@ impl KagiMcpServer {
     pub fn with_client(client: Arc<dyn KagiApi>) -> Self {
         Self {
             client,
-            kagi_timeout: 4.0,
+            search_timeout: 4.0,
+            extract_timeout: 30.0,
             limit: 10,
             safe_search: true,
             region: None,
@@ -66,7 +70,7 @@ impl KagiMcpServer {
         Parameters(params): Parameters<SearchParams>,
     ) -> Result<CallToolResult, McpError> {
         let config = SearchConfig {
-            kagi_timeout: self.kagi_timeout,
+            search_timeout: self.search_timeout,
             limit: self.limit,
             safe_search: self.safe_search,
             region: self.region.clone(),
@@ -82,7 +86,7 @@ impl KagiMcpServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<ExtractParams>,
     ) -> Result<CallToolResult, McpError> {
-        extract_handler(&*self.client, params, &ctx, self.kagi_timeout).await
+        extract_handler(&*self.client, params, &ctx, self.extract_timeout).await
     }
 }
 
@@ -102,7 +106,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let server = KagiMcpServer::new(client, 4.0, 10, true, None, 5, 50);
+        let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, 5, 50);
 
         let info = server.get_info();
         assert!(

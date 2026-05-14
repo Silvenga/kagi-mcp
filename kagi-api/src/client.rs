@@ -13,7 +13,7 @@ const DEFAULT_USER_AGENT: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     " (github.com/Silvenga/kagi-mcp)"
 );
-const DEFAULT_TIMEOUT_SECS: f64 = 10.0;
+const DEFAULT_TIMEOUT_SECS: f64 = 32.0;
 const DEFAULT_RETRIES: u32 = 3;
 
 /// Client for the Kagi Search and Extract APIs.

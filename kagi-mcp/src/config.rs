@@ -9,10 +9,13 @@ pub struct Config {
     #[arg(long, env = "KAGI_BASE_URL", default_value = "https://kagi.com/api")]
     pub base_url: String,
 
-    #[arg(long, env = "KAGI_TIMEOUT", default_value = "4.0")]
-    pub kagi_timeout: f64,
+    #[arg(long, env = "KAGI_SEARCH_TIMEOUT", default_value = "4.0")]
+    pub search_timeout: f64,
 
-    #[arg(long, env = "KAGI_CLIENT_TIMEOUT", default_value = "10.0")]
+    #[arg(long, env = "KAGI_EXTRACT_TIMEOUT", default_value = "30.0")]
+    pub extract_timeout: f64,
+
+    #[arg(long, env = "KAGI_CLIENT_TIMEOUT", default_value = "32.0")]
     pub client_timeout: f64,
 
     #[arg(long, env = "KAGI_RETRIES", default_value = "3")]
@@ -50,8 +53,9 @@ mod tests {
 
         assert_eq!(config.api_key, "test-key");
         assert_eq!(config.base_url, "https://kagi.com/api");
-        assert_eq!(config.kagi_timeout, 4.0);
-        assert_eq!(config.client_timeout, 10.0);
+        assert_eq!(config.search_timeout, 4.0);
+        assert_eq!(config.extract_timeout, 30.0);
+        assert_eq!(config.client_timeout, 32.0);
         assert_eq!(config.retries, 3);
         assert_eq!(config.limit, 10);
         assert!(config.safe_search);
@@ -68,10 +72,12 @@ mod tests {
             "custom-key",
             "--base-url",
             "https://custom.example.com",
-            "--kagi-timeout",
+            "--search-timeout",
             "8.5",
-            "--client-timeout",
+            "--extract-timeout",
             "30.0",
+            "--client-timeout",
+            "35.0",
             "--retries",
             "5",
             "--limit",
@@ -89,8 +95,9 @@ mod tests {
 
         assert_eq!(config.api_key, "custom-key");
         assert_eq!(config.base_url, "https://custom.example.com");
-        assert_eq!(config.kagi_timeout, 8.5);
-        assert_eq!(config.client_timeout, 30.0);
+        assert_eq!(config.search_timeout, 8.5);
+        assert_eq!(config.extract_timeout, 30.0);
+        assert_eq!(config.client_timeout, 35.0);
         assert_eq!(config.retries, 5);
         assert_eq!(config.limit, 25);
         assert!(!config.safe_search);

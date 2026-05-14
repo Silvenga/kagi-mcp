@@ -26,7 +26,7 @@ pub struct SearchParams {
 
 #[derive(Clone, Debug)]
 pub struct SearchConfig {
-    pub kagi_timeout: f64,
+    pub search_timeout: f64,
     pub limit: u32,
     pub safe_search: bool,
     pub region: Option<String>,
@@ -37,7 +37,7 @@ pub struct SearchConfig {
 impl Default for SearchConfig {
     fn default() -> Self {
         Self {
-            kagi_timeout: 4.0,
+            search_timeout: 4.0,
             limit: 10,
             safe_search: true,
             region: None,
@@ -72,7 +72,7 @@ pub async fn search_handler(
         query: params.query.clone(),
         workflow: params.workflow.clone(),
         format: Some("json".to_owned()),
-        timeout: Some(config.kagi_timeout),
+        timeout: Some(config.search_timeout),
         page: None,
         limit: Some(upstream_limit),
         safe_search: Some(config.safe_search),
@@ -480,7 +480,7 @@ mod tests {
             .returning(|_| Ok(make_search_response(vec![])));
 
         let config = SearchConfig {
-            kagi_timeout: 8.5,
+            search_timeout: 8.5,
             limit: 25,
             safe_search: false,
             region: Some("us-west".to_owned()),
@@ -514,7 +514,7 @@ mod tests {
             .returning(|_| Ok(make_search_response(vec![])));
 
         let config = SearchConfig {
-            kagi_timeout: 4.0,
+            search_timeout: 4.0,
             limit: 10,
             safe_search: true,
             region: Some("eu".to_owned()),

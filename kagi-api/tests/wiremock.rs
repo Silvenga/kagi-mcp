@@ -26,7 +26,6 @@ fn extract_request() -> ExtractRequest {
         pages: vec![ExtractPage {
             url: "https://example.com".to_owned(),
         }],
-        timeout: None,
         format: None,
     }
 }

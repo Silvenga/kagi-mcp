@@ -34,7 +34,8 @@ async fn main() -> anyhow::Result<()> {
 
     let server = KagiMcpServer::new(
         client,
-        config.kagi_timeout,
+        config.search_timeout,
+        config.extract_timeout,
         config.limit,
         config.safe_search,
         config.region,

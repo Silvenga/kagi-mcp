@@ -1496,9 +1496,10 @@ mod tests {
 
     #[test]
     fn when_using_search_response_fixture_then_markdown_should_match_golden() {
-        let response: SearchResponse =
-            serde_json::from_str(include_str!("../../docs/test-fixtures/search-response.json"))
-                .expect("valid fixture JSON");
+        let response: SearchResponse = serde_json::from_str(include_str!(
+            "../../docs/test-fixtures/search-response.json"
+        ))
+        .expect("valid fixture JSON");
         let expected = r##"## Web Results
 
 1. **[Rust Programming Language](https://rust-lang.org/)**
@@ -1512,9 +1513,10 @@ mod tests {
 
     #[test]
     fn when_using_extract_response_fixture_then_markdown_should_match_golden() {
-        let response: ExtractResponse =
-            serde_json::from_str(include_str!("../../docs/test-fixtures/extract-response.json"))
-                .expect("valid fixture JSON");
+        let response: ExtractResponse = serde_json::from_str(include_str!(
+            "../../docs/test-fixtures/extract-response.json"
+        ))
+        .expect("valid fixture JSON");
         let expected = r##"## Extracted Content
 
 ### https://www.rust-lang.org
@@ -1804,7 +1806,8 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        let expected = "## Code Results\n\n1. **[A Code Repository](https://github.com/user/repo)**";
+        let expected =
+            "## Code Results\n\n1. **[A Code Repository](https://github.com/user/repo)**";
         assert_eq!(format_search_markdown(&response), expected);
     }
 
