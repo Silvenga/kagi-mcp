@@ -1,3 +1,4 @@
+use askama::Template;
 use kagi_api::types::{ExtractResponse, SearchResponse, SearchResult};
 
 fn decode_entities(s: &str) -> String {
@@ -69,301 +70,377 @@ fn trim_iso_date(s: &str) -> String {
     }
 }
 
-pub fn format_search_markdown(response: &SearchResponse) -> String {
-    let mut output = String::new();
-    let data = &response.data;
+#[derive(Template)]
+#[template(path = "search_results.md", escape = "none")]
+struct SearchResultsTemplate {
+    general_sections: Vec<GeneralSection>,
+    image_results: Vec<ImageItem>,
+    related_questions: Vec<RelatedQuestionItem>,
+    direct_answers: Vec<DirectAnswerItem>,
+    infoboxes: Vec<InfoboxItem>,
+    related_searches: Vec<RelatedSearchItem>,
+    weather: Vec<WeatherItem>,
+    package_tracking: Vec<PackageTrackingItem>,
+    has_results: bool,
+}
 
+struct GeneralSection {
+    title: String,
+    items: Vec<GeneralItem>,
+}
+
+struct GeneralItem {
+    index: usize,
+    title: String,
+    url: String,
+    snippet: Option<String>,
+    time: Option<String>,
+}
+
+struct ImageItem {
+    index: usize,
+    title: String,
+    url: String,
+    image_url: String,
+    width: String,
+    height: String,
+}
+
+struct RelatedQuestionItem {
+    index: usize,
+    question: String,
+    url: String,
+    snippet: Option<String>,
+}
+
+struct DirectAnswerItem {
+    snippet: String,
+}
+
+struct InfoboxItem {
+    title: String,
+    url: String,
+    snippet: Option<String>,
+    properties: Vec<(String, String)>,
+}
+
+struct RelatedSearchItem {
+    title: String,
+}
+
+struct WeatherItem {
+    snippet: String,
+}
+
+struct PackageTrackingItem {
+    url: String,
+}
+
+fn build_general_section(title: &str, results: &Option<Vec<SearchResult>>) -> Option<GeneralSection> {
+    let results = results.as_ref()?;
+    if results.is_empty() {
+        return None;
+    }
+    let items = results
+        .iter()
+        .enumerate()
+        .map(|(i, r)| GeneralItem {
+            index: i + 1,
+            title: decode_entities(&normalize_title_whitespace(&r.title)),
+            url: r.url.clone(),
+            snippet: r
+                .snippet
+                .as_ref()
+                .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+            time: r.time.as_ref().map(|t| trim_iso_date(t)),
+        })
+        .collect();
+    Some(GeneralSection {
+        title: title.to_owned(),
+        items,
+    })
+}
+
+pub fn format_search_markdown(response: &SearchResponse) -> String {
+    let data = &response.data;
     let mut has_results = false;
 
-    let mut format_general = |title: &str, results: &Option<Vec<SearchResult>>| {
-        if let Some(results) = results {
-            if !results.is_empty() {
-                has_results = true;
-                output.push_str(&format!("## {}\n\n", title));
-                for (i, result) in results.iter().enumerate() {
-                    output.push_str(&format!(
-                        "{}. **[{}]({})**\n",
-                        i + 1,
-                        decode_entities(&normalize_title_whitespace(&result.title)),
-                        result.url
-                    ));
-                    if let Some(snippet) = &result.snippet {
-                        output.push_str(&format!(
-                            "   - Snippet: {}\n",
-                            decode_entities(&collapse_snippet_ellipses(snippet))
-                        ));
-                    }
-                    if let Some(time) = &result.time {
-                        output.push_str(&format!("   - Published: {}\n", trim_iso_date(time)));
-                    }
-                }
-                output.push('\n');
-            }
+    let mut general_sections = Vec::new();
+
+    let mut add_general = |title: &str, results: &Option<Vec<SearchResult>>| {
+        if let Some(section) = build_general_section(title, results) {
+            has_results = true;
+            general_sections.push(section);
         }
     };
 
-    format_general("Web Results", &data.search);
-    format_general("News", &data.news);
-    format_general("Interesting News", &data.interesting_news);
-    format_general("Interesting Finds", &data.interesting_finds);
-    format_general("Code Results", &data.code);
-    format_general("Public Records", &data.public_records);
-    format_general("Listicles", &data.listicle);
-    format_general("Web Archive", &data.web_archive);
+    add_general("Web Results", &data.search);
+    add_general("News", &data.news);
+    add_general("Interesting News", &data.interesting_news);
+    add_general("Interesting Finds", &data.interesting_finds);
+    add_general("Code Results", &data.code);
+    add_general("Public Records", &data.public_records);
+    add_general("Listicles", &data.listicle);
+    add_general("Web Archive", &data.web_archive);
+    add_general("Videos", &data.video);
+    add_general("Podcasts", &data.podcast);
+    add_general("Podcast Creators", &data.podcast_creator);
 
-    if let Some(results) = &data.image {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Images\n\n");
-            for (i, result) in results.iter().enumerate() {
-                output.push_str(&format!(
-                    "{}. **[{}]({})**\n",
-                    i + 1,
-                    decode_entities(&normalize_title_whitespace(&result.title)),
-                    result.url
-                ));
-                if let Some(image) = &result.image {
-                    let width = image.width.map_or("?".to_owned(), |w| w.to_string());
-                    let height = image.height.map_or("?".to_owned(), |h| h.to_string());
-                    output.push_str(&format!(
-                        "   - Image: {} ({}x{})\n",
-                        image.url, width, height
-                    ));
-                }
-            }
-            output.push('\n');
-        }
+    let image_results = build_image_items(&data.image, &mut has_results);
+    let related_questions = build_related_question_items(&data.adjacent_question, &mut has_results);
+    let direct_answers = build_direct_answer_items(&data.direct_answer, &mut has_results);
+    let infoboxes = build_infobox_items(&data.infobox, &mut has_results);
+    let related_searches = build_related_search_items(&data.related_search, &mut has_results);
+    let weather = build_weather_items(&data.weather, &mut has_results);
+    let package_tracking = build_package_tracking_items(&data.package_tracking, &mut has_results);
+
+    let template = SearchResultsTemplate {
+        general_sections,
+        image_results,
+        related_questions,
+        direct_answers,
+        infoboxes,
+        related_searches,
+        weather,
+        package_tracking,
+        has_results,
+    };
+
+    template.render().unwrap().trim_end().to_owned()
+}
+
+fn build_image_items(
+    results: &Option<Vec<SearchResult>>,
+    has_results: &mut bool,
+) -> Vec<ImageItem> {
+    let Some(results) = results else { return Vec::new() };
+    if results.is_empty() {
+        return Vec::new();
     }
-
-    if let Some(results) = &data.video {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Videos\n\n");
-            for (i, result) in results.iter().enumerate() {
-                output.push_str(&format!(
-                    "{}. **[{}]({})**\n",
-                    i + 1,
-                    decode_entities(&normalize_title_whitespace(&result.title)),
-                    result.url
-                ));
-                if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!(
-                        "   - Snippet: {}\n",
-                        decode_entities(&collapse_snippet_ellipses(snippet))
-                    ));
-                }
-                if let Some(time) = &result.time {
-                    output.push_str(&format!("   - Published: {}\n", trim_iso_date(time)));
-                }
+    *has_results = true;
+    results
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let width = r
+                .image
+                .as_ref()
+                .and_then(|img| img.width)
+                .map_or_else(|| "?".to_owned(), |w| w.to_string());
+            let height = r
+                .image
+                .as_ref()
+                .and_then(|img| img.height)
+                .map_or_else(|| "?".to_owned(), |h| h.to_string());
+            ImageItem {
+                index: i + 1,
+                title: decode_entities(&normalize_title_whitespace(&r.title)),
+                url: r.url.clone(),
+                image_url: r.image.as_ref().map_or(String::new(), |img| img.url.clone()),
+                width,
+                height,
             }
-            output.push('\n');
-        }
-    }
+        })
+        .collect()
+}
 
-    if let Some(results) = &data.podcast {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Podcasts\n\n");
-            for (i, result) in results.iter().enumerate() {
-                output.push_str(&format!(
-                    "{}. **[{}]({})**\n",
-                    i + 1,
-                    decode_entities(&normalize_title_whitespace(&result.title)),
-                    result.url
-                ));
-                if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!(
-                        "   - Snippet: {}\n",
-                        decode_entities(&collapse_snippet_ellipses(snippet))
-                    ));
-                }
-                if let Some(time) = &result.time {
-                    output.push_str(&format!("   - Published: {}\n", trim_iso_date(time)));
-                }
-            }
-            output.push('\n');
-        }
+fn build_related_question_items(
+    results: &Option<Vec<SearchResult>>,
+    has_results: &mut bool,
+) -> Vec<RelatedQuestionItem> {
+    let Some(results) = results else { return Vec::new() };
+    if results.is_empty() {
+        return Vec::new();
     }
-
-    if let Some(results) = &data.podcast_creator {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Podcast Creators\n\n");
-            for (i, result) in results.iter().enumerate() {
-                output.push_str(&format!(
-                    "{}. **[{}]({})**\n",
-                    i + 1,
-                    decode_entities(&normalize_title_whitespace(&result.title)),
-                    result.url
-                ));
-                if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!(
-                        "   - Snippet: {}\n",
-                        decode_entities(&collapse_snippet_ellipses(snippet))
-                    ));
-                }
-                if let Some(time) = &result.time {
-                    output.push_str(&format!("   - Published: {}\n", trim_iso_date(time)));
-                }
-            }
-            output.push('\n');
-        }
-    }
-
-    if let Some(results) = &data.adjacent_question {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Related Questions\n\n");
-            for (i, result) in results.iter().enumerate() {
-                let question = result
-                    .props
+    *has_results = true;
+    results
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let question = r
+                .props
+                .as_ref()
+                .and_then(|p| p.get("question"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown Question");
+            RelatedQuestionItem {
+                index: i + 1,
+                question: decode_entities(&normalize_title_whitespace(question)),
+                url: r.url.clone(),
+                snippet: r
+                    .snippet
                     .as_ref()
-                    .and_then(|p| p.get("question"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Unknown Question");
-                let question = decode_entities(&normalize_title_whitespace(question));
-                output.push_str(&format!("{}. **{}**\n", i + 1, question));
-                if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!(
-                        "    - [Answer]({}): {}\n",
-                        result.url,
-                        decode_entities(&collapse_snippet_ellipses(snippet))
-                    ));
-                }
+                    .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
             }
-            output.push('\n');
-        }
-    }
+        })
+        .collect()
+}
 
-    if let Some(results) = &data.direct_answer {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Direct Answer\n\n");
-            for result in results {
-                if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!(
-                        "{}\n\n",
-                        decode_entities(&collapse_snippet_ellipses(snippet))
-                    ));
-                }
-            }
-        }
+fn build_direct_answer_items(
+    results: &Option<Vec<SearchResult>>,
+    has_results: &mut bool,
+) -> Vec<DirectAnswerItem> {
+    let Some(results) = results else { return Vec::new() };
+    if results.is_empty() {
+        return Vec::new();
     }
+    *has_results = true;
+    results
+        .iter()
+        .filter_map(|r| {
+            r.snippet.as_ref().map(|s| DirectAnswerItem {
+                snippet: decode_entities(&collapse_snippet_ellipses(s)),
+            })
+        })
+        .collect()
+}
 
-    if let Some(results) = &data.infobox {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Infobox\n\n");
-            for result in results {
-                output.push_str(&format!(
-                    "**[{}]({})**\n\n",
-                    decode_entities(&normalize_title_whitespace(&result.title)),
-                    result.url
-                ));
-                if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!(
-                        "{}\n\n",
-                        decode_entities(&collapse_snippet_ellipses(snippet))
-                    ));
-                }
-                if let Some(props) = &result.props {
-                    if let Some(infobox) = props.get("infobox") {
-                        if let Some(obj) = infobox.as_object() {
-                            for (key, value) in obj {
-                                let val_str = if let Some(s) = value.as_str() {
-                                    s.to_owned()
-                                } else {
-                                    value.to_string()
-                                };
-                                output.push_str(&format!("{}: {}\n", key, val_str));
-                            }
+fn build_infobox_items(
+    results: &Option<Vec<SearchResult>>,
+    has_results: &mut bool,
+) -> Vec<InfoboxItem> {
+    let Some(results) = results else { return Vec::new() };
+    if results.is_empty() {
+        return Vec::new();
+    }
+    *has_results = true;
+    results
+        .iter()
+        .map(|r| {
+            let mut properties = Vec::new();
+            if let Some(props) = &r.props {
+                if let Some(infobox) = props.get("infobox") {
+                    if let Some(obj) = infobox.as_object() {
+                        for (key, value) in obj {
+                            let val_str = value
+                                .as_str()
+                                .map(|s| s.to_owned())
+                                .unwrap_or_else(|| value.to_string());
+                            properties.push((key.clone(), val_str));
                         }
                     }
                 }
-                output.push('\n');
             }
-        }
-    }
-
-    if let Some(results) = &data.related_search {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Related Searches\n\n");
-            for result in results {
-                output.push_str(&format!(
-                    "- {}\n",
-                    decode_entities(&normalize_title_whitespace(&result.title))
-                ));
+            InfoboxItem {
+                title: decode_entities(&normalize_title_whitespace(&r.title)),
+                url: r.url.clone(),
+                snippet: r
+                    .snippet
+                    .as_ref()
+                    .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+                properties,
             }
-            output.push('\n');
-        }
-    }
+        })
+        .collect()
+}
 
-    if let Some(results) = &data.weather {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Weather\n\n");
-            for result in results {
-                if let Some(snippet) = &result.snippet {
-                    output.push_str(&format!(
-                        "{}\n",
-                        decode_entities(&collapse_snippet_ellipses(snippet))
-                    ));
-                }
-            }
-            output.push('\n');
-        }
+fn build_related_search_items(
+    results: &Option<Vec<SearchResult>>,
+    has_results: &mut bool,
+) -> Vec<RelatedSearchItem> {
+    let Some(results) = results else { return Vec::new() };
+    if results.is_empty() {
+        return Vec::new();
     }
+    *has_results = true;
+    results
+        .iter()
+        .map(|r| RelatedSearchItem {
+            title: decode_entities(&normalize_title_whitespace(&r.title)),
+        })
+        .collect()
+}
 
-    if let Some(results) = &data.package_tracking {
-        if !results.is_empty() {
-            has_results = true;
-            output.push_str("## Package Tracking\n\n");
-            for result in results {
-                output.push_str(&format!("- [Tracking Link]({})\n", result.url));
-            }
-            output.push('\n');
-        }
+fn build_weather_items(
+    results: &Option<Vec<SearchResult>>,
+    has_results: &mut bool,
+) -> Vec<WeatherItem> {
+    let Some(results) = results else { return Vec::new() };
+    if results.is_empty() {
+        return Vec::new();
     }
+    *has_results = true;
+    results
+        .iter()
+        .filter_map(|r| {
+            r.snippet.as_ref().map(|s| WeatherItem {
+                snippet: decode_entities(&collapse_snippet_ellipses(s)),
+            })
+        })
+        .collect()
+}
 
-    if !has_results {
-        return "No results found.".to_owned();
+fn build_package_tracking_items(
+    results: &Option<Vec<SearchResult>>,
+    has_results: &mut bool,
+) -> Vec<PackageTrackingItem> {
+    let Some(results) = results else { return Vec::new() };
+    if results.is_empty() {
+        return Vec::new();
     }
+    *has_results = true;
+    results
+        .iter()
+        .map(|r| PackageTrackingItem {
+            url: r.url.clone(),
+        })
+        .collect()
+}
 
-    output.trim_end().to_owned()
+#[derive(Template)]
+#[template(path = "extract_results.md", escape = "none")]
+struct ExtractResultsTemplate {
+    has_content: bool,
+    data_items: Vec<ExtractDataItem>,
+    error_items: Vec<ExtractErrorItem>,
+}
+
+struct ExtractDataItem {
+    url: String,
+    has_markdown: bool,
+    markdown: String,
+}
+
+struct ExtractErrorItem {
+    url: String,
+    message: String,
 }
 
 pub fn format_extract_markdown(response: &ExtractResponse) -> String {
-    let mut output = String::new();
-    output.push_str("## Extracted Content\n\n");
-
+    let mut data_items = Vec::new();
+    let mut error_items = Vec::new();
     let mut has_content = false;
 
     if let Some(data) = &response.data {
         for item in data {
             has_content = true;
-            output.push_str(&format!("### {}\n\n", item.url));
-            if let Some(markdown) = &item.markdown {
-                output.push_str(&format!("{}\n\n", markdown));
-            }
-            output.push_str("---\n\n");
+            let markdown = item.markdown.clone();
+            let has_markdown = markdown.is_some();
+            data_items.push(ExtractDataItem {
+                url: item.url.clone(),
+                has_markdown,
+                markdown: markdown.unwrap_or_default(),
+            });
         }
     }
 
     if let Some(errors) = &response.errors {
         for error in errors {
             has_content = true;
-            output.push_str(&format!("### {}\n\n", error.url));
-            let message = error.message.as_deref().unwrap_or("Unknown error");
-            output.push_str(&format!("**Extraction failed:** {}\n\n", message));
+            error_items.push(ExtractErrorItem {
+                url: error.url.clone(),
+                message: error.message.clone().unwrap_or_else(|| "Unknown error".to_owned()),
+            });
         }
     }
 
-    if !has_content {
-        return "No content extracted.".to_owned();
-    }
+    let template = ExtractResultsTemplate {
+        has_content,
+        data_items,
+        error_items,
+    };
 
-    output.trim_end().to_owned()
+    template.render().unwrap().trim_end().to_owned()
 }
 
 pub fn format_json<T: serde::Serialize>(response: &T) -> String {
