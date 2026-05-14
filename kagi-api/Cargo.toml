@@ -13,6 +13,9 @@ keywords = ["kagi", "search", "api", "client"]
 categories = ["web-programming::http-client", "api-bindings"]
 rust-version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true, features = ["json"] }

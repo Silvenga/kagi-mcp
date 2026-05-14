@@ -32,7 +32,7 @@ cargo build --workspace
 cargo test --workspace
 
 # Run clippy
-cargo clippy --workspace
+cargo clippy --workspace --all-targets --all-features
 ```
 
 ## Key Architecture Decisions

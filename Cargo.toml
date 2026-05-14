@@ -16,6 +16,35 @@ keywords = ["kagi", "search", "mcp", "api"]
 categories = ["web-programming::http-client", "command-line-utilities"]
 rust-version = "1.84"
 
+[workspace.lints.clippy]
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+create_dir = "warn"
+else_if_without_else = "warn"
+filetype_is_file = "warn"
+infinite_loop = "warn"
+undocumented_unsafe_blocks = "warn"
+unnecessary_safety_comment = "warn"
+unnecessary_safety_doc = "warn"
+
+# Pedantic
+empty_enum_variants_with_brackets = "warn"
+empty_structs_with_brackets = "warn"
+get_unwrap = "warn"
+iter_over_hash_type = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+redundant_test_prefix = "warn"
+redundant_type_annotations = "warn"
+str_to_string = "warn"
+todo = "warn"
+unneeded_field_pattern = "warn"
+wildcard_dependencies = "warn"
+redundant_feature_names = "warn"
+negative_feature_names = "warn"
+cargo_common_metadata = "warn"
+absolute_paths = "warn"
+
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
