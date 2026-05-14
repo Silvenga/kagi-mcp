@@ -43,7 +43,7 @@ fn validate_url(url_str: &str) -> Result<url::Url, ValidationError> {
 
     let host = url
         .host()
-        .ok_or_else(|| ValidationError::InvalidUrl("missing host".to_string()))?;
+        .ok_or_else(|| ValidationError::InvalidUrl("missing host".to_owned()))?;
 
     match host {
         url::Host::Domain(domain) => {
@@ -81,8 +81,8 @@ mod tests {
     #[test]
     fn when_https_url_is_valid_should_return_parsed_url() {
         let urls = vec![
-            "https://example.com".to_string(),
-            "https://kagi.com/api".to_string(),
+            "https://example.com".to_owned(),
+            "https://kagi.com/api".to_owned(),
         ];
 
         let result = validate_extract_urls(&urls);
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn when_url_has_http_scheme_should_return_not_https_error() {
-        let urls = vec!["http://example.com".to_string()];
+        let urls = vec!["http://example.com".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
@@ -106,55 +106,55 @@ mod tests {
 
     #[test]
     fn when_url_has_private_ipv4_10_should_return_private_ip_error() {
-        let urls = vec!["https://10.0.0.1/".to_string()];
+        let urls = vec!["https://10.0.0.1/".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
         assert_eq!(
             result,
-            Err(ValidationError::PrivateIp("10.0.0.1".to_string()))
+            Err(ValidationError::PrivateIp("10.0.0.1".to_owned()))
         );
     }
 
     #[test]
     fn when_url_has_private_ipv4_172_16_should_return_private_ip_error() {
-        let urls = vec!["https://172.16.0.1/".to_string()];
+        let urls = vec!["https://172.16.0.1/".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
         assert_eq!(
             result,
-            Err(ValidationError::PrivateIp("172.16.0.1".to_string()))
+            Err(ValidationError::PrivateIp("172.16.0.1".to_owned()))
         );
     }
 
     #[test]
     fn when_url_has_private_ipv4_192_168_should_return_private_ip_error() {
-        let urls = vec!["https://192.168.1.1/".to_string()];
+        let urls = vec!["https://192.168.1.1/".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
         assert_eq!(
             result,
-            Err(ValidationError::PrivateIp("192.168.1.1".to_string()))
+            Err(ValidationError::PrivateIp("192.168.1.1".to_owned()))
         );
     }
 
     #[test]
     fn when_url_has_loopback_ipv4_should_return_private_ip_error() {
-        let urls = vec!["https://127.0.0.1/".to_string()];
+        let urls = vec!["https://127.0.0.1/".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
         assert_eq!(
             result,
-            Err(ValidationError::PrivateIp("127.0.0.1".to_string()))
+            Err(ValidationError::PrivateIp("127.0.0.1".to_owned()))
         );
     }
 
     #[test]
     fn when_url_has_localhost_hostname_should_return_localhost_error() {
-        let urls = vec!["https://localhost/".to_string()];
+        let urls = vec!["https://localhost/".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
@@ -163,33 +163,33 @@ mod tests {
 
     #[test]
     fn when_url_has_link_local_ipv4_should_return_link_local_error() {
-        let urls = vec!["https://169.254.0.1/".to_string()];
+        let urls = vec!["https://169.254.0.1/".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
         assert_eq!(
             result,
-            Err(ValidationError::LinkLocal("169.254.0.1".to_string()))
+            Err(ValidationError::LinkLocal("169.254.0.1".to_owned()))
         );
     }
 
     #[test]
     fn when_url_has_link_local_ipv6_should_return_link_local_error() {
-        let urls = vec!["https://[fe80::1]/".to_string()];
+        let urls = vec!["https://[fe80::1]/".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
         assert_eq!(
             result,
-            Err(ValidationError::LinkLocal("fe80::1".to_string()))
+            Err(ValidationError::LinkLocal("fe80::1".to_owned()))
         );
     }
 
     #[test]
     fn when_multiple_urls_with_first_invalid_should_return_error() {
         let urls = vec![
-            "http://example.com".to_string(),
-            "https://kagi.com".to_string(),
+            "http://example.com".to_owned(),
+            "https://kagi.com".to_owned(),
         ];
 
         let result = validate_extract_urls(&urls);
@@ -200,8 +200,8 @@ mod tests {
     #[test]
     fn when_multiple_urls_with_second_invalid_should_return_error() {
         let urls = vec![
-            "https://kagi.com".to_string(),
-            "http://example.com".to_string(),
+            "https://kagi.com".to_owned(),
+            "http://example.com".to_owned(),
         ];
 
         let result = validate_extract_urls(&urls);
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn when_url_has_invalid_syntax_should_return_invalid_url_error() {
-        let urls = vec!["not-a-url".to_string()];
+        let urls = vec!["not-a-url".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn when_url_missing_host_should_return_invalid_url_error() {
-        let urls = vec!["https://".to_string()];
+        let urls = vec!["https://".to_owned()];
 
         let result = validate_extract_urls(&urls);
 
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn when_extract_pages_count_is_one_should_return_ok() {
-        let pages = vec!["https://example.com".to_string()];
+        let pages = vec!["https://example.com".to_owned()];
 
         let result = validate_extract_pages_count(&pages);
 

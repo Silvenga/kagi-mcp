@@ -2,7 +2,7 @@ use kagi_api::types::{ExtractResponse, SearchResponse, SearchResult};
 
 fn decode_entities(s: &str) -> String {
     if !s.contains('&') {
-        return s.to_string();
+        return s.to_owned();
     }
     html_escape::decode_html_entities(s).into_owned()
 }
@@ -65,7 +65,7 @@ fn trim_iso_date(s: &str) -> String {
     if s.len() >= 11 && bytes[4] == b'-' && bytes[7] == b'-' && bytes[10] == b'T' {
         s[..10].to_string()
     } else {
-        s.to_string()
+        s.to_owned()
     }
 }
 
@@ -123,8 +123,8 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                     result.url
                 ));
                 if let Some(image) = &result.image {
-                    let width = image.width.map_or("?".to_string(), |w| w.to_string());
-                    let height = image.height.map_or("?".to_string(), |h| h.to_string());
+                    let width = image.width.map_or("?".to_owned(), |w| w.to_string());
+                    let height = image.height.map_or("?".to_owned(), |h| h.to_string());
                     output.push_str(&format!(
                         "   - Image: {} ({}x{})\n",
                         image.url, width, height
@@ -271,7 +271,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                         if let Some(obj) = infobox.as_object() {
                             for (key, value) in obj {
                                 let val_str = if let Some(s) = value.as_str() {
-                                    s.to_string()
+                                    s.to_owned()
                                 } else {
                                     value.to_string()
                                 };
@@ -327,10 +327,10 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
     }
 
     if !has_results {
-        return "No results found.".to_string();
+        return "No results found.".to_owned();
     }
 
-    output.trim_end().to_string()
+    output.trim_end().to_owned()
 }
 
 pub fn format_extract_markdown(response: &ExtractResponse) -> String {
@@ -360,10 +360,10 @@ pub fn format_extract_markdown(response: &ExtractResponse) -> String {
     }
 
     if !has_content {
-        return "No content extracted.".to_string();
+        return "No content extracted.".to_owned();
     }
 
-    output.trim_end().to_string()
+    output.trim_end().to_owned()
 }
 
 pub fn format_json<T: serde::Serialize>(response: &T) -> String {
@@ -377,10 +377,10 @@ mod tests {
     use kagi_api::types::{ExtractData, ExtractError, Image, Meta, SearchData};
 
     #[test]
-    fn test_format_search_markdown_empty() {
+    fn format_search_markdown_empty() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -410,19 +410,19 @@ mod tests {
     }
 
     #[test]
-    fn test_format_search_markdown_web_results() {
+    fn format_search_markdown_web_results() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: SearchData {
                 search: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Example".to_string(),
-                    snippet: Some("This is an example.".to_string()),
-                    time: Some("2023-01-01".to_string()),
+                    url: "https://example.com".to_owned(),
+                    title: "Example".to_owned(),
+                    snippet: Some("This is an example.".to_owned()),
+                    time: Some("2023-01-01".to_owned()),
                     image: None,
                     props: None,
                 }]),
@@ -451,22 +451,22 @@ mod tests {
     }
 
     #[test]
-    fn test_format_search_markdown_images() {
+    fn format_search_markdown_images() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: SearchData {
                 search: None,
                 image: Some(vec![SearchResult {
-                    url: "https://example.com/page".to_string(),
-                    title: "Example Image".to_string(),
+                    url: "https://example.com/page".to_owned(),
+                    title: "Example Image".to_owned(),
                     snippet: None,
                     time: None,
                     image: Some(Image {
-                        url: "https://example.com/image.jpg".to_string(),
+                        url: "https://example.com/image.jpg".to_owned(),
                         width: Some(800),
                         height: Some(600),
                     }),
@@ -496,17 +496,17 @@ mod tests {
     }
 
     #[test]
-    fn test_format_search_markdown_missing_snippet_time() {
+    fn format_search_markdown_missing_snippet_time() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: SearchData {
                 search: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Example".to_string(),
+                    url: "https://example.com".to_owned(),
+                    title: "Example".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
@@ -540,7 +540,7 @@ mod tests {
     fn when_search_data_has_podcast_creator_then_markdown_should_include_podcast_creator_section() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -550,10 +550,10 @@ mod tests {
                 video: None,
                 podcast: None,
                 podcast_creator: Some(vec![SearchResult {
-                    url: "https://example.com/creator1".to_string(),
-                    title: "Creator One".to_string(),
-                    snippet: Some("A great podcast creator.".to_string()),
-                    time: Some("2024-01-15".to_string()),
+                    url: "https://example.com/creator1".to_owned(),
+                    title: "Creator One".to_owned(),
+                    snippet: Some("A great podcast creator.".to_owned()),
+                    time: Some("2024-01-15".to_owned()),
                     image: None,
                     props: None,
                 }]),
@@ -581,7 +581,7 @@ mod tests {
     fn when_search_data_has_podcast_then_markdown_should_include_podcast_section() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -590,10 +590,10 @@ mod tests {
                 image: None,
                 video: None,
                 podcast: Some(vec![SearchResult {
-                    url: "https://example.com/podcast1".to_string(),
-                    title: "Podcast One".to_string(),
-                    snippet: Some("A great podcast episode.".to_string()),
-                    time: Some("2024-01-15".to_string()),
+                    url: "https://example.com/podcast1".to_owned(),
+                    title: "Podcast One".to_owned(),
+                    snippet: Some("A great podcast episode.".to_owned()),
+                    time: Some("2024-01-15".to_owned()),
                     image: None,
                     props: None,
                 }]),
@@ -622,7 +622,7 @@ mod tests {
     fn when_search_data_has_video_then_markdown_should_include_video_section() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -630,10 +630,10 @@ mod tests {
                 search: None,
                 image: None,
                 video: Some(vec![SearchResult {
-                    url: "https://example.com/video1".to_string(),
-                    title: "Video One".to_string(),
-                    snippet: Some("A great video.".to_string()),
-                    time: Some("2024-02-01".to_string()),
+                    url: "https://example.com/video1".to_owned(),
+                    title: "Video One".to_owned(),
+                    snippet: Some("A great video.".to_owned()),
+                    time: Some("2024-02-01".to_owned()),
                     image: None,
                     props: None,
                 }]),
@@ -663,7 +663,7 @@ mod tests {
     fn when_search_data_has_adjacent_question_then_markdown_should_include_related_questions() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -675,9 +675,9 @@ mod tests {
                 podcast_creator: None,
                 news: None,
                 adjacent_question: Some(vec![SearchResult {
-                    url: "https://example.com/answer".to_string(),
-                    title: "Answer Page".to_string(),
-                    snippet: Some("The answer is 42.".to_string()),
+                    url: "https://example.com/answer".to_owned(),
+                    title: "Answer Page".to_owned(),
+                    snippet: Some("The answer is 42.".to_owned()),
                     time: None,
                     image: None,
                     props: Some(serde_json::json!({"question": "What is the meaning of life?"})),
@@ -704,7 +704,7 @@ mod tests {
     fn when_search_data_has_direct_answer_then_markdown_should_include_direct_answer() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -717,9 +717,9 @@ mod tests {
                 news: None,
                 adjacent_question: None,
                 direct_answer: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Answer".to_string(),
-                    snippet: Some("The direct answer is 42.".to_string()),
+                    url: "https://example.com".to_owned(),
+                    title: "Answer".to_owned(),
+                    snippet: Some("The direct answer is 42.".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -745,7 +745,7 @@ mod tests {
     fn when_search_data_has_infobox_then_markdown_should_include_infobox_section() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -761,9 +761,9 @@ mod tests {
                 interesting_news: None,
                 interesting_finds: None,
                 infobox: Some(vec![SearchResult {
-                    url: "https://example.com/info".to_string(),
-                    title: "Info Title".to_string(),
-                    snippet: Some("Key information.".to_string()),
+                    url: "https://example.com/info".to_owned(),
+                    title: "Info Title".to_owned(),
+                    snippet: Some("Key information.".to_owned()),
                     time: None,
                     image: None,
                     props: Some(
@@ -791,7 +791,7 @@ mod tests {
     fn when_search_data_has_related_search_then_markdown_should_include_related_searches() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -812,8 +812,8 @@ mod tests {
                 public_records: None,
                 weather: None,
                 related_search: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Related Topic".to_string(),
+                    url: "https://example.com".to_owned(),
+                    title: "Related Topic".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
@@ -832,7 +832,7 @@ mod tests {
     fn when_search_data_has_weather_then_markdown_should_include_weather_section() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -852,9 +852,9 @@ mod tests {
                 package_tracking: None,
                 public_records: None,
                 weather: Some(vec![SearchResult {
-                    url: "".to_string(),
-                    title: "".to_string(),
-                    snippet: Some("Sunny, 25°C".to_string()),
+                    url: "".to_owned(),
+                    title: "".to_owned(),
+                    snippet: Some("Sunny, 25°C".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -873,7 +873,7 @@ mod tests {
     fn when_search_data_has_package_tracking_then_markdown_should_include_package_tracking() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -891,8 +891,8 @@ mod tests {
                 infobox: None,
                 code: None,
                 package_tracking: Some(vec![SearchResult {
-                    url: "https://track.example.com/1".to_string(),
-                    title: "Package".to_string(),
+                    url: "https://track.example.com/1".to_owned(),
+                    title: "Package".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
@@ -911,18 +911,18 @@ mod tests {
     }
 
     #[test]
-    fn test_format_search_markdown_mixed() {
+    fn format_search_markdown_mixed() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: SearchData {
                 search: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Example".to_string(),
-                    snippet: Some("This is an example.".to_string()),
+                    url: "https://example.com".to_owned(),
+                    title: "Example".to_owned(),
+                    snippet: Some("This is an example.".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -941,9 +941,9 @@ mod tests {
                 package_tracking: None,
                 public_records: None,
                 weather: Some(vec![SearchResult {
-                    url: "".to_string(),
-                    title: "".to_string(),
-                    snippet: Some("Sunny, 25C".to_string()),
+                    url: "".to_owned(),
+                    title: "".to_owned(),
+                    snippet: Some("Sunny, 25C".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -959,16 +959,16 @@ mod tests {
     }
 
     #[test]
-    fn test_format_extract_markdown_success() {
+    fn format_extract_markdown_success() {
         let response = ExtractResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: Some(vec![ExtractData {
-                url: "https://example.com".to_string(),
-                markdown: Some("# Hello\nWorld".to_string()),
+                url: "https://example.com".to_owned(),
+                markdown: Some("# Hello\nWorld".to_owned()),
             }]),
             errors: None,
         };
@@ -978,18 +978,18 @@ mod tests {
     }
 
     #[test]
-    fn test_format_extract_markdown_failure() {
+    fn format_extract_markdown_failure() {
         let response = ExtractResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: None,
             errors: Some(vec![ExtractError {
-                url: "https://example.com".to_string(),
-                code: "404".to_string(),
-                message: Some("Not Found".to_string()),
+                url: "https://example.com".to_owned(),
+                code: "404".to_owned(),
+                message: Some("Not Found".to_owned()),
             }]),
         };
 
@@ -999,12 +999,12 @@ mod tests {
     }
 
     #[test]
-    fn test_format_json() {
+    fn format_json_works() {
         let data = serde_json::json!({
             "key": "value"
         });
         let expected = "{\n  \"key\": \"value\"\n}";
-        assert_eq!(format_json(&data), expected);
+        assert_eq!(super::format_json(&data), expected);
     }
 
     #[test]
@@ -1116,14 +1116,14 @@ mod tests {
     fn when_format_search_with_html_entities_in_title_then_should_decode() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: SearchData {
                 search: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Foo &amp; Bar &quot;baz&quot;".to_string(),
+                    url: "https://example.com".to_owned(),
+                    title: "Foo &amp; Bar &quot;baz&quot;".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
@@ -1157,15 +1157,15 @@ mod tests {
     fn when_format_search_with_html_entities_in_snippet_then_should_decode() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: SearchData {
                 search: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Example".to_string(),
-                    snippet: Some("It&#39;s great &amp; amazing.".to_string()),
+                    url: "https://example.com".to_owned(),
+                    title: "Example".to_owned(),
+                    snippet: Some("It&#39;s great &amp; amazing.".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -1198,16 +1198,16 @@ mod tests {
     fn when_format_search_with_iso_timestamp_in_time_then_should_render_date_only() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: SearchData {
                 search: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Example".to_string(),
+                    url: "https://example.com".to_owned(),
+                    title: "Example".to_owned(),
                     snippet: None,
-                    time: Some("2024-03-15T10:30:00Z".to_string()),
+                    time: Some("2024-03-15T10:30:00Z".to_owned()),
                     image: None,
                     props: None,
                 }]),
@@ -1240,15 +1240,15 @@ mod tests {
     fn when_format_search_with_ellipsis_run_in_snippet_then_should_collapse() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
             data: SearchData {
                 search: Some(vec![SearchResult {
-                    url: "https://example.com".to_string(),
-                    title: "Example".to_string(),
-                    snippet: Some("foo ... ... ... bar".to_string()),
+                    url: "https://example.com".to_owned(),
+                    title: "Example".to_owned(),
+                    snippet: Some("foo ... ... ... bar".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -1282,7 +1282,7 @@ mod tests {
     fn when_format_search_has_news_then_section_header_should_be_news_not_web_results() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -1293,9 +1293,9 @@ mod tests {
                 podcast: None,
                 podcast_creator: None,
                 news: Some(vec![SearchResult {
-                    url: "https://example.com/news".to_string(),
-                    title: "News Item".to_string(),
-                    snippet: Some("Breaking news.".to_string()),
+                    url: "https://example.com/news".to_owned(),
+                    title: "News Item".to_owned(),
+                    snippet: Some("Breaking news.".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -1324,7 +1324,7 @@ mod tests {
     fn when_format_search_has_code_then_section_header_should_be_code_results() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -1341,9 +1341,9 @@ mod tests {
                 interesting_finds: None,
                 infobox: None,
                 code: Some(vec![SearchResult {
-                    url: "https://example.com/code".to_string(),
-                    title: "Code Snippet".to_string(),
-                    snippet: Some("fn main() {}".to_string()),
+                    url: "https://example.com/code".to_owned(),
+                    title: "Code Snippet".to_owned(),
+                    snippet: Some("fn main() {}".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -1365,7 +1365,7 @@ mod tests {
     fn when_format_search_has_listicle_then_section_header_should_be_listicles() {
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -1387,9 +1387,9 @@ mod tests {
                 weather: None,
                 related_search: None,
                 listicle: Some(vec![SearchResult {
-                    url: "https://example.com/list".to_string(),
-                    title: "Top 10 Things".to_string(),
-                    snippet: Some("A listicle.".to_string()),
+                    url: "https://example.com/list".to_owned(),
+                    title: "Top 10 Things".to_owned(),
+                    snippet: Some("A listicle.".to_owned()),
                     time: None,
                     image: None,
                     props: None,
@@ -1405,8 +1405,8 @@ mod tests {
     #[test]
     fn when_format_search_has_all_8_web_categories_then_each_should_have_distinct_header() {
         let mk = |title: &str| SearchResult {
-            url: "https://example.com".to_string(),
-            title: title.to_string(),
+            url: "https://example.com".to_owned(),
+            title: title.to_owned(),
             snippet: None,
             time: None,
             image: None,
@@ -1415,7 +1415,7 @@ mod tests {
 
         let response = SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },

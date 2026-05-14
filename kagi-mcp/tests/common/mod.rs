@@ -12,9 +12,7 @@ pub struct TestHarness {
 
 impl TestHarness {
     pub async fn cleanup(mut self) {
-        if let Err(e) = self.running.cancel().await {
-            eprintln!("warning: cancel failed: {e}");
-        }
+        let _ = self.running.cancel().await;
         let _ = self.child.kill().await;
     }
 }

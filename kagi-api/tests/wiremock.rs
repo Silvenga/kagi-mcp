@@ -9,7 +9,7 @@ use wiremock::{
 
 fn search_request() -> SearchRequest {
     SearchRequest {
-        query: "test query".to_string(),
+        query: "test query".to_owned(),
         workflow: None,
         format: None,
         timeout: None,
@@ -24,7 +24,7 @@ fn search_request() -> SearchRequest {
 fn extract_request() -> ExtractRequest {
     ExtractRequest {
         pages: vec![ExtractPage {
-            url: "https://example.com".to_string(),
+            url: "https://example.com".to_owned(),
         }],
         timeout: None,
         format: None,
@@ -100,7 +100,7 @@ async fn extract_happy_path() {
     assert_eq!(response.meta.trace, "test-trace");
     assert_eq!(
         response.data.unwrap()[0].markdown,
-        Some("# Hello".to_string())
+        Some("# Hello".to_owned())
     );
 }
 

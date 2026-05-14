@@ -37,8 +37,8 @@ impl KagiClientBuilder {
     pub fn new() -> Self {
         Self {
             api_key: None,
-            base_url: DEFAULT_BASE_URL.to_string(),
-            user_agent: DEFAULT_USER_AGENT.to_string(),
+            base_url: DEFAULT_BASE_URL.to_owned(),
+            user_agent: DEFAULT_USER_AGENT.to_owned(),
             timeout: Duration::from_secs_f64(DEFAULT_TIMEOUT_SECS),
             retries: DEFAULT_RETRIES,
         }
@@ -72,7 +72,7 @@ impl KagiClientBuilder {
     pub fn build(self) -> Result<KagiClient, KagiError> {
         let api_key = self.api_key.ok_or_else(|| KagiError::Api {
             status: 0,
-            message: "API key is required".to_string(),
+            message: "API key is required".to_owned(),
         })?;
 
         let reqwest_client = reqwest::Client::builder()
@@ -265,6 +265,6 @@ mod tests {
     fn when_api_key_set_then_should_be_some() {
         let builder = KagiClientBuilder::new().api_key("test-key");
 
-        assert_eq!(builder.api_key, Some("test-key".to_string()));
+        assert_eq!(builder.api_key, Some("test-key".to_owned()));
     }
 }

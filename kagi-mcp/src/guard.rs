@@ -10,7 +10,7 @@ pub fn truncate_response(content: &str, max_bytes: usize) -> String {
     let content_bytes = content.len();
 
     if content_bytes <= max_bytes {
-        return content.to_string();
+        return content.to_owned();
     }
 
     // Find the last valid UTF-8 boundary before max_bytes
@@ -61,7 +61,7 @@ mod tests {
         // Each emoji is 4 bytes. 256KB = 65536 emojis.
         // We'll create 66000 emojis (264000 bytes) which exceeds 256KB (262144 bytes).
         let emoji_count = 66_000;
-        let content: String = "😀".repeat(emoji_count);
+        let content = "😀".repeat(emoji_count);
         // Total: 66_000 * 4 = 264_000 bytes > 262_144
         let result = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
 
