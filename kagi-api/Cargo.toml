@@ -34,7 +34,7 @@ mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
-wiremock = "0.6"
+wiremock = "0.6.5"
 
 [features]
 mock = ["dep:mockall"]
