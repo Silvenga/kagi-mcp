@@ -48,12 +48,12 @@ pub enum KagiError {
 /// Error detail as returned by the Kagi API.
 #[derive(Debug, Deserialize)]
 struct ErrorDetail {
-    #[expect(dead_code)]
+    #[expect(dead_code, reason = "field present in API response but not consumed")]
     code: String,
-    #[expect(dead_code)]
+    #[expect(dead_code, reason = "field present in API response but not consumed")]
     url: String,
     message: Option<String>,
-    #[expect(dead_code)]
+    #[expect(dead_code, reason = "field present in API response but not consumed")]
     location: Option<String>,
 }
 
@@ -63,9 +63,9 @@ struct ErrorDetail {
 /// error detail objects describing what went wrong.
 #[derive(Debug, Deserialize)]
 pub struct KagiErrorResponse {
-    #[expect(dead_code)]
+    #[expect(dead_code, reason = "field present in API response but not consumed")]
     meta: serde_json::Value,
-    #[expect(dead_code)]
+    #[expect(dead_code, reason = "field present in API response but not consumed")]
     data: Option<serde_json::Value>,
     error: Vec<ErrorDetail>,
 }
@@ -105,6 +105,7 @@ pub(crate) fn from_http_status(status: StatusCode, body: Option<KagiErrorRespons
 mod tests {
     use super::*;
     use reqwest::StatusCode;
+    use std::time::Duration;
 
     fn make_error_response(message: Option<&str>) -> KagiErrorResponse {
         KagiErrorResponse {
@@ -178,7 +179,7 @@ mod tests {
     #[tokio::test]
     async fn when_network_error_then_from_trait_should_map() {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_millis(100))
+            .timeout(Duration::from_millis(100))
             .build()
             .unwrap();
         let result = client.get("http://127.0.0.1:1").send().await;

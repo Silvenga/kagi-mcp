@@ -1,20 +1,21 @@
 use assert_cmd::cargo::cargo_bin;
 use rmcp::serve_client;
+use rmcp::service::RunningService;
+use rmcp::RoleClient;
 use std::process::Stdio;
-use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
+use tokio::task::JoinHandle;
 
 pub struct TestHarness {
-    pub running: rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    pub running: RunningService<RoleClient, ()>,
     child: Child,
-    _stderr_handle: tokio::task::JoinHandle<()>,
+    _stderr_handle: JoinHandle<()>,
 }
 
 impl TestHarness {
     pub async fn cleanup(mut self) {
-        if let Err(e) = self.running.cancel().await {
-            eprintln!("warning: cancel failed: {e}");
-        }
+        let _ = self.running.cancel().await;
         let _ = self.child.kill().await;
     }
 }
@@ -38,7 +39,7 @@ pub async fn spawn_server(base_url: &str, extra_args: &[&str]) -> TestHarness {
     let stderr = child.stderr.take().expect("stderr not available");
 
     let _stderr_handle = tokio::spawn(async move {
-        let reader = tokio::io::BufReader::new(stderr);
+        let reader = BufReader::new(stderr);
         let mut lines = reader.lines();
         while let Ok(Some(_line)) = lines.next_line().await {}
     });

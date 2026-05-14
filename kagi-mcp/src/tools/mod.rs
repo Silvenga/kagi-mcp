@@ -2,7 +2,7 @@ pub mod extract;
 pub mod search;
 
 use kagi_api::error::KagiError;
-use rmcp::model::ProgressNotificationParam;
+use rmcp::model::{ErrorData, ProgressNotificationParam};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 
@@ -22,53 +22,54 @@ pub(crate) async fn send_progress(
     }
 }
 
-pub(crate) fn map_kagi_error(error: KagiError) -> rmcp::ErrorData {
+pub(crate) fn map_kagi_error(error: KagiError) -> ErrorData {
     match error {
         KagiError::InvalidRequest { message } => {
-            rmcp::ErrorData::invalid_request(format!("Invalid request: {message}"), None)
+            ErrorData::invalid_request(format!("Invalid request: {message}"), None)
         }
         KagiError::Unauthorized => {
-            rmcp::ErrorData::invalid_request("Unauthorized: Invalid Kagi API key", None)
+            ErrorData::invalid_request("Unauthorized: Invalid Kagi API key", None)
         }
         KagiError::Forbidden => {
-            rmcp::ErrorData::invalid_request("Forbidden: IP address not authorized", None)
+            ErrorData::invalid_request("Forbidden: IP address not authorized", None)
         }
         KagiError::RateLimited => {
-            rmcp::ErrorData::internal_error("Rate limited. Please retry later.", None)
+            ErrorData::internal_error("Rate limited. Please retry later.", None)
         }
         KagiError::ServerError => {
-            rmcp::ErrorData::internal_error("Kagi API error. Please retry later.", None)
+            ErrorData::internal_error("Kagi API error. Please retry later.", None)
         }
         KagiError::Network { source } => {
-            rmcp::ErrorData::internal_error(format!("Request failed: {source}"), None)
+            ErrorData::internal_error(format!("Request failed: {source}"), None)
         }
-        KagiError::Api { status, message } => rmcp::ErrorData::internal_error(
-            format!("Kagi API error (HTTP {status}): {message}"),
-            None,
-        ),
+        KagiError::Api { status, message } => {
+            ErrorData::internal_error(format!("Kagi API error (HTTP {status}): {message}"), None)
+        }
     }
 }
 
 #[cfg(test)]
-pub(crate) async fn test_request_context() -> rmcp::service::RequestContext<rmcp::RoleServer> {
+pub(crate) async fn test_request_context() -> RequestContext<RoleServer> {
     use crate::server::KagiMcpServer;
+    use rmcp::model::{ClientInfo, RequestId};
     use rmcp::service::serve_directly_with_ct;
     use std::sync::Arc;
+    use tokio::io::duplex;
     use tokio_util::sync::CancellationToken;
 
-    let (server_transport, client_transport) = tokio::io::duplex(4096);
+    let (server_transport, client_transport) = duplex(4096);
     drop(client_transport);
 
     let server = KagiMcpServer::with_client(Arc::new(kagi_api::MockKagiApi::new()));
     let server_svc = serve_directly_with_ct(
         server,
         server_transport,
-        None::<rmcp::model::ClientInfo>,
+        None::<ClientInfo>,
         CancellationToken::new(),
     );
 
     let peer = server_svc.peer().clone();
     drop(server_svc);
 
-    rmcp::service::RequestContext::new(rmcp::model::RequestId::Number(1), peer)
+    RequestContext::new(RequestId::Number(1), peer)
 }

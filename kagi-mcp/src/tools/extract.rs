@@ -1,7 +1,10 @@
 use super::{map_kagi_error, send_progress};
+use crate::format::{format_extract_markdown, format_json};
+use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
+use crate::validation::{validate_extract_pages_count, validate_extract_urls};
 use kagi_api::types::{ExtractPage, ExtractRequest};
 use kagi_api::KagiApi;
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
@@ -19,18 +22,18 @@ pub async fn extract_handler(
     params: ExtractParams,
     ctx: &RequestContext<RoleServer>,
     kagi_timeout: f64,
-) -> Result<CallToolResult, rmcp::ErrorData> {
-    if let Err(e) = crate::validation::validate_extract_pages_count(&params.pages) {
-        return Err(rmcp::ErrorData::invalid_params(
+) -> Result<CallToolResult, ErrorData> {
+    if let Err(e) = validate_extract_pages_count(&params.pages) {
+        return Err(ErrorData::invalid_params(
             format!("Pages validation failed: {e}"),
             None,
         ));
     }
 
-    let validated_urls = match crate::validation::validate_extract_urls(&params.pages) {
+    let validated_urls = match validate_extract_urls(&params.pages) {
         Ok(urls) => urls,
         Err(e) => {
-            return Err(rmcp::ErrorData::invalid_request(
+            return Err(ErrorData::invalid_request(
                 format!("URL validation failed: {e}"),
                 None,
             ));
@@ -45,7 +48,7 @@ pub async fn extract_handler(
     let request = ExtractRequest {
         pages,
         timeout: params.timeout.or(Some(kagi_timeout)),
-        format: Some("json".to_string()),
+        format: Some("json".to_owned()),
     };
 
     let total_pages = params.pages.len();
@@ -59,16 +62,12 @@ pub async fn extract_handler(
     .await;
 
     if ctx.ct.is_cancelled() {
-        return Err(rmcp::ErrorData::new(
-            rmcp::model::ErrorCode(-32800),
-            "Cancelled",
-            None,
-        ));
+        return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
     }
 
     let result = tokio::select! {
         _ = ctx.ct.cancelled() => {
-            return Err(rmcp::ErrorData::new(rmcp::model::ErrorCode(-32800), "Cancelled", None));
+            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
         }
         result = client.extract(request) => result,
     };
@@ -76,15 +75,14 @@ pub async fn extract_handler(
     match result {
         Ok(response) => {
             let _ =
-                send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_string()).await;
+                send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
             let output_format = params.output_format.as_deref().unwrap_or("markdown");
             let content = if output_format == "json" {
-                crate::format::format_json(&response)
+                format_json(&response)
             } else {
-                crate::format::format_extract_markdown(&response)
+                format_extract_markdown(&response)
             };
-            let truncated =
-                crate::guard::truncate_response(&content, crate::guard::DEFAULT_MAX_RESPONSE_BYTES);
+            let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
             Ok(CallToolResult::success(vec![Content::text(truncated)]))
         }
         Err(e) => Err(map_kagi_error(e)),
@@ -114,7 +112,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Pages validation failed"));
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[tokio::test]
@@ -135,13 +133,13 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Pages validation failed"));
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     fn make_extract_response(data: Vec<ExtractData>, errors: Vec<ExtractError>) -> ExtractResponse {
         ExtractResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -156,20 +154,20 @@ mod tests {
         mock.expect_extract().times(1).returning(|_| {
             Ok(ExtractResponse {
                 meta: Meta {
-                    trace: "test".to_string(),
+                    trace: "test".to_owned(),
                     node: None,
                     ms: None,
                 },
                 data: Some(vec![ExtractData {
-                    url: "https://example.com".to_string(),
-                    markdown: Some("# Hello\nWorld".to_string()),
+                    url: "https://example.com".to_owned(),
+                    markdown: Some("# Hello\nWorld".to_owned()),
                 }]),
                 errors: None,
             })
         });
 
         let params = ExtractParams {
-            pages: vec!["https://example.com".to_string()],
+            pages: vec!["https://example.com".to_owned()],
             timeout: None,
             output_format: None,
         };
@@ -190,22 +188,22 @@ mod tests {
         mock.expect_extract().times(1).returning(|_| {
             Ok(ExtractResponse {
                 meta: Meta {
-                    trace: "test".to_string(),
+                    trace: "test".to_owned(),
                     node: None,
                     ms: None,
                 },
                 data: Some(vec![ExtractData {
-                    url: "https://example.com".to_string(),
-                    markdown: Some("content".to_string()),
+                    url: "https://example.com".to_owned(),
+                    markdown: Some("content".to_owned()),
                 }]),
                 errors: None,
             })
         });
 
         let params = ExtractParams {
-            pages: vec!["https://example.com".to_string()],
+            pages: vec!["https://example.com".to_owned()],
             timeout: None,
-            output_format: Some("json".to_string()),
+            output_format: Some("json".to_owned()),
         };
         let ctx = super::super::test_request_context().await;
 
@@ -222,7 +220,7 @@ mod tests {
         let mock = MockKagiApi::new();
 
         let params = ExtractParams {
-            pages: vec!["https://192.168.1.1/".to_string()],
+            pages: vec!["https://192.168.1.1/".to_owned()],
             timeout: None,
             output_format: None,
         };
@@ -244,7 +242,7 @@ mod tests {
             .returning(|_| Err(KagiError::ServerError));
 
         let params = ExtractParams {
-            pages: vec!["https://example.com".to_string()],
+            pages: vec!["https://example.com".to_owned()],
             timeout: None,
             output_format: None,
         };
@@ -255,7 +253,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Kagi API error"));
-        assert_eq!(err.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
     }
 
     #[tokio::test]
@@ -264,19 +262,19 @@ mod tests {
         mock.expect_extract().times(1).returning(|_| {
             Ok(make_extract_response(
                 vec![ExtractData {
-                    url: "https://ok.com".to_string(),
-                    markdown: Some("Good content".to_string()),
+                    url: "https://ok.com".to_owned(),
+                    markdown: Some("Good content".to_owned()),
                 }],
                 vec![ExtractError {
-                    url: "https://fail.com".to_string(),
-                    code: "500".to_string(),
-                    message: Some("Server Error".to_string()),
+                    url: "https://fail.com".to_owned(),
+                    code: "500".to_owned(),
+                    message: Some("Server Error".to_owned()),
                 }],
             ))
         });
 
         let params = ExtractParams {
-            pages: vec!["https://ok.com".to_string(), "https://fail.com".to_string()],
+            pages: vec!["https://ok.com".to_owned(), "https://fail.com".to_owned()],
             timeout: None,
             output_format: None,
         };
@@ -300,7 +298,7 @@ mod tests {
             .returning(|_| {
                 Ok(ExtractResponse {
                     meta: Meta {
-                        trace: "test".to_string(),
+                        trace: "test".to_owned(),
                         node: None,
                         ms: None,
                     },
@@ -310,7 +308,7 @@ mod tests {
             });
 
         let params = ExtractParams {
-            pages: vec!["https://example.com".to_string()],
+            pages: vec!["https://example.com".to_owned()],
             timeout: None,
             output_format: None,
         };
@@ -330,7 +328,7 @@ mod tests {
             .returning(|_| {
                 Ok(ExtractResponse {
                     meta: Meta {
-                        trace: "test".to_string(),
+                        trace: "test".to_owned(),
                         node: None,
                         ms: None,
                     },
@@ -340,7 +338,7 @@ mod tests {
             });
 
         let params = ExtractParams {
-            pages: vec!["https://example.com".to_string()],
+            pages: vec!["https://example.com".to_owned()],
             timeout: Some(5.0),
             output_format: None,
         };

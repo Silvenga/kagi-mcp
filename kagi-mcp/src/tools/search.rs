@@ -1,7 +1,10 @@
 use super::{map_kagi_error, send_progress};
+use crate::domain::extract_group_key;
+use crate::format::{format_json, format_search_markdown};
+use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use kagi_api::types::{Filters, SearchData, SearchRequest, SearchResult};
 use kagi_api::KagiApi;
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
@@ -49,9 +52,9 @@ pub async fn search_handler(
     params: SearchParams,
     ctx: &RequestContext<RoleServer>,
     config: &SearchConfig,
-) -> Result<CallToolResult, rmcp::ErrorData> {
+) -> Result<CallToolResult, ErrorData> {
     if params.limit_per_domain == Some(0) {
-        return Err(rmcp::ErrorData::invalid_request(
+        return Err(ErrorData::invalid_request(
             "limit_per_domain must be >= 1",
             None,
         ));
@@ -68,7 +71,7 @@ pub async fn search_handler(
     let request = SearchRequest {
         query: params.query.clone(),
         workflow: params.workflow.clone(),
-        format: Some("json".to_string()),
+        format: Some("json".to_owned()),
         timeout: Some(config.kagi_timeout),
         page: None,
         limit: Some(upstream_limit),
@@ -86,21 +89,17 @@ pub async fn search_handler(
     .await;
 
     if ctx.ct.is_cancelled() {
-        return Err(rmcp::ErrorData::new(
-            rmcp::model::ErrorCode(-32800),
-            "Cancelled",
-            None,
-        ));
+        return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
     }
 
     let result = tokio::select! {
         _ = ctx.ct.cancelled() => {
-            return Err(rmcp::ErrorData::new(rmcp::model::ErrorCode(-32800), "Cancelled", None));
+            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
         }
         result = client.search(request) => result,
     };
 
-    let _ = send_progress(ctx, 100.0, Some(100.0), "Query completed.".to_string()).await;
+    let _ = send_progress(ctx, 100.0, Some(100.0), "Query completed.".to_owned()).await;
 
     match result {
         Ok(mut response) => {
@@ -109,12 +108,11 @@ pub async fn search_handler(
             }
             let output_format = params.output_format.as_deref().unwrap_or("markdown");
             let content = if output_format == "json" {
-                crate::format::format_json(&response)
+                format_json(&response)
             } else {
-                crate::format::format_search_markdown(&response)
+                format_search_markdown(&response)
             };
-            let truncated =
-                crate::guard::truncate_response(&content, crate::guard::DEFAULT_MAX_RESPONSE_BYTES);
+            let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
             Ok(CallToolResult::success(vec![Content::text(truncated)]))
         }
         Err(e) => Err(map_kagi_error(e)),
@@ -145,7 +143,7 @@ fn dedup_by_domain(data: &mut SearchData, limit_per_domain: u32, final_limit: u3
             let mut counts: HashMap<String, u32> = HashMap::new();
             let mut kept: Vec<SearchResult> = Vec::new();
             for result in results.drain(..) {
-                match crate::domain::extract_group_key(&result) {
+                match extract_group_key(&result) {
                     Some(key) => {
                         let count = counts.entry(key).or_insert(0);
                         if *count < limit_per_domain {
@@ -212,7 +210,7 @@ mod tests {
     fn make_search_response(results: Vec<SearchResult>) -> SearchResponse {
         SearchResponse {
             meta: Meta {
-                trace: "test".to_string(),
+                trace: "test".to_owned(),
                 node: None,
                 ms: None,
             },
@@ -228,17 +226,17 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
             Ok(make_search_response(vec![SearchResult {
-                url: "https://example.com".to_string(),
-                title: "Example".to_string(),
-                snippet: Some("Snippet text".to_string()),
-                time: Some("2023-01-01".to_string()),
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("Snippet text".to_owned()),
+                time: Some("2023-01-01".to_owned()),
                 image: None,
                 props: None,
             }]))
         });
 
         let params = SearchParams {
-            query: "test query".to_string(),
+            query: "test query".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -264,16 +262,16 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(SearchResponse {
                 meta: Meta {
-                    trace: "test".to_string(),
+                    trace: "test".to_owned(),
                     node: None,
                     ms: None,
                 },
                 data: SearchData {
                     podcast_creator: Some(vec![SearchResult {
-                        url: "https://example.com/pc".to_string(),
-                        title: "Podcast Creator".to_string(),
-                        snippet: Some("Top creator".to_string()),
-                        time: Some("2024-06-01".to_string()),
+                        url: "https://example.com/pc".to_owned(),
+                        title: "Podcast Creator".to_owned(),
+                        snippet: Some("Top creator".to_owned()),
+                        time: Some("2024-06-01".to_owned()),
                         image: None,
                         props: None,
                     }]),
@@ -283,7 +281,7 @@ mod tests {
         });
 
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -307,8 +305,8 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
             Ok(make_search_response(vec![SearchResult {
-                url: "https://example.com".to_string(),
-                title: "Example".to_string(),
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
                 snippet: None,
                 time: None,
                 image: None,
@@ -317,11 +315,11 @@ mod tests {
         });
 
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_string()),
+            output_format: Some("json".to_owned()),
             limit_per_domain: None,
         };
         let ctx = super::super::test_request_context().await;
@@ -340,7 +338,7 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(SearchResponse {
                 meta: Meta {
-                    trace: "test".to_string(),
+                    trace: "test".to_owned(),
                     node: None,
                     ms: None,
                 },
@@ -349,7 +347,7 @@ mod tests {
         });
 
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -373,7 +371,7 @@ mod tests {
             .returning(|_| Err(KagiError::Unauthorized));
 
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -387,7 +385,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Unauthorized"));
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
     }
 
     #[tokio::test]
@@ -398,7 +396,7 @@ mod tests {
             .returning(|_| Err(KagiError::RateLimited));
 
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -419,12 +417,12 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
             Err(KagiError::InvalidRequest {
-                message: "bad param".to_string(),
+                message: "bad param".to_owned(),
             })
         });
 
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -439,7 +437,7 @@ mod tests {
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Invalid request"));
         assert!(err.to_string().contains("bad param"));
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
     }
 
     #[tokio::test]
@@ -450,7 +448,7 @@ mod tests {
             .returning(|_| Err(KagiError::ServerError));
 
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -476,7 +474,7 @@ mod tests {
             .withf(|req| {
                 req.limit == Some(25)
                     && req.safe_search == Some(false)
-                    && req.region == Some("us-west".to_string())
+                    && req.region == Some("us-west".to_owned())
                     && req.timeout == Some(8.5)
             })
             .returning(|_| Ok(make_search_response(vec![])));
@@ -485,12 +483,12 @@ mod tests {
             kagi_timeout: 8.5,
             limit: 25,
             safe_search: false,
-            region: Some("us-west".to_string()),
+            region: Some("us-west".to_owned()),
             overfetch_multiplier: 5,
             overfetch_max: 50,
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -511,7 +509,7 @@ mod tests {
             .withf(|req| {
                 req.filters
                     .as_ref()
-                    .is_some_and(|f| f.region == Some("eu".to_string()))
+                    .is_some_and(|f| f.region == Some("eu".to_owned()))
             })
             .returning(|_| Ok(make_search_response(vec![])));
 
@@ -519,14 +517,14 @@ mod tests {
             kagi_timeout: 4.0,
             limit: 10,
             safe_search: true,
-            region: Some("eu".to_string()),
+            region: Some("eu".to_owned()),
             overfetch_multiplier: 5,
             overfetch_max: 50,
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
-            after: Some("2023-01-01".to_string()),
+            after: Some("2023-01-01".to_owned()),
             before: None,
             output_format: None,
             limit_per_domain: None,
@@ -541,7 +539,7 @@ mod tests {
     async fn when_limit_per_domain_is_zero_then_handler_should_return_invalid_request() {
         let mock = MockKagiApi::new();
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -554,7 +552,7 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.code, rmcp::model::ErrorCode::INVALID_REQUEST);
+        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
         assert!(err.to_string().contains("limit_per_domain must be >= 1"));
     }
 
@@ -573,7 +571,7 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -602,7 +600,7 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -630,7 +628,7 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
@@ -649,24 +647,24 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(make_search_response(vec![
                 SearchResult {
-                    url: "https://example.com/1".to_string(),
-                    title: "First".to_string(),
+                    url: "https://example.com/1".to_owned(),
+                    title: "First".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
                     props: None,
                 },
                 SearchResult {
-                    url: "https://example.com/2".to_string(),
-                    title: "Second".to_string(),
+                    url: "https://example.com/2".to_owned(),
+                    title: "Second".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
                     props: None,
                 },
                 SearchResult {
-                    url: "https://example.com/3".to_string(),
-                    title: "Third".to_string(),
+                    url: "https://example.com/3".to_owned(),
+                    title: "Third".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
@@ -682,11 +680,11 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_string()),
+            output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
         };
         let ctx = super::super::test_request_context().await;
@@ -706,22 +704,22 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(SearchResponse {
                 meta: Meta {
-                    trace: "test".to_string(),
+                    trace: "test".to_owned(),
                     node: None,
                     ms: None,
                 },
                 data: SearchData {
                     search: Some(vec![SearchResult {
-                        url: "https://example.com/s1".to_string(),
-                        title: "Search 1".to_string(),
+                        url: "https://example.com/s1".to_owned(),
+                        title: "Search 1".to_owned(),
                         snippet: None,
                         time: None,
                         image: None,
                         props: None,
                     }]),
                     news: Some(vec![SearchResult {
-                        url: "https://example.com/n1".to_string(),
-                        title: "News 1".to_string(),
+                        url: "https://example.com/n1".to_owned(),
+                        title: "News 1".to_owned(),
                         snippet: None,
                         time: None,
                         image: None,
@@ -739,11 +737,11 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_string()),
+            output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
         };
         let ctx = super::super::test_request_context().await;
@@ -762,24 +760,24 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(make_search_response(vec![
                 SearchResult {
-                    url: "https://a.com/1".to_string(),
-                    title: "A1".to_string(),
+                    url: "https://a.com/1".to_owned(),
+                    title: "A1".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
                     props: None,
                 },
                 SearchResult {
-                    url: "https://b.com/1".to_string(),
-                    title: "B1".to_string(),
+                    url: "https://b.com/1".to_owned(),
+                    title: "B1".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
                     props: None,
                 },
                 SearchResult {
-                    url: "https://a.com/2".to_string(),
-                    title: "A2".to_string(),
+                    url: "https://a.com/2".to_owned(),
+                    title: "A2".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
@@ -795,11 +793,11 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_string()),
+            output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
         };
         let ctx = super::super::test_request_context().await;
@@ -820,24 +818,24 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(make_search_response(vec![
                 SearchResult {
-                    url: "https://blog.example.com/1".to_string(),
-                    title: "Blog 1".to_string(),
+                    url: "https://blog.example.com/1".to_owned(),
+                    title: "Blog 1".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
                     props: Some(serde_json::json!({"group_id": "blog.example.com"})),
                 },
                 SearchResult {
-                    url: "https://www.example.com/1".to_string(),
-                    title: "Main 1".to_string(),
+                    url: "https://www.example.com/1".to_owned(),
+                    title: "Main 1".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
                     props: Some(serde_json::json!({"group_id": "www.example.com"})),
                 },
                 SearchResult {
-                    url: "https://blog.example.com/2".to_string(),
-                    title: "Blog 2".to_string(),
+                    url: "https://blog.example.com/2".to_owned(),
+                    title: "Blog 2".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
@@ -853,11 +851,11 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_string()),
+            output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
         };
         let ctx = super::super::test_request_context().await;
@@ -878,24 +876,24 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(make_search_response(vec![
                 SearchResult {
-                    url: "https://a.com/1".to_string(),
-                    title: "A1".to_string(),
+                    url: "https://a.com/1".to_owned(),
+                    title: "A1".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
                     props: None,
                 },
                 SearchResult {
-                    url: "https://b.com/1".to_string(),
-                    title: "B1".to_string(),
+                    url: "https://b.com/1".to_owned(),
+                    title: "B1".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
                     props: None,
                 },
                 SearchResult {
-                    url: "https://c.com/1".to_string(),
-                    title: "C1".to_string(),
+                    url: "https://c.com/1".to_owned(),
+                    title: "C1".to_owned(),
                     snippet: None,
                     time: None,
                     image: None,
@@ -911,11 +909,11 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_string()),
+            output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
         };
         let ctx = super::super::test_request_context().await;
@@ -936,7 +934,7 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(SearchResponse {
                 meta: Meta {
-                    trace: "test".to_string(),
+                    trace: "test".to_owned(),
                     node: None,
                     ms: None,
                 },
@@ -951,7 +949,7 @@ mod tests {
             ..SearchConfig::default()
         };
         let params = SearchParams {
-            query: "test".to_string(),
+            query: "test".to_owned(),
             workflow: None,
             after: None,
             before: None,
