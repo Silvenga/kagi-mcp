@@ -377,7 +377,7 @@ mod tests {
     use kagi_api::types::{ExtractData, ExtractError, Image, Meta, SearchData};
 
     #[test]
-    fn format_search_markdown_empty() {
+    fn when_search_data_is_empty_then_should_return_no_results() {
         let response = SearchResponse {
             meta: Meta {
                 trace: "test".to_owned(),
@@ -410,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn format_search_markdown_web_results() {
+    fn when_search_has_web_results_then_should_format_web_section() {
         let response = SearchResponse {
             meta: Meta {
                 trace: "test".to_owned(),
@@ -451,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn format_search_markdown_images() {
+    fn when_search_has_images_then_should_format_images_section() {
         let response = SearchResponse {
             meta: Meta {
                 trace: "test".to_owned(),
@@ -496,7 +496,7 @@ mod tests {
     }
 
     #[test]
-    fn format_search_markdown_missing_snippet_time() {
+    fn when_search_result_missing_snippet_and_time_then_should_handle_gracefully() {
         let response = SearchResponse {
             meta: Meta {
                 trace: "test".to_owned(),
@@ -911,7 +911,7 @@ mod tests {
     }
 
     #[test]
-    fn format_search_markdown_mixed() {
+    fn when_search_has_mixed_results_then_should_format_all_sections() {
         let response = SearchResponse {
             meta: Meta {
                 trace: "test".to_owned(),
@@ -959,7 +959,7 @@ mod tests {
     }
 
     #[test]
-    fn format_extract_markdown_success() {
+    fn when_extract_succeeds_then_should_format_content() {
         let response = ExtractResponse {
             meta: Meta {
                 trace: "test".to_owned(),
@@ -978,7 +978,7 @@ mod tests {
     }
 
     #[test]
-    fn format_extract_markdown_failure() {
+    fn when_extract_fails_then_should_format_error() {
         let response = ExtractResponse {
             meta: Meta {
                 trace: "test".to_owned(),
@@ -999,7 +999,7 @@ mod tests {
     }
 
     #[test]
-    fn format_json_works() {
+    fn when_format_is_json_then_should_serialize_correctly() {
         let data = serde_json::json!({
             "key": "value"
         });

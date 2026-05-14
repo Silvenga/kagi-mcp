@@ -145,7 +145,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_success_returns_markdown() {
+    async fn when_extract_succeeds_then_should_return_markdown() {
         let mut mock = MockKagiApi::new();
         mock.expect_extract().times(1).returning(|_| {
             Ok(ExtractResponse {
@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_success_json_returns_raw_json() {
+    async fn when_extract_succeeds_with_json_format_then_should_return_raw_json() {
         let mut mock = MockKagiApi::new();
         mock.expect_extract().times(1).returning(|_| {
             Ok(ExtractResponse {
@@ -210,7 +210,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_private_ip_rejected_without_api_call() {
+    async fn when_extract_with_private_ip_then_should_return_validation_error_without_api_call() {
         let mock = MockKagiApi::new();
 
         let params = ExtractParams {
@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_error_500_returns_server_error_message() {
+    async fn when_extract_returns_500_then_should_return_server_error_message() {
         let mut mock = MockKagiApi::new();
         mock.expect_extract()
             .times(1)
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn extract_partial_failure_renders_both_data_and_errors() {
+    async fn when_extract_has_partial_failure_then_should_render_both_data_and_errors() {
         let mut mock = MockKagiApi::new();
         mock.expect_extract().times(1).returning(|_| {
             Ok(make_extract_response(
