@@ -1,8 +1,11 @@
-use super::{map_kagi_error, send_progress};
+use super::{default_true, map_kagi_error, send_progress};
+use crate::cache::error::CacheError;
+use crate::cache::key::generate_cache_key;
+use crate::cache::store::CacheStore;
 use crate::domain::extract_group_key;
 use crate::format::{format_json, format_search_markdown};
 use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::types::{Filters, SearchData, SearchRequest, SearchResult};
+use kagi_api::types::{Filters, SearchData, SearchRequest, SearchResponse, SearchResult};
 use kagi_api::KagiApi;
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
@@ -22,6 +25,10 @@ pub struct SearchParams {
     /// grouping key (with eTLD+1 fallback). Must be >= 1. Default:
     /// no per-domain limit.
     pub limit_per_domain: Option<u32>,
+    /// Whether to use cached results. Default: true.
+    #[serde(default = "default_true")]
+    #[schemars(default = "default_true")]
+    pub cache: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -52,6 +59,7 @@ pub async fn search_handler(
     params: SearchParams,
     ctx: &RequestContext<RoleServer>,
     config: &SearchConfig,
+    cache_store: Option<&CacheStore>,
 ) -> Result<CallToolResult, ErrorData> {
     if params.limit_per_domain == Some(0) {
         return Err(ErrorData::invalid_request(
@@ -80,6 +88,31 @@ pub async fn search_handler(
         filters: build_filters(params.after, params.before, config.region.clone()),
     };
 
+    if params.cache {
+        if let Some(store) = cache_store {
+            let key = generate_cache_key(&request);
+            match store.get(&key) {
+                Ok(Some(cached_bytes)) => {
+                    let mut cached_response: SearchResponse = serde_json::from_slice(&cached_bytes)
+                        .map_err(|e| map_cache_error(e.into()))?;
+                    if let Some(lpd) = params.limit_per_domain {
+                        dedup_by_domain(&mut cached_response.data, lpd, config.limit);
+                    }
+                    let output_format = params.output_format.as_deref().unwrap_or("markdown");
+                    let content = if output_format == "json" {
+                        format_json(&cached_response)
+                    } else {
+                        format_search_markdown(&cached_response)
+                    };
+                    let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
+                    return Ok(CallToolResult::success(vec![Content::text(truncated)]));
+                }
+                Ok(None) => {}
+                Err(e) => return Err(map_cache_error(e)),
+            }
+        }
+    }
+
     let _ = send_progress(
         ctx,
         0.0,
@@ -96,13 +129,22 @@ pub async fn search_handler(
         _ = ctx.ct.cancelled() => {
             return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
         }
-        result = client.search(request) => result,
+        result = client.search(request.clone()) => result,
     };
 
     let _ = send_progress(ctx, 100.0, Some(100.0), "Query completed.".to_owned()).await;
 
     match result {
         Ok(mut response) => {
+            if let Some(store) = cache_store {
+                let key = generate_cache_key(&request);
+                let json_bytes =
+                    serde_json::to_vec(&response).map_err(|e| map_cache_error(e.into()))?;
+                store
+                    .set(&key, "search", &json_bytes)
+                    .map_err(map_cache_error)?;
+            }
+
             if let Some(lpd) = params.limit_per_domain {
                 dedup_by_domain(&mut response.data, lpd, config.limit);
             }
@@ -117,6 +159,10 @@ pub async fn search_handler(
         }
         Err(e) => Err(map_kagi_error(e)),
     }
+}
+
+fn map_cache_error(error: CacheError) -> ErrorData {
+    ErrorData::internal_error(format!("Cache error: {error}"), None)
 }
 
 fn build_filters(
@@ -242,10 +288,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_ok());
         let content = result.unwrap().content;
@@ -287,10 +334,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -321,10 +369,11 @@ mod tests {
             before: None,
             output_format: Some("json".to_owned()),
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -353,10 +402,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -377,10 +427,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -402,10 +453,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -428,10 +480,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -454,11 +507,12 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
         ctx.ct.cancel();
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -494,10 +548,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
     }
 
@@ -528,10 +583,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
     }
 
@@ -545,10 +601,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: Some(0),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default()).await;
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -577,10 +634,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: Some(2),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
     }
 
@@ -606,10 +664,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: Some(2),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
     }
 
@@ -634,10 +693,11 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: None,
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
     }
 
@@ -686,10 +746,11 @@ mod tests {
             before: None,
             output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -743,10 +804,11 @@ mod tests {
             before: None,
             output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -799,10 +861,11 @@ mod tests {
             before: None,
             output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -857,10 +920,11 @@ mod tests {
             before: None,
             output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -915,10 +979,11 @@ mod tests {
             before: None,
             output_format: Some("json".to_owned()),
             limit_per_domain: Some(1),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -955,12 +1020,228 @@ mod tests {
             before: None,
             output_format: None,
             limit_per_domain: Some(1),
+            cache: true,
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config).await;
+        let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert_eq!(text, "No results found.");
+    }
+
+    #[test]
+    fn when_search_params_deserialized_without_cache_should_default_to_true() {
+        let json = r#"{"query": "test"}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+
+        assert!(params.cache);
+    }
+
+    #[test]
+    fn when_search_params_deserialized_with_cache_false_should_be_false() {
+        let json = r#"{"query": "test", "cache": false}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+
+        assert!(!params.cache);
+    }
+
+    #[test]
+    fn when_search_params_deserialized_with_cache_true_should_be_true() {
+        let json = r#"{"query": "test", "cache": true}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+
+        assert!(params.cache);
+    }
+
+    #[tokio::test]
+    async fn when_cache_hit_then_mock_api_should_not_be_called() {
+        let mock = MockKagiApi::new();
+        let store = CacheStore::open_in_memory().unwrap();
+
+        let cached_response = make_search_response(vec![SearchResult {
+            url: "https://example.com/".to_owned(),
+            title: "Cached".to_owned(),
+            snippet: Some("Cached snippet".to_owned()),
+            time: None,
+            image: None,
+            props: None,
+        }]);
+        let request = SearchRequest {
+            query: "test query".to_owned(),
+            workflow: None,
+            format: Some("json".to_owned()),
+            timeout: Some(SearchConfig::default().search_timeout),
+            page: None,
+            limit: Some(SearchConfig::default().limit),
+            safe_search: Some(SearchConfig::default().safe_search),
+            region: SearchConfig::default().region.clone(),
+            filters: None,
+        };
+        let key = generate_cache_key(&request);
+        store
+            .set(
+                &key,
+                "search",
+                &serde_json::to_vec(&cached_response).unwrap(),
+            )
+            .unwrap();
+
+        let params = SearchParams {
+            query: "test query".to_owned(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Cached"));
+        assert!(text.contains("Cached snippet"));
+    }
+
+    #[tokio::test]
+    async fn when_cache_miss_then_api_should_be_called_and_response_stored() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(make_search_response(vec![SearchResult {
+                url: "https://example.com/".to_owned(),
+                title: "Fresh".to_owned(),
+                snippet: Some("Fresh snippet".to_owned()),
+                time: None,
+                image: None,
+                props: None,
+            }]))
+        });
+
+        let store = CacheStore::open_in_memory().unwrap();
+        let params = SearchParams {
+            query: "test query".to_owned(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Fresh"));
+
+        let request = SearchRequest {
+            query: "test query".to_owned(),
+            workflow: None,
+            format: Some("json".to_owned()),
+            timeout: Some(SearchConfig::default().search_timeout),
+            page: None,
+            limit: Some(SearchConfig::default().limit),
+            safe_search: Some(SearchConfig::default().safe_search),
+            region: SearchConfig::default().region.clone(),
+            filters: None,
+        };
+        let key = generate_cache_key(&request);
+        let cached = store.get(&key).unwrap();
+        assert!(cached.is_some());
+        let stored_response: SearchResponse = serde_json::from_slice(&cached.unwrap()).unwrap();
+        assert_eq!(stored_response.data.search.unwrap()[0].title, "Fresh");
+    }
+
+    #[tokio::test]
+    async fn when_cache_false_then_api_should_be_called_and_response_stored() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(make_search_response(vec![SearchResult {
+                url: "https://example.com/".to_owned(),
+                title: "Fresh".to_owned(),
+                snippet: Some("Fresh snippet".to_owned()),
+                time: None,
+                image: None,
+                props: None,
+            }]))
+        });
+
+        let store = CacheStore::open_in_memory().unwrap();
+        let params = SearchParams {
+            query: "test query".to_owned(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: None,
+            cache: false,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Fresh"));
+
+        let request = SearchRequest {
+            query: "test query".to_owned(),
+            workflow: None,
+            format: Some("json".to_owned()),
+            timeout: Some(SearchConfig::default().search_timeout),
+            page: None,
+            limit: Some(SearchConfig::default().limit),
+            safe_search: Some(SearchConfig::default().safe_search),
+            region: SearchConfig::default().region.clone(),
+            filters: None,
+        };
+        let key = generate_cache_key(&request);
+        let cached = store.get(&key).unwrap();
+        assert!(cached.is_some());
+    }
+
+    #[tokio::test]
+    async fn when_cache_corrupted_then_tool_call_should_fail() {
+        let mock = MockKagiApi::new();
+        let store = CacheStore::open_in_memory().unwrap();
+
+        let request = SearchRequest {
+            query: "test query".to_owned(),
+            workflow: None,
+            format: Some("json".to_owned()),
+            timeout: Some(SearchConfig::default().search_timeout),
+            page: None,
+            limit: Some(SearchConfig::default().limit),
+            safe_search: Some(SearchConfig::default().safe_search),
+            region: SearchConfig::default().region.clone(),
+            filters: None,
+        };
+        let key = generate_cache_key(&request);
+        store.set(&key, "search", b"invalid json").unwrap();
+
+        let params = SearchParams {
+            query: "test query".to_owned(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: None,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Cache error"));
     }
 }

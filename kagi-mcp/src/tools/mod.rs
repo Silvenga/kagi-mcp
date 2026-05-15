@@ -6,6 +6,10 @@ use rmcp::model::{ErrorData, ProgressNotificationParam};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 
+pub(crate) fn default_true() -> bool {
+    true
+}
+
 pub(crate) async fn send_progress(
     ctx: &RequestContext<RoleServer>,
     progress: f64,
@@ -60,7 +64,7 @@ pub(crate) async fn test_request_context() -> RequestContext<RoleServer> {
     let (server_transport, client_transport) = duplex(4096);
     drop(client_transport);
 
-    let server = KagiMcpServer::with_client(Arc::new(kagi_api::MockKagiApi::new()));
+    let server = KagiMcpServer::with_client(Arc::new(kagi_api::MockKagiApi::new()), None);
     let server_svc = serve_directly_with_ct(
         server,
         server_transport,

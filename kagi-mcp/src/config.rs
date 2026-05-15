@@ -1,4 +1,27 @@
 use clap::Parser;
+use std::path::PathBuf;
+
+fn parse_cache_size_gb(s: &str) -> Result<f64, String> {
+    let val: f64 = s
+        .parse()
+        .map_err(|_| format!("`{s}` is not a valid float"))?;
+    if val <= 0.0 {
+        Err(format!("cache size must be positive, got {val}"))
+    } else {
+        Ok(val)
+    }
+}
+
+fn parse_cache_ttl_days(s: &str) -> Result<u64, String> {
+    let val: u64 = s
+        .parse()
+        .map_err(|_| format!("`{s}` is not a valid integer"))?;
+    if val == 0 {
+        Err(format!("cache TTL must be positive, got {val}"))
+    } else {
+        Ok(val)
+    }
+}
 
 #[derive(Debug, Parser, Clone)]
 #[command(name = "kagi-mcp", about = "Kagi MCP server")]
@@ -41,6 +64,25 @@ pub struct Config {
 
     #[arg(long, env = "KAGI_OVERFETCH_MAX", default_value = "50")]
     pub overfetch_max: u32,
+
+    #[arg(long, env = "KAGI_CACHE_DIR", default_value = "~/.cache/kagi-mcp/")]
+    pub cache_dir: PathBuf,
+
+    #[arg(
+        long,
+        env = "KAGI_CACHE_SIZE_GB",
+        default_value = "5.0",
+        value_parser = parse_cache_size_gb,
+    )]
+    pub cache_size_gb: f64,
+
+    #[arg(
+        long,
+        env = "KAGI_CACHE_TTL_DAYS",
+        default_value = "7",
+        value_parser = parse_cache_ttl_days,
+    )]
+    pub cache_ttl_days: u64,
 }
 
 #[cfg(test)]
@@ -62,6 +104,9 @@ mod tests {
         assert_eq!(config.region, None);
         assert_eq!(config.overfetch_multiplier, 5);
         assert_eq!(config.overfetch_max, 50);
+        assert_eq!(config.cache_dir, PathBuf::from("~/.cache/kagi-mcp/"));
+        assert_eq!(config.cache_size_gb, 5.0);
+        assert_eq!(config.cache_ttl_days, 7);
     }
 
     #[test]
@@ -90,6 +135,12 @@ mod tests {
             "10",
             "--overfetch-max",
             "100",
+            "--cache-dir",
+            "/custom/cache/dir",
+            "--cache-size-gb",
+            "10.0",
+            "--cache-ttl-days",
+            "14",
         ])
         .unwrap();
 
@@ -104,6 +155,9 @@ mod tests {
         assert_eq!(config.region.as_deref(), Some("us-west"));
         assert_eq!(config.overfetch_multiplier, 10);
         assert_eq!(config.overfetch_max, 100);
+        assert_eq!(config.cache_dir, PathBuf::from("/custom/cache/dir"));
+        assert_eq!(config.cache_size_gb, 10.0);
+        assert_eq!(config.cache_ttl_days, 14);
     }
 
     #[test]
@@ -135,5 +189,79 @@ mod tests {
 
         assert_eq!(config.overfetch_multiplier, 5);
         assert_eq!(config.overfetch_max, 75);
+    }
+
+    #[test]
+    fn when_negative_cache_size_gb_provided_then_parse_should_fail() {
+        let result = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--cache-size-gb",
+            "-1.0",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn when_invalid_cache_size_gb_provided_then_parse_should_fail() {
+        let result = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--cache-size-gb",
+            "not-a-float",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn when_negative_cache_ttl_days_provided_then_parse_should_fail() {
+        let result = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--cache-ttl-days",
+            "-1",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn when_invalid_cache_ttl_days_provided_then_parse_should_fail() {
+        let result = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--cache-ttl-days",
+            "not-an-integer",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn when_zero_cache_size_gb_provided_then_parse_should_fail() {
+        let result =
+            Config::try_parse_from(["kagi-mcp", "--api-key", "test-key", "--cache-size-gb", "0"]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn when_cache_size_gb_default_then_non_negative_should_apply() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--cache-size-gb",
+            "0.5",
+        ])
+        .unwrap();
+
+        assert_eq!(config.cache_size_gb, 0.5);
     }
 }

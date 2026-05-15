@@ -3,6 +3,7 @@ use rmcp::serve_client;
 use rmcp::service::RunningService;
 use rmcp::RoleClient;
 use std::process::Stdio;
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
@@ -11,6 +12,7 @@ pub struct TestHarness {
     pub running: RunningService<RoleClient, ()>,
     child: Child,
     _stderr_handle: JoinHandle<()>,
+    _cache_dir: TempDir,
 }
 
 impl TestHarness {
@@ -22,8 +24,12 @@ impl TestHarness {
 
 pub async fn spawn_server(base_url: &str, extra_args: &[&str]) -> TestHarness {
     let bin = cargo_bin("kagi-mcp");
+    let cache_dir = TempDir::new().expect("failed to create temp cache dir");
+    let cache_dir_path = cache_dir.path().to_str().expect("non-utf8 path").to_owned();
+
     let mut cmd = Command::new(bin);
-    cmd.args(extra_args)
+    cmd.args(["--cache-dir", &cache_dir_path])
+        .args(extra_args)
         .env("KAGI_API_KEY", "test-key")
         .env("KAGI_BASE_URL", base_url)
         .stdin(Stdio::piped())
@@ -53,5 +59,6 @@ pub async fn spawn_server(base_url: &str, extra_args: &[&str]) -> TestHarness {
         running,
         child,
         _stderr_handle,
+        _cache_dir: cache_dir,
     }
 }

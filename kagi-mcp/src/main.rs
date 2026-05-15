@@ -1,3 +1,4 @@
+pub(crate) mod cache;
 mod config;
 pub(crate) mod domain;
 pub mod format;
@@ -6,12 +7,14 @@ pub mod server;
 mod tools;
 pub(crate) mod validation;
 
+use crate::cache::store::CacheStore;
 use clap::Parser;
 use config::Config;
 use kagi_api::client::KagiClientBuilder;
 use rmcp::ServiceExt;
 use server::KagiMcpServer;
 use std::io::stderr;
+use std::sync::Arc;
 use tokio::io::{stdin, stdout};
 use tracing_subscriber::EnvFilter;
 
@@ -32,6 +35,15 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .map_err(|e| anyhow::anyhow!("failed to create Kagi client: {e}"))?;
 
+    let cache_store = Arc::new(
+        CacheStore::new(
+            &config.cache_dir,
+            config.cache_size_gb,
+            config.cache_ttl_days,
+        )
+        .map_err(|e| anyhow::anyhow!("failed to initialize cache: {e}"))?,
+    );
+
     let server = KagiMcpServer::new(
         client,
         config.search_timeout,
@@ -41,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
         config.region,
         config.overfetch_multiplier,
         config.overfetch_max,
+        Some(cache_store),
     );
 
     let transport = (stdin(), stdout());

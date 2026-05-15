@@ -1,3 +1,4 @@
+use crate::cache::store::CacheStore;
 use crate::tools::extract::{extract_handler, ExtractParams};
 use crate::tools::search::{search_handler, SearchConfig, SearchParams};
 use kagi_api::client::KagiClient;
@@ -19,6 +20,7 @@ pub struct KagiMcpServer {
     pub region: Option<String>,
     pub overfetch_multiplier: u32,
     pub overfetch_max: u32,
+    pub cache_store: Option<Arc<CacheStore>>,
 }
 
 impl KagiMcpServer {
@@ -37,6 +39,7 @@ impl KagiMcpServer {
         region: Option<String>,
         overfetch_multiplier: u32,
         overfetch_max: u32,
+        cache_store: Option<Arc<CacheStore>>,
     ) -> Self {
         Self {
             client: Arc::new(client),
@@ -47,11 +50,12 @@ impl KagiMcpServer {
             region,
             overfetch_multiplier,
             overfetch_max,
+            cache_store,
         }
     }
 
     #[cfg(test)]
-    pub fn with_client(client: Arc<dyn KagiApi>) -> Self {
+    pub fn with_client(client: Arc<dyn KagiApi>, cache_store: Option<Arc<CacheStore>>) -> Self {
         Self {
             client,
             search_timeout: 4.0,
@@ -61,6 +65,7 @@ impl KagiMcpServer {
             region: None,
             overfetch_multiplier: 5,
             overfetch_max: 50,
+            cache_store,
         }
     }
 }
@@ -83,7 +88,14 @@ impl KagiMcpServer {
             overfetch_multiplier: self.overfetch_multiplier,
             overfetch_max: self.overfetch_max,
         };
-        search_handler(&*self.client, params, &ctx, &config).await
+        search_handler(
+            &*self.client,
+            params,
+            &ctx,
+            &config,
+            self.cache_store.as_deref(),
+        )
+        .await
     }
 
     #[tool(description = "Extract clean Markdown from URLs")]
@@ -92,7 +104,14 @@ impl KagiMcpServer {
         ctx: RequestContext<RoleServer>,
         Parameters(params): Parameters<ExtractParams>,
     ) -> Result<CallToolResult, McpError> {
-        extract_handler(&*self.client, params, &ctx, self.extract_timeout).await
+        extract_handler(
+            &*self.client,
+            params,
+            &ctx,
+            self.extract_timeout,
+            self.cache_store.as_deref(),
+        )
+        .await
     }
 }
 
@@ -112,7 +131,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, 5, 50);
+        let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, 5, 50, None);
 
         let info = server.get_info();
         assert!(
@@ -124,12 +143,44 @@ mod tests {
     #[test]
     fn when_mock_client_provided_then_server_should_accept_it() {
         let mock = kagi_api::MockKagiApi::new();
-        let server = KagiMcpServer::with_client(Arc::new(mock));
+        let server = KagiMcpServer::with_client(Arc::new(mock), None);
 
         let info = server.get_info();
         assert!(
             info.capabilities.tools.is_some(),
             "server should have tools capability"
+        );
+    }
+
+    #[test]
+    fn when_server_created_with_cache_store_then_it_should_compile() {
+        let store = CacheStore::open_in_memory().expect("failed to create in-memory cache store");
+
+        let client = KagiClientBuilder::new()
+            .api_key("test-key")
+            .build()
+            .unwrap();
+
+        let server = KagiMcpServer::new(
+            client,
+            4.0,
+            30.0,
+            10,
+            true,
+            None,
+            5,
+            50,
+            Some(Arc::new(store)),
+        );
+
+        let info = server.get_info();
+        assert!(
+            info.capabilities.tools.is_some(),
+            "server with cache store should have tools capability"
+        );
+        assert!(
+            server.cache_store.is_some(),
+            "cache_store should be present"
         );
     }
 }
