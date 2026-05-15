@@ -1,6 +1,5 @@
-use rusqlite::Connection;
-
 use crate::cache::error::CacheError;
+use rusqlite::Connection;
 
 /// Evicts the oldest cache entries until the total size is at or below `max_size_bytes`.
 ///

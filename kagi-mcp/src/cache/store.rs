@@ -1,11 +1,9 @@
+use crate::cache::error::CacheError;
+use crate::cache::evict::evict_if_needed;
+use rusqlite::Connection;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use rusqlite::Connection;
-
-use crate::cache::error::CacheError;
-use crate::cache::evict::evict_if_needed;
 
 const SCHEMA_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS cache_entries (

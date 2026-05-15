@@ -12,10 +12,6 @@ use tempfile::TempDir;
 use tokio::io::duplex;
 use tokio_util::sync::CancellationToken;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 async fn test_request_context() -> RequestContext<RoleServer> {
     let (server_transport, client_transport) = duplex(4096);
     drop(client_transport);
@@ -82,10 +78,6 @@ fn make_search_response(title: &str, snippet: &str) -> SearchResponse {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Test 1: Persistence across CacheStore instances
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn when_cache_persists_across_instances_then_data_should_be_readable() {
     let tmp = TempDir::new().unwrap();
@@ -102,10 +94,6 @@ async fn when_cache_persists_across_instances_then_data_should_be_readable() {
 
     assert_eq!(result, Some(b"persistent_payload".to_vec()));
 }
-
-// ---------------------------------------------------------------------------
-// Test 2: Two CacheStores reading the same entry concurrently
-// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn when_concurrent_readers_then_both_should_read_same_entry() {
@@ -125,10 +113,6 @@ async fn when_concurrent_readers_then_both_should_read_same_entry() {
     assert_eq!(result_a, Some(b"shared_data".to_vec()));
     assert_eq!(result_b, Some(b"shared_data".to_vec()));
 }
-
-// ---------------------------------------------------------------------------
-// Test 3: Cache hit returns cached response without calling the API
-// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn when_cache_hit_then_api_should_not_be_called() {
