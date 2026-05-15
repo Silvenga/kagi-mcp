@@ -7,6 +7,7 @@ pub mod server;
 mod tools;
 pub(crate) mod validation;
 
+use crate::cache::store::CacheStore;
 use clap::Parser;
 use config::Config;
 use kagi_api::client::KagiClientBuilder;
@@ -16,8 +17,6 @@ use std::io::stderr;
 use std::sync::Arc;
 use tokio::io::{stdin, stdout};
 use tracing_subscriber::EnvFilter;
-
-use crate::cache::store::CacheStore;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
