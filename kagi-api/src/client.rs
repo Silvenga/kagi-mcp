@@ -97,4 +97,3 @@ fn map_middleware_error(error: reqwest_middleware::Error) -> KagiError {
         }
     }
 }
-

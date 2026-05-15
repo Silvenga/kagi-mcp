@@ -1,5 +1,5 @@
-use kagi_api::{KagiClientBuilder, KagiError};
 use kagi_api::types::{ExtractPage, ExtractRequest};
+use kagi_api::{KagiClientBuilder, KagiError};
 use wiremock::{
     matchers::{body_json, header, method, path},
     Mock, MockServer, ResponseTemplate,

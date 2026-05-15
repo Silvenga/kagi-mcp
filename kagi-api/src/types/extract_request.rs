@@ -73,7 +73,8 @@ mod tests {
     fn when_with_timeout_seconds_then_should_use_timeout_key_in_json() {
         let request = ExtractRequest::new(vec![ExtractPage {
             url: "https://example.com".to_owned(),
-        }]).with_timeout_seconds(30.0);
+        }])
+        .with_timeout_seconds(30.0);
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("\"timeout\":30.0"));
         assert!(!json.contains("\"timeout_seconds\""));

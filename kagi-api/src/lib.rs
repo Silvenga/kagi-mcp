@@ -39,5 +39,3 @@ pub use api_trait::KagiApi;
 
 #[cfg(any(test, feature = "mock"))]
 pub use api_trait::MockKagiApi;
-
-
