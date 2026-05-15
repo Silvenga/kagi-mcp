@@ -56,10 +56,7 @@ pub async fn extract_handler(
         .map(|u| ExtractPage { url: u.to_string() })
         .collect();
 
-    let request = ExtractRequest {
-        pages,
-        format: Some("json".to_owned()),
-    };
+    let request = ExtractRequest::new(pages).with_format("json".to_owned());
 
     if params.cache {
         if let Some(store) = cache_store {
@@ -336,7 +333,7 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_extract()
             .times(1)
-            .withf(|req| req.pages.len() == 1)
+            .withf(|req| req.pages().len() == 1)
             .returning(|_| {
                 Ok(ExtractResponse {
                     meta: Meta {
@@ -396,12 +393,10 @@ mod tests {
             }],
             vec![],
         );
-        let request = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com/".to_owned(),
-            }],
-            format: Some("json".to_owned()),
-        };
+        let request = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }])
+        .with_format("json".to_owned());
         let key = generate_cache_key(&request);
         store
             .set(
@@ -452,12 +447,10 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Fresh content"));
 
-        let request = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com/".to_owned(),
-            }],
-            format: Some("json".to_owned()),
-        };
+        let request = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }])
+        .with_format("json".to_owned());
         let key = generate_cache_key(&request);
         let cached = store.get(&key).unwrap();
         assert!(cached.is_some());
@@ -495,12 +488,10 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Fresh content"));
 
-        let request = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com/".to_owned(),
-            }],
-            format: Some("json".to_owned()),
-        };
+        let request = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }])
+        .with_format("json".to_owned());
         let key = generate_cache_key(&request);
         let cached = store.get(&key).unwrap();
         assert!(cached.is_some());
@@ -511,12 +502,10 @@ mod tests {
         let mock = MockKagiApi::new();
         let store = CacheStore::open_in_memory().unwrap();
 
-        let request = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com/".to_owned(),
-            }],
-            format: Some("json".to_owned()),
-        };
+        let request = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }])
+        .with_format("json".to_owned());
         let key = generate_cache_key(&request);
         store.set(&key, "extract", b"invalid json").unwrap();
 

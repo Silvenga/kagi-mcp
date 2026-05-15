@@ -1,43 +1,14 @@
-use kagi_api::{
-    types::{ExtractPage, ExtractRequest, SearchRequest},
-    KagiClientBuilder, KagiError,
-};
+use kagi_api::{KagiClientBuilder, KagiError};
+use kagi_api::types::SearchRequest;
 use wiremock::{
     matchers::{body_json, header, method, path},
     Mock, MockServer, ResponseTemplate,
 };
 
+mod common;
+
 fn search_request() -> SearchRequest {
-    SearchRequest {
-        query: "test query".to_owned(),
-        workflow: None,
-        format: None,
-        timeout: None,
-        page: None,
-        limit: None,
-        safe_search: None,
-        region: None,
-        filters: None,
-    }
-}
-
-fn extract_request() -> ExtractRequest {
-    ExtractRequest {
-        pages: vec![ExtractPage {
-            url: "https://example.com".to_owned(),
-        }],
-        format: None,
-    }
-}
-
-fn error_response_json() -> serde_json::Value {
-    serde_json::json!({
-        "meta": { "trace": "error-trace" },
-        "data": null,
-        "error": [
-            { "code": "ERR_CODE", "url": "", "message": "Error message", "location": null }
-        ]
-    })
+    SearchRequest::new("test query")
 }
 
 #[tokio::test]
@@ -60,8 +31,8 @@ async fn when_search_succeeds_then_should_return_results() {
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
         .build()
         .unwrap();
 
@@ -71,51 +42,18 @@ async fn when_search_succeeds_then_should_return_results() {
 }
 
 #[tokio::test]
-async fn when_extract_succeeds_then_should_return_content() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/v1/extract"))
-        .and(header("authorization", "Bearer test-key"))
-        .and(header("content-type", "application/json"))
-        .and(body_json(serde_json::json!({
-            "pages": [{ "url": "https://example.com" }]
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "meta": { "trace": "test-trace", "node": "test-node", "ms": 100 },
-            "data": [
-                { "url": "https://example.com", "markdown": "# Hello" }
-            ]
-        })))
-        .mount(&server)
-        .await;
-
-    let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .build()
-        .unwrap();
-
-    let response = client.extract(extract_request()).await.unwrap();
-    assert_eq!(response.meta.trace, "test-trace");
-    assert_eq!(
-        response.data.unwrap()[0].markdown,
-        Some("# Hello".to_owned())
-    );
-}
-
-#[tokio::test]
 async fn when_search_returns_400_then_should_return_invalid_request_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(error_response_json()))
+        .respond_with(ResponseTemplate::new(400).set_body_json(common::error_response_json()))
         .mount(&server)
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(0)
         .build()
         .unwrap();
 
@@ -133,14 +71,14 @@ async fn when_search_returns_401_then_should_return_unauthorized_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(401).set_body_json(error_response_json()))
+        .respond_with(ResponseTemplate::new(401).set_body_json(common::error_response_json()))
         .mount(&server)
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(0)
         .build()
         .unwrap();
 
@@ -157,14 +95,14 @@ async fn when_search_returns_403_then_should_return_forbidden_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(403).set_body_json(error_response_json()))
+        .respond_with(ResponseTemplate::new(403).set_body_json(common::error_response_json()))
         .mount(&server)
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(0)
         .build()
         .unwrap();
 
@@ -181,14 +119,14 @@ async fn when_search_returns_429_then_should_return_rate_limited_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(429).set_body_json(error_response_json()))
+        .respond_with(ResponseTemplate::new(429).set_body_json(common::error_response_json()))
         .mount(&server)
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(0)
         .build()
         .unwrap();
 
@@ -205,139 +143,18 @@ async fn when_search_returns_500_then_should_return_server_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(500).set_body_json(error_response_json()))
+        .respond_with(ResponseTemplate::new(500).set_body_json(common::error_response_json()))
         .mount(&server)
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(0)
         .build()
         .unwrap();
 
     let result = client.search(search_request()).await;
-    let err = result.unwrap_err();
-    assert!(
-        matches!(err, KagiError::ServerError),
-        "expected ServerError, got {err}"
-    );
-}
-
-#[tokio::test]
-async fn when_extract_returns_400_then_should_return_invalid_request_error() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/v1/extract"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(error_response_json()))
-        .mount(&server)
-        .await;
-
-    let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
-        .build()
-        .unwrap();
-
-    let result = client.extract(extract_request()).await;
-    let err = result.unwrap_err();
-    assert!(
-        matches!(err, KagiError::InvalidRequest { .. }),
-        "expected InvalidRequest, got {err}"
-    );
-    assert_eq!(err.to_string(), "invalid request: Error message");
-}
-
-#[tokio::test]
-async fn when_extract_returns_401_then_should_return_unauthorized_error() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/v1/extract"))
-        .respond_with(ResponseTemplate::new(401).set_body_json(error_response_json()))
-        .mount(&server)
-        .await;
-
-    let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
-        .build()
-        .unwrap();
-
-    let result = client.extract(extract_request()).await;
-    let err = result.unwrap_err();
-    assert!(
-        matches!(err, KagiError::Unauthorized),
-        "expected Unauthorized, got {err}"
-    );
-}
-
-#[tokio::test]
-async fn when_extract_returns_403_then_should_return_forbidden_error() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/v1/extract"))
-        .respond_with(ResponseTemplate::new(403).set_body_json(error_response_json()))
-        .mount(&server)
-        .await;
-
-    let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
-        .build()
-        .unwrap();
-
-    let result = client.extract(extract_request()).await;
-    let err = result.unwrap_err();
-    assert!(
-        matches!(err, KagiError::Forbidden),
-        "expected Forbidden, got {err}"
-    );
-}
-
-#[tokio::test]
-async fn when_extract_returns_429_then_should_return_rate_limited_error() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/v1/extract"))
-        .respond_with(ResponseTemplate::new(429).set_body_json(error_response_json()))
-        .mount(&server)
-        .await;
-
-    let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
-        .build()
-        .unwrap();
-
-    let result = client.extract(extract_request()).await;
-    let err = result.unwrap_err();
-    assert!(
-        matches!(err, KagiError::RateLimited),
-        "expected RateLimited, got {err}"
-    );
-}
-
-#[tokio::test]
-async fn when_extract_returns_500_then_should_return_server_error() {
-    let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/v1/extract"))
-        .respond_with(ResponseTemplate::new(500).set_body_json(error_response_json()))
-        .mount(&server)
-        .await;
-
-    let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
-        .build()
-        .unwrap();
-
-    let result = client.extract(extract_request()).await;
     let err = result.unwrap_err();
     assert!(
         matches!(err, KagiError::ServerError),
@@ -355,9 +172,9 @@ async fn when_search_returns_invalid_json_then_should_return_network_error() {
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(0)
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(0)
         .build()
         .unwrap();
 
@@ -374,7 +191,7 @@ async fn when_search_returns_429_once_then_retry_should_succeed() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(429).set_body_json(error_response_json()))
+        .respond_with(ResponseTemplate::new(429).set_body_json(common::error_response_json()))
         .up_to_n_times(1)
         .mount(&server)
         .await;
@@ -393,9 +210,9 @@ async fn when_search_returns_429_once_then_retry_should_succeed() {
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(1)
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(1)
         .build()
         .unwrap();
 
@@ -409,7 +226,7 @@ async fn when_search_returns_500_once_then_retry_should_succeed() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(500).set_body_json(error_response_json()))
+        .respond_with(ResponseTemplate::new(500).set_body_json(common::error_response_json()))
         .up_to_n_times(1)
         .mount(&server)
         .await;
@@ -428,9 +245,9 @@ async fn when_search_returns_500_once_then_retry_should_succeed() {
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .retries(1)
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(1)
         .build()
         .unwrap();
 
@@ -452,8 +269,8 @@ async fn when_default_user_agent_then_should_send_default_value() {
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
         .build()
         .unwrap();
 
@@ -488,9 +305,9 @@ async fn when_custom_user_agent_then_should_send_custom_value() {
         .await;
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
-        .base_url(server.uri())
-        .user_agent("my-custom-agent/1.0")
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_user_agent("my-custom-agent/1.0")
         .build()
         .unwrap();
 

@@ -18,17 +18,7 @@ mod tests {
 
     #[test]
     fn when_same_request_then_same_key_should_be_equal() {
-        let req = SearchRequest {
-            query: "rust programming".into(),
-            workflow: None,
-            format: None,
-            timeout: None,
-            page: None,
-            limit: None,
-            safe_search: None,
-            region: None,
-            filters: None,
-        };
+        let req = SearchRequest::new("rust programming");
 
         let key1 = generate_cache_key(&req);
         let key2 = generate_cache_key(&req);
@@ -38,28 +28,8 @@ mod tests {
 
     #[test]
     fn when_different_requests_then_different_keys_should_not_be_equal() {
-        let req1 = SearchRequest {
-            query: "rust programming".into(),
-            workflow: None,
-            format: None,
-            timeout: None,
-            page: None,
-            limit: None,
-            safe_search: None,
-            region: None,
-            filters: None,
-        };
-        let req2 = SearchRequest {
-            query: "python programming".into(),
-            workflow: None,
-            format: None,
-            timeout: None,
-            page: None,
-            limit: None,
-            safe_search: None,
-            region: None,
-            filters: None,
-        };
+        let req1 = SearchRequest::new("rust programming");
+        let req2 = SearchRequest::new("python programming");
 
         let key1 = generate_cache_key(&req1);
         let key2 = generate_cache_key(&req2);
@@ -69,17 +39,7 @@ mod tests {
 
     #[test]
     fn when_generated_then_key_format_should_be_hex() {
-        let req = SearchRequest {
-            query: "format test".into(),
-            workflow: None,
-            format: None,
-            timeout: None,
-            page: None,
-            limit: None,
-            safe_search: None,
-            region: None,
-            filters: None,
-        };
+        let req = SearchRequest::new("format test");
 
         let key = generate_cache_key(&req);
 
@@ -90,17 +50,7 @@ mod tests {
 
     #[test]
     fn when_called_multiple_then_deterministic_should_be_consistent() {
-        let req = SearchRequest {
-            query: "deterministic test".into(),
-            workflow: None,
-            format: None,
-            timeout: None,
-            page: None,
-            limit: None,
-            safe_search: None,
-            region: None,
-            filters: None,
-        };
+        let req = SearchRequest::new("deterministic test");
 
         let key = generate_cache_key(&req);
         for _ in 0..100 {
@@ -110,12 +60,9 @@ mod tests {
 
     #[test]
     fn when_extract_request_then_key_should_be_stable() {
-        let req = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com".into(),
-            }],
-            format: None,
-        };
+        let req = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com".into(),
+        }]);
 
         let key1 = generate_cache_key(&req);
         let key2 = generate_cache_key(&req);
@@ -125,28 +72,8 @@ mod tests {
 
     #[test]
     fn when_default_fields_then_explicit_and_implicit_should_be_equal() {
-        let implicit = SearchRequest {
-            query: "test".into(),
-            workflow: None,
-            format: None,
-            timeout: None,
-            page: None,
-            limit: None,
-            safe_search: None,
-            region: None,
-            filters: None,
-        };
-        let explicit = SearchRequest {
-            query: "test".into(),
-            workflow: None,
-            format: None,
-            timeout: None,
-            page: None,
-            limit: None,
-            safe_search: None,
-            region: None,
-            filters: None,
-        };
+        let implicit = SearchRequest::new("test");
+        let explicit = SearchRequest::new("test");
 
         assert_eq!(generate_cache_key(&implicit), generate_cache_key(&explicit));
     }

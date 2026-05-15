@@ -10,7 +10,7 @@ pub(crate) mod validation;
 use crate::cache::store::CacheStore;
 use clap::Parser;
 use config::Config;
-use kagi_api::client::KagiClientBuilder;
+use kagi_api::KagiClientBuilder;
 use rmcp::ServiceExt;
 use server::KagiMcpServer;
 use std::io::stderr;
@@ -28,10 +28,10 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
 
     let client = KagiClientBuilder::new()
-        .api_key(&config.api_key)
-        .base_url(&config.base_url)
-        .timeout(config.client_timeout)
-        .retries(config.retries)
+        .with_api_key(&config.api_key)
+        .with_base_url(&config.base_url)
+        .with_timeout_seconds(config.client_timeout)
+        .with_retries(config.retries)
         .build()
         .map_err(|e| anyhow::anyhow!("failed to create Kagi client: {e}"))?;
 

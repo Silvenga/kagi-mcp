@@ -121,13 +121,13 @@ impl rmcp::ServerHandler for KagiMcpServer {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kagi_api::client::KagiClientBuilder;
+    use kagi_api::KagiClientBuilder;
     use rmcp::ServerHandler;
 
     #[test]
     fn when_server_created_then_tools_should_be_registered() {
         let client = KagiClientBuilder::new()
-            .api_key("test-key")
+            .with_api_key("test-key")
             .build()
             .unwrap();
 
@@ -157,7 +157,7 @@ mod tests {
         let store = CacheStore::open_in_memory().expect("failed to create in-memory cache store");
 
         let client = KagiClientBuilder::new()
-            .api_key("test-key")
+            .with_api_key("test-key")
             .build()
             .unwrap();
 
