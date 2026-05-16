@@ -1,0 +1,15 @@
+---
+source: kagi-mcp/src/format/extract.rs
+expression: "format_extract_markdown(&response).replace(\"\\r\\n\", \"\\n\")"
+---
+## Extracted Content
+
+### https://example.com/ok
+
+Successful content.
+
+---
+
+### https://example.com/bad
+
+**Extraction failed:** Server Error

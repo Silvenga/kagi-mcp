@@ -1,0 +1,5 @@
+---
+source: kagi-mcp/src/format/extract.rs
+expression: "format_extract_markdown(&response).replace(\"\\r\\n\", \"\\n\")"
+---
+No content extracted.
