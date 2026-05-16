@@ -9,8 +9,8 @@ pub fn evict_if_needed(conn: &Connection, max_size_bytes: u64) -> Result<u64, Ca
     let total: u64 = conn.query_row(
         "SELECT COALESCE(SUM(size_bytes), 0) FROM cache_entries",
         [],
-        |row| row.get(0),
-    )?;
+        |row| row.get::<_, i64>(0),
+    )? as u64;
 
     if total <= max_size_bytes {
         return Ok(0);
@@ -23,7 +23,8 @@ pub fn evict_if_needed(conn: &Connection, max_size_bytes: u64) -> Result<u64, Ca
         conn.prepare("SELECT cache_key, size_bytes FROM cache_entries ORDER BY created_at ASC")?;
     let entries: Vec<(String, u64)> = stmt
         .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
+            let size_bytes: i64 = row.get(1)?;
+            Ok((row.get::<_, String>(0)?, size_bytes as u64))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     drop(stmt);
@@ -70,7 +71,7 @@ mod tests {
         conn.execute(
             "INSERT INTO cache_entries (cache_key, tool_type, created_at, size_bytes, response_json)
              VALUES (?1, 'search', ?2, ?3, '{}')",
-            (key, created_at, size_bytes),
+            (key, created_at, size_bytes as i64),
         )
         .unwrap();
     }
@@ -79,16 +80,16 @@ mod tests {
         conn.query_row(
             "SELECT COALESCE(SUM(size_bytes), 0) FROM cache_entries",
             [],
-            |row| row.get::<_, u64>(0),
+            |row| row.get::<_, i64>(0),
         )
-        .unwrap()
+        .unwrap() as u64
     }
 
     fn count_entries(conn: &Connection) -> u64 {
         conn.query_row("SELECT COUNT(*) FROM cache_entries", [], |row| {
-            row.get::<_, u64>(0)
+            row.get::<_, i64>(0)
         })
-        .unwrap()
+        .unwrap() as u64
     }
 
     #[test]
