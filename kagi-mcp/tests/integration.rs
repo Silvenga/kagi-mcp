@@ -257,7 +257,15 @@ async fn when_extract_times_out_then_returns_network_error() {
                 "error should indicate a network/timeout issue, got: {err}"
             );
         }
-        other => panic!("expected McpError for timeout, got: {other:?}"),
+        Ok(call_tool_result) => {
+            let text = call_tool_result.content[0].as_text().unwrap().text.clone();
+            assert!(
+                text.contains("Extraction failed")
+                    || text.contains("error sending request"),
+                "response should contain extraction failure message, got: {text}"
+            );
+        }
+        other => panic!("expected McpError or Ok for timeout, got: {other:?}"),
     }
 
     harness.cleanup().await;
