@@ -25,6 +25,7 @@ pub struct KagiClientBuilder {
 }
 
 impl KagiClientBuilder {
+    /// Create a new builder with default settings.
     pub fn new() -> Self {
         Self {
             api_key: None,
@@ -35,31 +36,37 @@ impl KagiClientBuilder {
         }
     }
 
+    /// Set the Kagi API key.
     pub fn with_api_key(mut self, key: impl Into<String>) -> Self {
         self.api_key = Some(key.into());
         self
     }
 
+    /// Set the base URL for the Kagi API.
     pub fn with_base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = url.into();
         self
     }
 
+    /// Set a custom User-Agent header.
     pub fn with_user_agent(mut self, agent: impl Into<String>) -> Self {
         self.user_agent = agent.into();
         self
     }
 
+    /// Set the request timeout in seconds.
     pub fn with_timeout_seconds(mut self, seconds: f64) -> Self {
         self.timeout = Duration::from_secs_f64(seconds);
         self
     }
 
+    /// Set the number of retries for transient failures.
     pub fn with_retries(mut self, count: u32) -> Self {
         self.retries = count;
         self
     }
 
+    /// Build and return a configured [`KagiClient`].
     pub fn build(self) -> Result<KagiClient, KagiError> {
         let api_key = self.api_key.ok_or_else(|| KagiError::Api {
             status: 0,

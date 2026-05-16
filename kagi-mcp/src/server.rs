@@ -1,8 +1,8 @@
 use crate::cache::store::CacheStore;
 use crate::tools::extract::{extract_handler, ExtractParams};
 use crate::tools::search::{search_handler, SearchConfig, SearchParams};
-use kagi_api::KagiClient;
 use kagi_api::KagiApi;
+use kagi_api::KagiClient;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::service::RequestContext;

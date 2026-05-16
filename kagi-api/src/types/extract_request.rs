@@ -18,6 +18,7 @@ pub struct ExtractRequest {
 }
 
 impl ExtractRequest {
+    /// Create a new extract request with the given pages.
     pub fn new(pages: Vec<ExtractPage>) -> Self {
         Self {
             pages,
@@ -26,23 +27,28 @@ impl ExtractRequest {
         }
     }
 
+    /// The pages to extract content from.
     pub fn pages(&self) -> &[ExtractPage] {
         &self.pages
     }
 
+    /// The requested response format, if set.
     pub fn format(&self) -> Option<&str> {
         self.format.as_deref()
     }
 
+    /// The timeout for the extraction, in seconds.
     pub fn timeout_seconds(&self) -> Option<f64> {
         self.timeout_seconds
     }
 
+    /// Set the response format.
     pub fn with_format(mut self, format: impl Into<String>) -> Self {
         self.format = Some(format.into());
         self
     }
 
+    /// Set the timeout for the extraction.
     pub fn with_timeout_seconds(mut self, timeout: f64) -> Self {
         self.timeout_seconds = Some(timeout);
         self

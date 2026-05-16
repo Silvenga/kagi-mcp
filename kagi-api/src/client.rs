@@ -1,5 +1,7 @@
-use crate::error::{from_http_status, KagiError, KagiErrorResponse};
-use crate::types::{ExtractRequest, ExtractResponse, SearchRequest, SearchResponse};
+use crate::error::{from_http_status, KagiError};
+use crate::types::{
+    ExtractRequest, ExtractResponse, KagiErrorResponse, SearchRequest, SearchResponse,
+};
 use crate::KagiApi;
 use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::RetryError;

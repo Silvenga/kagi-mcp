@@ -1,6 +1,6 @@
-use kagi_api::{Meta, SearchData, SearchRequest, SearchResponse, SearchResult};
 use kagi_api::KagiClientBuilder;
 use kagi_api::MockKagiApi;
+use kagi_api::{Meta, SearchData, SearchRequest, SearchResponse, SearchResult};
 use kagi_mcp::cache::key::generate_cache_key;
 use kagi_mcp::cache::store::CacheStore;
 use kagi_mcp::server::KagiMcpServer;

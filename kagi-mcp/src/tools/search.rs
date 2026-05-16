@@ -5,8 +5,8 @@ use crate::cache::store::CacheStore;
 use crate::domain::extract_group_key;
 use crate::format::{format_json, format_search_markdown};
 use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::{Filters, SearchData, SearchRequest, SearchResponse, SearchResult};
 use kagi_api::KagiApi;
+use kagi_api::{Filters, SearchData, SearchRequest, SearchResponse, SearchResult};
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
@@ -230,8 +230,8 @@ fn dedup_by_domain(data: &mut SearchData, limit_per_domain: u32, final_limit: u3
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kagi_api::{KagiError, Meta, SearchData, SearchResponse, SearchResult};
     use kagi_api::MockKagiApi;
+    use kagi_api::{KagiError, Meta, SearchData, SearchResponse, SearchResult};
 
     fn empty_search_data() -> SearchData {
         SearchData {

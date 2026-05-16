@@ -4,11 +4,13 @@ use crate::types;
 /// Async trait abstracting the Kagi Search and Extract APIs.
 #[async_trait::async_trait]
 pub trait KagiApi: Send + Sync {
+    /// Execute a search request.
     async fn search(
         &self,
         request: types::SearchRequest,
     ) -> Result<types::SearchResponse, error::KagiError>;
 
+    /// Execute an extract request.
     async fn extract(
         &self,
         request: types::ExtractRequest,

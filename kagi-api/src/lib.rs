@@ -21,6 +21,8 @@
 //! # }
 //! ```
 
+#![warn(missing_docs)]
+
 mod api_trait;
 mod client;
 mod client_builder;
@@ -29,7 +31,7 @@ mod types;
 
 pub use client::KagiClient;
 pub use client_builder::KagiClientBuilder;
-pub use error::{KagiError, KagiErrorResponse};
+pub use error::KagiError;
 pub use types::{
     ExtractData, ExtractError, ExtractPage, ExtractRequest, ExtractResponse, Filters, Image, Meta,
     SearchData, SearchRequest, SearchResponse, SearchResult,

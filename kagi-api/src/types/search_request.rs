@@ -33,6 +33,7 @@ pub struct SearchRequest {
 }
 
 impl SearchRequest {
+    /// Create a new search request with the given query.
     pub fn new(query: impl Into<String>) -> Self {
         Self {
             query: query.into(),
@@ -47,77 +48,94 @@ impl SearchRequest {
         }
     }
 
+    /// The search query string.
     pub fn query(&self) -> &str {
         &self.query
     }
 
+    /// The result type filter, if set.
     pub fn workflow(&self) -> Option<&str> {
         self.workflow.as_deref()
     }
 
+    /// The requested response format, if set.
     pub fn format(&self) -> Option<&str> {
         self.format.as_deref()
     }
 
+    /// The timeout for the search, in seconds.
     pub fn timeout_seconds(&self) -> Option<f64> {
         self.timeout_seconds
     }
 
+    /// The page number for paginated results.
     pub fn page(&self) -> Option<u32> {
         self.page
     }
 
+    /// The maximum number of results to return.
     pub fn limit(&self) -> Option<u32> {
         self.limit
     }
 
+    /// Whether safe search is enabled.
     pub fn safe_search(&self) -> Option<bool> {
         self.safe_search
     }
 
+    /// The region filter, if set.
     pub fn region(&self) -> Option<&str> {
         self.region.as_deref()
     }
 
+    /// The search filters, if set.
     pub fn filters(&self) -> Option<&Filters> {
         self.filters.as_ref()
     }
 
+    /// Set the result type filter.
     pub fn with_workflow(mut self, workflow: impl Into<String>) -> Self {
         self.workflow = Some(workflow.into());
         self
     }
 
+    /// Set the response format.
     pub fn with_format(mut self, format: impl Into<String>) -> Self {
         self.format = Some(format.into());
         self
     }
 
+    /// Set the timeout for the search.
     pub fn with_timeout_seconds(mut self, timeout: f64) -> Self {
         self.timeout_seconds = Some(timeout);
         self
     }
 
+    /// Set the page number for pagination.
     pub fn with_page(mut self, page: u32) -> Self {
         self.page = Some(page);
         self
     }
 
+    /// Set the maximum number of results.
     pub fn with_limit(mut self, limit: u32) -> Self {
         self.limit = Some(limit);
         self
     }
 
+    /// Enable or disable safe search.
     pub fn with_safe_search(mut self, safe_search: bool) -> Self {
         self.safe_search = Some(safe_search);
         self
     }
 
+    /// Set the region filter.
     pub fn with_region(mut self, region: impl Into<String>) -> Self {
         self.region = Some(region.into());
         self
     }
 
+    /// Set the search filters.
     pub fn with_filters(mut self, filters: Filters) -> Self {
         self.filters = Some(filters);
         self

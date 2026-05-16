@@ -1,5 +1,5 @@
+use crate::types::KagiErrorResponse;
 use reqwest::StatusCode;
-use serde::Deserialize;
 
 /// Error type for Kagi API operations.
 #[derive(Debug, thiserror::Error)]
@@ -45,42 +45,6 @@ pub enum KagiError {
     },
 }
 
-/// Error detail as returned by the Kagi API.
-#[derive(Debug, Deserialize)]
-struct ErrorDetail {
-    #[expect(dead_code, reason = "field present in API response but not consumed")]
-    code: String,
-    #[expect(dead_code, reason = "field present in API response but not consumed")]
-    url: String,
-    message: Option<String>,
-    #[expect(dead_code, reason = "field present in API response but not consumed")]
-    location: Option<String>,
-}
-
-/// The Kagi API error response envelope.
-///
-/// Returned when a request fails. The `error` array contains one or more
-/// error detail objects describing what went wrong.
-#[derive(Debug, Deserialize)]
-pub struct KagiErrorResponse {
-    #[expect(dead_code, reason = "field present in API response but not consumed")]
-    meta: serde_json::Value,
-    #[expect(dead_code, reason = "field present in API response but not consumed")]
-    data: Option<serde_json::Value>,
-    error: Vec<ErrorDetail>,
-}
-
-impl KagiErrorResponse {
-    /// Formats the error details into a human-readable message.
-    fn format_message(&self) -> String {
-        self.error
-            .iter()
-            .filter_map(|e| e.message.as_deref())
-            .collect::<Vec<_>>()
-            .join("; ")
-    }
-}
-
 /// Maps an HTTP status code and optional error response body to a [`KagiError`].
 pub(crate) fn from_http_status(status: StatusCode, body: Option<KagiErrorResponse>) -> KagiError {
     let message = body
@@ -104,6 +68,7 @@ pub(crate) fn from_http_status(status: StatusCode, body: Option<KagiErrorRespons
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::ErrorDetail;
     use reqwest::StatusCode;
     use std::time::Duration;
 
