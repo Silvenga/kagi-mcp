@@ -20,7 +20,7 @@ async fn test_request_context() -> RequestContext<RoleServer> {
         .with_api_key("test-key")
         .build()
         .expect("KagiClient should build in test");
-    let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, 5, 50, None);
+    let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, None);
     let server_svc = serve_directly_with_ct(
         server,
         server_transport,

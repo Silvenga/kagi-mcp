@@ -44,10 +44,10 @@ pub struct Config {
     #[arg(long, env = "KAGI_SEARCH_TIMEOUT", default_value = "4.0")]
     pub search_timeout: f64,
 
-    #[arg(long, env = "KAGI_EXTRACT_TIMEOUT", default_value = "30.0")]
+    #[arg(long, env = "KAGI_EXTRACT_TIMEOUT", default_value = "10.0")]
     pub extract_timeout: f64,
 
-    #[arg(long, env = "KAGI_CLIENT_TIMEOUT", default_value = "32.0")]
+    #[arg(long, env = "KAGI_CLIENT_TIMEOUT", default_value = "12.0")]
     pub client_timeout: f64,
 
     #[arg(long, env = "KAGI_RETRIES", default_value = "3")]
@@ -67,12 +67,6 @@ pub struct Config {
 
     #[arg(long, env = "KAGI_REGION", value_parser = parse_region)]
     pub region: Option<String>,
-
-    #[arg(long, env = "KAGI_OVERFETCH_MULTIPLIER", default_value = "5")]
-    pub overfetch_multiplier: u32,
-
-    #[arg(long, env = "KAGI_OVERFETCH_MAX", default_value = "50")]
-    pub overfetch_max: u32,
 
     #[arg(
         long,
@@ -110,14 +104,12 @@ mod tests {
         assert_eq!(config.api_key, "test-key");
         assert_eq!(config.base_url, "https://kagi.com/api");
         assert_eq!(config.search_timeout, 4.0);
-        assert_eq!(config.extract_timeout, 30.0);
-        assert_eq!(config.client_timeout, 32.0);
+        assert_eq!(config.extract_timeout, 10.0);
+        assert_eq!(config.client_timeout, 12.0);
         assert_eq!(config.retries, 3);
         assert_eq!(config.limit, 10);
         assert!(config.safe_search);
         assert_eq!(config.region, None);
-        assert_eq!(config.overfetch_multiplier, 5);
-        assert_eq!(config.overfetch_max, 50);
         let expected_cache_dir = shellexpand::tilde("~/.cache/kagi-mcp/");
         assert_eq!(config.cache_dir, PathBuf::from(expected_cache_dir.as_ref()));
         assert_eq!(config.cache_size_gb, 5.0);
@@ -146,10 +138,6 @@ mod tests {
             "false",
             "--region",
             "us-west",
-            "--overfetch-multiplier",
-            "10",
-            "--overfetch-max",
-            "100",
             "--cache-dir",
             "/custom/cache/dir",
             "--cache-size-gb",
@@ -168,8 +156,6 @@ mod tests {
         assert_eq!(config.limit, 25);
         assert!(!config.safe_search);
         assert_eq!(config.region.as_deref(), Some("us-west"));
-        assert_eq!(config.overfetch_multiplier, 10);
-        assert_eq!(config.overfetch_max, 100);
         assert_eq!(config.cache_dir, PathBuf::from("/custom/cache/dir"));
         assert_eq!(config.cache_size_gb, 10.0);
         assert_eq!(config.cache_ttl_days, 14);
@@ -188,31 +174,6 @@ mod tests {
     fn when_missing_api_key_then_parse_should_fail() {
         let result = Config::try_parse_from(["kagi-mcp"]);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn when_overfetch_multiplier_from_env_then_should_apply() {
-        let config = Config::try_parse_from([
-            "kagi-mcp",
-            "--api-key",
-            "test-key",
-            "--overfetch-multiplier",
-            "15",
-        ])
-        .unwrap();
-
-        assert_eq!(config.overfetch_multiplier, 15);
-        assert_eq!(config.overfetch_max, 50);
-    }
-
-    #[test]
-    fn when_overfetch_max_from_env_then_should_apply() {
-        let config =
-            Config::try_parse_from(["kagi-mcp", "--api-key", "test-key", "--overfetch-max", "75"])
-                .unwrap();
-
-        assert_eq!(config.overfetch_multiplier, 5);
-        assert_eq!(config.overfetch_max, 75);
     }
 
     #[test]
