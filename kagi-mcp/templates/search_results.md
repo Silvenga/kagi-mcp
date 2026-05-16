@@ -4,6 +4,10 @@
 {% for item in section.items %}{{ item.index }}. **[{{ item.title }}]({{ item.url }})**
 {% if let Some(s) = item.snippet %}   - Snippet: {{ s }}
 {% endif %}{% if let Some(t) = item.time %}   - Published: {{ t }}
+{% endif %}{% if let Some(d) = item.duration %}   - Duration: {{ d }}
+{% endif %}{% if let Some(l) = item.language %}   - Language: {{ l }}
+{% endif %}{% if item.paywalled %}   - Paywalled: true
+{% endif %}{% if let Some(a) = item.ai_content %}   - AI Content: {{ a }}
 {% endif %}{% endfor %}
 {% endfor %}{% if !image_results.is_empty() %}## Images
 
