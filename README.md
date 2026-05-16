@@ -6,6 +6,7 @@ An MCP (Model Context Protocol) server for the [Kagi Search API](https://kagi.co
 
 - Search: Search the web with no rate limits and no funky scraping.
 - Extract: Extract URL's into clean Markdown.
+- Caching: Automatic local caching of search and extract results with configurable size and TTL.
 - MCP Featureful: Supports MCP features like cancellation and notifications.
 - Robust: Automatic retries, automatic truncation of long responses, and graceful error handling.
 
@@ -61,9 +62,13 @@ But you likely want to configure it in your MCP client:
 | `--extract-timeout` / `KAGI_EXTRACT_TIMEOUT`           | Extract API request timeout (seconds)                | `10`                   |
 | `--client-timeout` / `KAGI_CLIENT_TIMEOUT`             | Client-side HTTP timeout (seconds)                   | `12`                   |
 | `--retries` / `KAGI_RETRIES`                           | Number of retries for transient failures             | `3`                    |
-| `--limit` / `KAGI_LIMIT`                               | Default result limit for search                      | `1024`                 |
+| `--limit` / `KAGI_LIMIT`                               | Default result limit for search                      | `10`                   |
 | `--safe-search` / `KAGI_SAFE_SEARCH`                   | Enable safe search                                   | `true`                 |
 | `--region` / `KAGI_REGION`                             | Default region filter (ISO 3166-1 alpha-2)           | *none*                 |
+| `--split-extract-requests` / `KAGI_SPLIT_EXTRACT_REQUESTS` | Extract each URL individually instead of batching    | `true`                 |
+| `--cache-dir` / `KAGI_CACHE_DIR`                         | Directory for the local response cache               | `~/.cache/kagi-mcp/` |
+| `--cache-size-gb` / `KAGI_CACHE_SIZE_GB`                 | Maximum cache size in gigabytes                      | `5.0`                  |
+| `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`               | Cache entry TTL in days                              | `7`                    |
 
 
 ## Tools
@@ -80,6 +85,7 @@ Search the web using Kagi. Returns structured Markdown results optimized for LLM
 - `output_format` - `markdown` (default) or `json`
 - `limit_per_domain` - Max results per domain group. When set, the server over-fetches from Kagi and deduplicates using
   Kagi's grouping key (with eTLD+1 domain fallback). Useful to avoid same-domain clutter. Must be >= 1.
+- `cache` - Whether to use cached results. Default: `true`.
 
 ### `extract`
 
@@ -89,6 +95,22 @@ Extract clean Markdown content from URLs.
 
 - `pages` (required) - Array of 1-10 HTTPS URLs
 - `output_format` - `markdown` (default) or `json`
+- `cache` - Whether to use cached results. Default: `true`.
+
+## Additional Metadata in Markdown Output
+
+When using the default Markdown output, the server enriches results with additional metadata to help LLMs interpret the content:
+
+Search results may include:
+- Paywall indicator - Flags results that are behind a paywall.
+- AI content labels - Marks results as "generated" or "possibly AI-generated" when detected.
+- Language - Non-English results include a language code (e.g., `ja`, `fr`).
+- Duration - For video and podcast results, the runtime is included.
+- Image dimensions - Width and height are provided for image results.
+- Related questions - Suggested follow-up questions with links.
+- Direct answers - Inline answer snippets.
+
+Extract results include per-page Markdown content with explicit error messages for any URLs that could not be extracted.
 
 ## Known Issues
 
