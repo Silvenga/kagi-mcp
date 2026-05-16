@@ -150,7 +150,16 @@ mod tests {
             .build()
             .unwrap();
 
-        let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, true, Some(Arc::new(store)));
+        let server = KagiMcpServer::new(
+            client,
+            4.0,
+            30.0,
+            10,
+            true,
+            None,
+            true,
+            Some(Arc::new(store)),
+        );
 
         let info = server.get_info();
         assert!(

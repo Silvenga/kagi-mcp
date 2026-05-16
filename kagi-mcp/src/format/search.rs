@@ -107,23 +107,21 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                             let paywalled =
                                 extract_bool_prop(&r.props, "paywalled").unwrap_or(false);
 
-                            let ai_content = if extract_bool_prop(&r.props, "ai_generated")
-                                == Some(true)
-                            {
-                                Some("generated".to_owned())
-                            } else if extract_bool_prop(&r.props, "ai_possible")
-                                == Some(true)
-                            {
-                                Some("possibly AI-generated".to_owned())
-                            } else {
-                                None
-                            };
+                            let ai_content =
+                                if extract_bool_prop(&r.props, "ai_generated") == Some(true) {
+                                    Some("generated".to_owned())
+                                } else if extract_bool_prop(&r.props, "ai_possible") == Some(true) {
+                                    Some("possibly AI-generated".to_owned())
+                                } else {
+                                    None
+                                };
 
                             let language = extract_string_prop(&r.props, "language")
                                 .filter(|lang| lang != "en");
 
-                            let is_media =
-                                title == "Videos" || title == "Podcasts" || title == "Podcast Creators";
+                            let is_media = title == "Videos"
+                                || title == "Podcasts"
+                                || title == "Podcast Creators";
                             let duration = if is_media {
                                 extract_string_prop(&r.props, "duration")
                             } else {
@@ -134,9 +132,10 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                                 index: i + 1,
                                 title: decode_entities(&normalize_title_whitespace(&r.title)),
                                 url: r.url.clone(),
-                                snippet: r.snippet.as_ref().map(|s| {
-                                    decode_entities(&collapse_snippet_ellipses(s))
-                                }),
+                                snippet: r
+                                    .snippet
+                                    .as_ref()
+                                    .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
                                 time: r.time.as_ref().map(|t| trim_iso_date(t)),
                                 paywalled,
                                 ai_content,
@@ -859,10 +858,7 @@ mod tests {
     #[test]
     fn when_extract_string_prop_with_string_value_then_should_return_some() {
         let props = Some(serde_json::json!({"lang": "fr"}));
-        assert_eq!(
-            extract_string_prop(&props, "lang"),
-            Some("fr".to_owned())
-        );
+        assert_eq!(extract_string_prop(&props, "lang"), Some("fr".to_owned()));
     }
 
     #[test]

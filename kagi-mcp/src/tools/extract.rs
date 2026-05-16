@@ -38,9 +38,10 @@ fn kagi_error_to_extract_error(url: &str, error: kagi_api::KagiError) -> kagi_ap
         KagiError::RateLimited => ("rate_limited", Some(error.to_string())),
         KagiError::ServerError => ("server_error", Some(error.to_string())),
         KagiError::Network { source } => ("network_error", Some(source.to_string())),
-        KagiError::Api { status, message: msg } => {
-            ("api_error", Some(format!("HTTP {status}: {msg}")))
-        }
+        KagiError::Api {
+            status,
+            message: msg,
+        } => ("api_error", Some(format!("HTTP {status}: {msg}"))),
     };
     kagi_api::ExtractError {
         url: url.to_owned(),
@@ -280,8 +281,7 @@ async fn extract_split(
                     format!("Page {}/{} (error)", idx + 1, total_pages),
                 )
                 .await;
-                let extract_err =
-                    kagi_error_to_extract_error(&pages[idx].url, kagi_err);
+                let extract_err = kagi_error_to_extract_error(&pages[idx].url, kagi_err);
                 results[idx] = Some(ExtractResponse {
                     meta: kagi_api::Meta {
                         trace: String::new(),
@@ -765,10 +765,7 @@ mod tests {
             });
 
         let params = ExtractParams {
-            pages: vec![
-                "https://a.com".to_owned(),
-                "https://b.com".to_owned(),
-            ],
+            pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
             output_format: None,
             cache: false,
         };
@@ -837,8 +834,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result =
-            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1168,8 +1164,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result =
-            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();

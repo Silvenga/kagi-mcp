@@ -260,8 +260,7 @@ async fn when_extract_times_out_then_returns_network_error() {
         Ok(call_tool_result) => {
             let text = call_tool_result.content[0].as_text().unwrap().text.clone();
             assert!(
-                text.contains("Extraction failed")
-                    || text.contains("error sending request"),
+                text.contains("Extraction failed") || text.contains("error sending request"),
                 "response should contain extraction failure message, got: {text}"
             );
         }
