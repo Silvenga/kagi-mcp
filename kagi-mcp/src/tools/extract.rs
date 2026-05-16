@@ -12,6 +12,8 @@ use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use serde::Deserialize;
+use std::sync::Arc;
+use tokio::task::JoinSet;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ExtractParams {
@@ -27,11 +29,33 @@ fn map_cache_error(error: CacheError) -> ErrorData {
     ErrorData::internal_error(format!("Cache error: {error}"), None)
 }
 
+fn kagi_error_to_extract_error(url: &str, error: kagi_api::KagiError) -> kagi_api::ExtractError {
+    use kagi_api::KagiError;
+    let (code, message) = match &error {
+        KagiError::InvalidRequest { message: msg } => ("invalid_request", Some(msg.clone())),
+        KagiError::Unauthorized => ("unauthorized", Some(error.to_string())),
+        KagiError::Forbidden => ("forbidden", Some(error.to_string())),
+        KagiError::RateLimited => ("rate_limited", Some(error.to_string())),
+        KagiError::ServerError => ("server_error", Some(error.to_string())),
+        KagiError::Network { source } => ("network_error", Some(source.to_string())),
+        KagiError::Api {
+            status,
+            message: msg,
+        } => ("api_error", Some(format!("HTTP {status}: {msg}"))),
+    };
+    kagi_api::ExtractError {
+        url: url.to_owned(),
+        code: code.to_owned(),
+        message,
+    }
+}
+
 pub async fn extract_handler(
-    client: &dyn KagiApi,
+    client: Arc<dyn KagiApi>,
     params: ExtractParams,
     ctx: &RequestContext<RoleServer>,
     extract_timeout: f64,
+    split_extract_requests: bool,
     cache_store: Option<&CacheStore>,
 ) -> Result<CallToolResult, ErrorData> {
     if let Err(e) = validate_extract_pages_count(&params.pages) {
@@ -56,6 +80,21 @@ pub async fn extract_handler(
         .map(|u| ExtractPage { url: u.to_string() })
         .collect();
 
+    if split_extract_requests {
+        extract_split(client, params, ctx, extract_timeout, pages, cache_store).await
+    } else {
+        extract_batch(client, params, ctx, extract_timeout, pages, cache_store).await
+    }
+}
+
+async fn extract_batch(
+    client: Arc<dyn KagiApi>,
+    params: ExtractParams,
+    ctx: &RequestContext<RoleServer>,
+    extract_timeout: f64,
+    pages: Vec<ExtractPage>,
+    cache_store: Option<&CacheStore>,
+) -> Result<CallToolResult, ErrorData> {
     let request = ExtractRequest::new(pages)
         .with_format("json".to_owned())
         .with_timeout_seconds(extract_timeout);
@@ -130,50 +169,185 @@ pub async fn extract_handler(
     }
 }
 
+async fn extract_split(
+    client: Arc<dyn KagiApi>,
+    params: ExtractParams,
+    ctx: &RequestContext<RoleServer>,
+    extract_timeout: f64,
+    pages: Vec<ExtractPage>,
+    cache_store: Option<&CacheStore>,
+) -> Result<CallToolResult, ErrorData> {
+    let total_pages = pages.len();
+
+    let _ = send_progress(
+        ctx,
+        0.0,
+        Some(100.0),
+        format!("Extracting {total_pages} pages..."),
+    )
+    .await;
+
+    if ctx.ct.is_cancelled() {
+        return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
+    }
+
+    let mut results: Vec<Option<ExtractResponse>> = vec![None; total_pages];
+    let mut pending: Vec<usize> = Vec::new();
+
+    for (i, page) in pages.iter().enumerate() {
+        let single_req = ExtractRequest::new(vec![page.clone()])
+            .with_format("json".to_owned())
+            .with_timeout_seconds(extract_timeout);
+
+        let mut cache_hit = false;
+        if params.cache {
+            if let Some(store) = cache_store {
+                let key = generate_cache_key(&single_req);
+                if let Ok(Some(cached_bytes)) = store.get(&key) {
+                    if let Ok(cached_response) =
+                        serde_json::from_slice::<ExtractResponse>(&cached_bytes)
+                    {
+                        let _ = send_progress(
+                            ctx,
+                            ((i + 1) as f64 / total_pages as f64) * 100.0,
+                            Some(100.0),
+                            format!("Page {}/{} (cached)", i + 1, total_pages),
+                        )
+                        .await;
+                        results[i] = Some(cached_response);
+                        cache_hit = true;
+                    }
+                }
+            }
+        }
+        if !cache_hit {
+            pending.push(i);
+        }
+    }
+
+    let mut set = JoinSet::new();
+    for &idx in &pending {
+        if ctx.ct.is_cancelled() {
+            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
+        }
+        let client = Arc::clone(&client);
+        let page = pages[idx].clone();
+        let single_req = ExtractRequest::new(vec![page])
+            .with_format("json".to_owned())
+            .with_timeout_seconds(extract_timeout);
+
+        set.spawn(async move {
+            let result = client.extract(single_req).await;
+            (idx, result)
+        });
+    }
+
+    let mut collected = 0usize;
+    while let Some(join_result) = set.join_next().await {
+        if ctx.ct.is_cancelled() {
+            set.abort_all();
+            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
+        }
+
+        match join_result {
+            Ok((idx, Ok(api_response))) => {
+                if params.cache {
+                    if let Some(store) = cache_store {
+                        let store_req = ExtractRequest::new(vec![pages[idx].clone()])
+                            .with_format("json".to_owned())
+                            .with_timeout_seconds(extract_timeout);
+                        let key = generate_cache_key(&store_req);
+                        if let Ok(json_bytes) = serde_json::to_vec(&api_response) {
+                            let _ = store.set(&key, "extract", &json_bytes);
+                        }
+                    }
+                }
+                collected += 1;
+                let _ = send_progress(
+                    ctx,
+                    ((total_pages - pending.len() + collected) as f64 / total_pages as f64) * 100.0,
+                    Some(100.0),
+                    format!("Page {}/{}", idx + 1, total_pages),
+                )
+                .await;
+                results[idx] = Some(api_response);
+            }
+            Ok((idx, Err(kagi_err))) => {
+                collected += 1;
+                let _ = send_progress(
+                    ctx,
+                    ((total_pages - pending.len() + collected) as f64 / total_pages as f64) * 100.0,
+                    Some(100.0),
+                    format!("Page {}/{} (error)", idx + 1, total_pages),
+                )
+                .await;
+                let extract_err = kagi_error_to_extract_error(&pages[idx].url, kagi_err);
+                results[idx] = Some(ExtractResponse {
+                    meta: kagi_api::Meta {
+                        trace: String::new(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: None,
+                    errors: Some(vec![extract_err]),
+                });
+            }
+            Err(_join_err) => {
+                return Err(ErrorData::internal_error(
+                    "Internal error: extract task panicked",
+                    None,
+                ));
+            }
+        }
+    }
+
+    let mut data: Vec<kagi_api::ExtractData> = Vec::new();
+    let mut errors: Vec<kagi_api::ExtractError> = Vec::new();
+
+    for result in results.into_iter().flatten() {
+        if let Some(d) = result.data {
+            data.extend(d);
+        }
+        if let Some(e) = result.errors {
+            errors.extend(e);
+        }
+    }
+
+    let response = ExtractResponse {
+        meta: kagi_api::Meta {
+            trace: String::new(),
+            node: None,
+            ms: None,
+        },
+        data: if data.is_empty() { None } else { Some(data) },
+        errors: if errors.is_empty() {
+            None
+        } else {
+            Some(errors)
+        },
+    };
+
+    let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
+
+    let output_format = params.output_format.as_deref().unwrap_or("markdown");
+    let content = if output_format == "json" {
+        format_json(&response)
+    } else {
+        format_extract_markdown(&response)
+    };
+    let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
+    Ok(CallToolResult::success(vec![Content::text(truncated)]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use kagi_api::MockKagiApi;
-    use kagi_api::{ExtractData, ExtractError, ExtractResponse, KagiError, Meta};
+    use kagi_api::{ExtractData, ExtractError, Meta};
+    use std::sync::Arc;
 
-    #[tokio::test]
-    async fn when_zero_pages_should_return_invalid_params_error_without_api_call() {
-        let mock = MockKagiApi::new();
-
-        let params = ExtractParams {
-            pages: vec![],
-            output_format: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("Pages validation failed"));
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
-    }
-
-    #[tokio::test]
-    async fn when_eleven_pages_should_return_invalid_params_error_without_api_call() {
-        let mock = MockKagiApi::new();
-
-        let params = ExtractParams {
-            pages: (1..=11)
-                .map(|i| format!("https://example{i}.com"))
-                .collect(),
-            output_format: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("Pages validation failed"));
-        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    fn test_client() -> Arc<MockKagiApi> {
+        Arc::new(MockKagiApi::new())
     }
 
     fn make_extract_response(data: Vec<ExtractData>, errors: Vec<ExtractError>) -> ExtractResponse {
@@ -186,6 +360,46 @@ mod tests {
             data: Some(data),
             errors: Some(errors),
         }
+    }
+
+    #[tokio::test]
+    async fn when_zero_pages_should_return_invalid_params_error_without_api_call() {
+        let mock = test_client();
+
+        let params = ExtractParams {
+            pages: vec![],
+            output_format: None,
+            cache: true,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Pages validation failed"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn when_eleven_pages_should_return_invalid_params_error_without_api_call() {
+        let mock = test_client();
+
+        let params = ExtractParams {
+            pages: (1..=11)
+                .map(|i| format!("https://example{i}.com"))
+                .collect(),
+            output_format: None,
+            cache: true,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Pages validation failed"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[tokio::test]
@@ -213,7 +427,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -247,7 +461,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -257,7 +471,7 @@ mod tests {
 
     #[tokio::test]
     async fn when_extract_with_private_ip_then_should_return_validation_error_without_api_call() {
-        let mock = MockKagiApi::new();
+        let mock = test_client();
 
         let params = ExtractParams {
             pages: vec!["https://192.168.1.1/".to_owned()],
@@ -266,7 +480,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -279,7 +493,7 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_extract()
             .times(1)
-            .returning(|_| Err(KagiError::ServerError));
+            .returning(|_| Err(kagi_api::KagiError::ServerError));
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
@@ -288,7 +502,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -320,7 +534,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -354,7 +568,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
         assert!(result.is_ok());
     }
 
@@ -384,7 +598,7 @@ mod tests {
 
     #[tokio::test]
     async fn when_cache_hit_then_mock_api_should_not_be_called() {
-        let mock = MockKagiApi::new();
+        let mock = test_client();
         let store = CacheStore::open_in_memory().unwrap();
 
         let cached_response = make_extract_response(
@@ -415,7 +629,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, Some(&store)).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, true, Some(&store)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -443,7 +657,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, Some(&store)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -485,7 +699,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, Some(&store)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, Some(&store)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -503,7 +717,7 @@ mod tests {
 
     #[tokio::test]
     async fn when_cache_corrupted_then_tool_call_should_fail() {
-        let mock = MockKagiApi::new();
+        let mock = test_client();
         let store = CacheStore::open_in_memory().unwrap();
 
         let request = ExtractRequest::new(vec![ExtractPage {
@@ -521,10 +735,476 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 10.0, Some(&store)).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, false, Some(&store)).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Cache error"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_two_urls_then_api_called_twice_with_single_page_requests() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(2)
+            .withf(|req| req.pages().len() == 1)
+            .returning(|req| {
+                let url = &req.pages()[0].url;
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: url.clone(),
+                        markdown: Some(format!("Content from {url}")),
+                    }]),
+                    errors: None,
+                })
+            });
+
+        let params = ExtractParams {
+            pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
+            output_format: None,
+            cache: false,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("https://a.com"));
+        assert!(text.contains("Content from https://a.com"));
+        assert!(text.contains("https://b.com"));
+        assert!(text.contains("Content from https://b.com"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_with_cache_hit_then_api_not_called_for_cached_url() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .withf(|req| req.pages().len() == 1 && req.pages()[0].url == "https://b.com/")
+            .returning(|req| {
+                let url = &req.pages()[0].url;
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: url.clone(),
+                        markdown: Some(format!("Content from {url}")),
+                    }]),
+                    errors: None,
+                })
+            });
+
+        let store = CacheStore::open_in_memory().unwrap();
+
+        let cached_data = ExtractResponse {
+            meta: Meta {
+                trace: "test".to_owned(),
+                node: None,
+                ms: None,
+            },
+            data: Some(vec![ExtractData {
+                url: "https://a.com/".to_owned(),
+                markdown: Some("Cached A content".to_owned()),
+            }]),
+            errors: None,
+        };
+        let cache_req = ExtractRequest::new(vec![ExtractPage {
+            url: "https://a.com/".to_owned(),
+        }])
+        .with_format("json".to_owned())
+        .with_timeout_seconds(10.0);
+        let key = generate_cache_key(&cache_req);
+        store
+            .set(&key, "extract", &serde_json::to_vec(&cached_data).unwrap())
+            .unwrap();
+
+        let params = ExtractParams {
+            pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
+            output_format: None,
+            cache: true,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Cached A content"));
+        assert!(text.contains("Content from https://b.com/"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_all_cached_then_api_not_called() {
+        let mock = test_client();
+
+        let store = CacheStore::open_in_memory().unwrap();
+
+        for (url, content) in &[
+            ("https://a.com/", "Cached A"),
+            ("https://b.com/", "Cached B"),
+        ] {
+            let cached = ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: url.to_string(),
+                    markdown: Some(content.to_string()),
+                }]),
+                errors: None,
+            };
+            let cache_req = ExtractRequest::new(vec![ExtractPage {
+                url: url.to_string(),
+            }])
+            .with_format("json".to_owned())
+            .with_timeout_seconds(10.0);
+            let key = generate_cache_key(&cache_req);
+            store
+                .set(&key, "extract", &serde_json::to_vec(&cached).unwrap())
+                .unwrap();
+        }
+
+        let params = ExtractParams {
+            pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
+            output_format: None,
+            cache: true,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(mock, params, &ctx, 10.0, true, Some(&store)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Cached A"));
+        assert!(text.contains("Cached B"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_one_fails_then_error_appears_in_output() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(2).returning(|req| {
+            let url = &req.pages()[0].url;
+            if url == "https://fail.com/" {
+                Err(kagi_api::KagiError::ServerError)
+            } else {
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: url.clone(),
+                        markdown: Some(format!("Content from {url}")),
+                    }]),
+                    errors: None,
+                })
+            }
+        });
+
+        let params = ExtractParams {
+            pages: vec!["https://ok.com".to_owned(), "https://fail.com".to_owned()],
+            output_format: None,
+            cache: false,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Content from https://ok.com/"));
+        assert!(text.contains("https://fail.com"));
+        assert!(text.contains("server error"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_results_maintain_input_order() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(3).returning(|req| {
+            let url = &req.pages()[0].url;
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: url.clone(),
+                    markdown: Some(url.clone()),
+                }]),
+                errors: None,
+            })
+        });
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://first.com".to_owned(),
+                "https://second.com".to_owned(),
+                "https://third.com".to_owned(),
+            ],
+            output_format: Some("json".to_owned()),
+            cache: false,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let first_pos = text.find("https://first.com/").unwrap();
+        let second_pos = text.find("https://second.com/").unwrap();
+        let third_pos = text.find("https://third.com/").unwrap();
+        assert!(first_pos < second_pos);
+        assert!(second_pos < third_pos);
+    }
+
+    #[tokio::test]
+    async fn when_split_enabled_then_should_call_api_per_url() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(3)
+            .withf(|req| req.pages().len() == 1)
+            .returning(|req| {
+                let url = &req.pages()[0].url;
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: url.clone(),
+                        markdown: Some(format!("Content from {url}")),
+                    }]),
+                    errors: None,
+                })
+            });
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://a.com".to_owned(),
+                "https://b.com".to_owned(),
+                "https://c.com".to_owned(),
+            ],
+            output_format: None,
+            cache: false,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Content from https://a.com/"));
+        assert!(text.contains("Content from https://b.com/"));
+        assert!(text.contains("Content from https://c.com/"));
+    }
+
+    #[tokio::test]
+    async fn when_split_disabled_then_should_call_api_once_with_all_pages() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .withf(|req| req.pages().len() == 3)
+            .returning(|_| {
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![
+                        ExtractData {
+                            url: "https://a.com/".to_owned(),
+                            markdown: Some("Content A".to_owned()),
+                        },
+                        ExtractData {
+                            url: "https://b.com/".to_owned(),
+                            markdown: Some("Content B".to_owned()),
+                        },
+                        ExtractData {
+                            url: "https://c.com/".to_owned(),
+                            markdown: Some("Content C".to_owned()),
+                        },
+                    ]),
+                    errors: None,
+                })
+            });
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://a.com".to_owned(),
+                "https://b.com".to_owned(),
+                "https://c.com".to_owned(),
+            ],
+            output_format: None,
+            cache: false,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Content A"));
+        assert!(text.contains("Content B"));
+        assert!(text.contains("Content C"));
+    }
+
+    #[tokio::test]
+    async fn when_split_enabled_with_partial_failure_then_should_aggregate_successes_and_errors() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(3).returning(|req| {
+            let url = &req.pages()[0].url;
+            if url == "https://fail.com/" {
+                Err(kagi_api::KagiError::ServerError)
+            } else {
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: url.clone(),
+                        markdown: Some(format!("Content from {url}")),
+                    }]),
+                    errors: None,
+                })
+            }
+        });
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://ok1.com".to_owned(),
+                "https://fail.com".to_owned(),
+                "https://ok2.com".to_owned(),
+            ],
+            output_format: None,
+            cache: false,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Content from https://ok1.com/"));
+        assert!(text.contains("Content from https://ok2.com/"));
+        assert!(text.contains("https://fail.com"));
+        assert!(text.contains("server error"));
+    }
+
+    #[tokio::test]
+    async fn when_split_enabled_with_cache_hit_then_should_skip_api_call_for_cached_url() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(2)
+            .withf(|req| req.pages().len() == 1)
+            .returning(|req| {
+                let url = &req.pages()[0].url;
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: url.clone(),
+                        markdown: Some(format!("Content from {url}")),
+                    }]),
+                    errors: None,
+                })
+            });
+
+        let store = CacheStore::open_in_memory().unwrap();
+
+        let cached_data = ExtractResponse {
+            meta: Meta {
+                trace: "test".to_owned(),
+                node: None,
+                ms: None,
+            },
+            data: Some(vec![ExtractData {
+                url: "https://b.com/".to_owned(),
+                markdown: Some("Cached B content".to_owned()),
+            }]),
+            errors: None,
+        };
+        let cache_req = ExtractRequest::new(vec![ExtractPage {
+            url: "https://b.com/".to_owned(),
+        }])
+        .with_format("json".to_owned())
+        .with_timeout_seconds(10.0);
+        let key = generate_cache_key(&cache_req);
+        store
+            .set(&key, "extract", &serde_json::to_vec(&cached_data).unwrap())
+            .unwrap();
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://a.com".to_owned(),
+                "https://b.com".to_owned(),
+                "https://c.com".to_owned(),
+            ],
+            output_format: None,
+            cache: true,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Content from https://a.com/"));
+        assert!(text.contains("Cached B content"));
+        assert!(text.contains("Content from https://c.com/"));
+    }
+
+    #[tokio::test]
+    async fn when_single_url_with_split_enabled_then_should_call_api_once() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .withf(|req| req.pages().len() == 1)
+            .returning(|_| {
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: "https://only.com/".to_owned(),
+                        markdown: Some("Single content".to_owned()),
+                    }]),
+                    errors: None,
+                })
+            });
+
+        let params = ExtractParams {
+            pages: vec!["https://only.com".to_owned()],
+            output_format: None,
+            cache: false,
+        };
+        let ctx = super::super::test_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Single content"));
     }
 }

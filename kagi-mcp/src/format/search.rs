@@ -28,6 +28,10 @@ struct GeneralItem {
     url: String,
     snippet: Option<String>,
     time: Option<String>,
+    paywalled: bool,
+    ai_content: Option<String>,
+    language: Option<String>,
+    duration: Option<String>,
 }
 
 struct ImageItem {
@@ -69,6 +73,21 @@ struct PackageTrackingItem {
     url: String,
 }
 
+fn extract_bool_prop(props: &Option<serde_json::Value>, key: &str) -> Option<bool> {
+    props
+        .as_ref()
+        .and_then(|p| p.get(key))
+        .and_then(|v| v.as_bool())
+}
+
+fn extract_string_prop(props: &Option<serde_json::Value>, key: &str) -> Option<String> {
+    props
+        .as_ref()
+        .and_then(|p| p.get(key))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_owned())
+}
+
 pub fn format_search_markdown(response: &SearchResponse) -> String {
     let data = &response.data;
     let mut has_results = false;
@@ -84,15 +103,45 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
                     items: results
                         .iter()
                         .enumerate()
-                        .map(|(i, r)| GeneralItem {
-                            index: i + 1,
-                            title: decode_entities(&normalize_title_whitespace(&r.title)),
-                            url: r.url.clone(),
-                            snippet: r
-                                .snippet
-                                .as_ref()
-                                .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
-                            time: r.time.as_ref().map(|t| trim_iso_date(t)),
+                        .map(|(i, r)| {
+                            let paywalled =
+                                extract_bool_prop(&r.props, "paywalled").unwrap_or(false);
+
+                            let ai_content =
+                                if extract_bool_prop(&r.props, "ai_generated") == Some(true) {
+                                    Some("generated".to_owned())
+                                } else if extract_bool_prop(&r.props, "ai_possible") == Some(true) {
+                                    Some("possibly AI-generated".to_owned())
+                                } else {
+                                    None
+                                };
+
+                            let language = extract_string_prop(&r.props, "language")
+                                .filter(|lang| lang != "en");
+
+                            let is_media = title == "Videos"
+                                || title == "Podcasts"
+                                || title == "Podcast Creators";
+                            let duration = if is_media {
+                                extract_string_prop(&r.props, "duration")
+                            } else {
+                                None
+                            };
+
+                            GeneralItem {
+                                index: i + 1,
+                                title: decode_entities(&normalize_title_whitespace(&r.title)),
+                                url: r.url.clone(),
+                                snippet: r
+                                    .snippet
+                                    .as_ref()
+                                    .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+                                time: r.time.as_ref().map(|t| trim_iso_date(t)),
+                                paywalled,
+                                ai_content,
+                                language,
+                                duration,
+                            }
                         })
                         .collect(),
                 });
@@ -754,6 +803,73 @@ mod tests {
     }
 
     #[test]
+    fn when_extract_bool_prop_with_non_bool_value_then_should_return_none() {
+        let props = Some(serde_json::json!({"paywalled": "true"}));
+        assert_eq!(extract_bool_prop(&props, "paywalled"), None);
+
+        let props = Some(serde_json::json!({"paywalled": 1}));
+        assert_eq!(extract_bool_prop(&props, "paywalled"), None);
+
+        let props = Some(serde_json::json!({"paywalled": null}));
+        assert_eq!(extract_bool_prop(&props, "paywalled"), None);
+
+        let props = Some(serde_json::json!({"paywalled": [true]}));
+        assert_eq!(extract_bool_prop(&props, "paywalled"), None);
+
+        let props = Some(serde_json::json!({"paywalled": {"val": true}}));
+        assert_eq!(extract_bool_prop(&props, "paywalled"), None);
+    }
+
+    #[test]
+    fn when_extract_bool_prop_with_bool_value_then_should_return_some() {
+        let props = Some(serde_json::json!({"paywalled": true}));
+        assert_eq!(extract_bool_prop(&props, "paywalled"), Some(true));
+
+        let props = Some(serde_json::json!({"paywalled": false}));
+        assert_eq!(extract_bool_prop(&props, "paywalled"), Some(false));
+    }
+
+    #[test]
+    fn when_extract_bool_prop_with_none_or_missing_key_then_should_return_none() {
+        assert_eq!(extract_bool_prop(&None, "paywalled"), None);
+
+        let props = Some(serde_json::json!({"other": true}));
+        assert_eq!(extract_bool_prop(&props, "paywalled"), None);
+    }
+
+    #[test]
+    fn when_extract_string_prop_with_non_string_value_then_should_return_none() {
+        let props = Some(serde_json::json!({"lang": true}));
+        assert_eq!(extract_string_prop(&props, "lang"), None);
+
+        let props = Some(serde_json::json!({"lang": 123}));
+        assert_eq!(extract_string_prop(&props, "lang"), None);
+
+        let props = Some(serde_json::json!({"lang": null}));
+        assert_eq!(extract_string_prop(&props, "lang"), None);
+
+        let props = Some(serde_json::json!({"lang": ["en"]}));
+        assert_eq!(extract_string_prop(&props, "lang"), None);
+
+        let props = Some(serde_json::json!({"lang": {"code": "en"}}));
+        assert_eq!(extract_string_prop(&props, "lang"), None);
+    }
+
+    #[test]
+    fn when_extract_string_prop_with_string_value_then_should_return_some() {
+        let props = Some(serde_json::json!({"lang": "fr"}));
+        assert_eq!(extract_string_prop(&props, "lang"), Some("fr".to_owned()));
+    }
+
+    #[test]
+    fn when_extract_string_prop_with_none_or_missing_key_then_should_return_none() {
+        assert_eq!(extract_string_prop(&None, "lang"), None);
+
+        let props = Some(serde_json::json!({"other": "fr"}));
+        assert_eq!(extract_string_prop(&props, "lang"), None);
+    }
+
+    #[test]
     fn when_search_has_podcast_creator_then_should_format() {
         let response = make_response(SearchData {
             podcast_creator: Some(vec![SearchResult {
@@ -763,6 +879,205 @@ mod tests {
                 time: Some("2024-01-15".to_owned()),
                 image: None,
                 props: None,
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_paywalled_true_then_should_render_paywalled() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"paywalled": true})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_paywalled_false_then_should_not_render_paywalled() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"paywalled": false})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_paywalled_missing_then_should_not_render_paywalled() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: None,
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_ai_generated_true_then_should_render_generated() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"ai_generated": true})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_ai_possible_true_then_should_render_possibly_ai() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"ai_possible": true})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_both_ai_flags_then_generated_takes_precedence() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"ai_generated": true, "ai_possible": true})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_podcast_has_duration_then_should_render_duration() {
+        let response = make_response(SearchData {
+            podcast: Some(vec![SearchResult {
+                url: "https://example.com/podcast".to_owned(),
+                title: "Great Podcast".to_owned(),
+                snippet: Some("An amazing episode.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"duration": "1:10:14"})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_video_has_duration_then_should_render_duration() {
+        let response = make_response(SearchData {
+            video: Some(vec![SearchResult {
+                url: "https://example.com/video".to_owned(),
+                title: "Great Video".to_owned(),
+                snippet: Some("An amazing video.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"duration": "45:30"})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_non_english_language_then_should_render_language() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"language": "ja"})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_english_language_then_should_not_render_language() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"language": "en"})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_search_result_has_multiple_props_then_should_render_all() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: "Example".to_owned(),
+                snippet: Some("This is an example.".to_owned()),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({
+                    "paywalled": true,
+                    "ai_generated": true,
+                    "language": "fr"
+                })),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response));
+    }
+
+    #[test]
+    fn when_news_result_has_paywalled_and_language_then_should_render_both() {
+        let response = make_response(SearchData {
+            news: Some(vec![SearchResult {
+                url: "https://example.com/story".to_owned(),
+                title: "Breaking Story".to_owned(),
+                snippet: Some("Latest updates.".to_owned()),
+                time: Some("2024-06-01".to_owned()),
+                image: None,
+                props: Some(serde_json::json!({
+                    "paywalled": true,
+                    "language": "de"
+                })),
             }]),
             ..empty_search_data()
         });

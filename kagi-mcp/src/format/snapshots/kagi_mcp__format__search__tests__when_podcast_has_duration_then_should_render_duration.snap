@@ -1,0 +1,9 @@
+---
+source: kagi-mcp/src/format/search.rs
+expression: "format_search_markdown(&response).replace(\"\\r\\n\", \"\\n\")"
+---
+## Podcasts
+
+1. **[Great Podcast](https://example.com/podcast)**
+   - Snippet: An amazing episode.
+   - Duration: 1:10:14
