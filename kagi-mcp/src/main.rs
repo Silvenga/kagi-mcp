@@ -51,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
         config.limit,
         config.safe_search,
         config.region,
+        config.split_extract_requests,
         Some(cache_store),
     );
 
