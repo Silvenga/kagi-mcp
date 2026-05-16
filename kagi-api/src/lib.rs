@@ -33,8 +33,9 @@ pub use client::KagiClient;
 pub use client_builder::KagiClientBuilder;
 pub use error::KagiError;
 pub use types::{
-    ExtractData, ExtractError, ExtractPage, ExtractRequest, ExtractResponse, Filters, Image, Meta,
-    SearchData, SearchRequest, SearchResponse, SearchResult,
+    DomainKind, ExtractData, ExtractError, ExtractPage, ExtractRequest, ExtractResponse, Filters,
+    Image, Lens, Meta, PersonalizationDomain, PersonalizationRegex, Personalizations, SearchData,
+    SearchExtractConfig, SearchRequest, SearchResponse, SearchResult, TimeRelative,
 };
 
 pub use api_trait::KagiApi;

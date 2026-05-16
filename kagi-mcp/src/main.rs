@@ -51,8 +51,6 @@ async fn main() -> anyhow::Result<()> {
         config.limit,
         config.safe_search,
         config.region,
-        config.overfetch_multiplier,
-        config.overfetch_max,
         Some(cache_store),
     );
 

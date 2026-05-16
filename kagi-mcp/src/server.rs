@@ -18,18 +18,10 @@ pub struct KagiMcpServer {
     pub limit: u32,
     pub safe_search: bool,
     pub region: Option<String>,
-    pub overfetch_multiplier: u32,
-    pub overfetch_max: u32,
     pub cache_store: Option<Arc<CacheStore>>,
 }
 
 impl KagiMcpServer {
-    // Allow >7 args because each timeout is a distinct API parameter that must be
-    // configurable independently; bundling them would hurt readability.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "each timeout is a distinct API parameter"
-    )]
     pub fn new(
         client: KagiClient,
         search_timeout: f64,
@@ -37,8 +29,6 @@ impl KagiMcpServer {
         limit: u32,
         safe_search: bool,
         region: Option<String>,
-        overfetch_multiplier: u32,
-        overfetch_max: u32,
         cache_store: Option<Arc<CacheStore>>,
     ) -> Self {
         Self {
@@ -48,8 +38,6 @@ impl KagiMcpServer {
             limit,
             safe_search,
             region,
-            overfetch_multiplier,
-            overfetch_max,
             cache_store,
         }
     }
@@ -63,8 +51,6 @@ impl KagiMcpServer {
             limit: 10,
             safe_search: true,
             region: None,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
             cache_store,
         }
     }
@@ -85,8 +71,6 @@ impl KagiMcpServer {
             limit: self.limit,
             safe_search: self.safe_search,
             region: self.region.clone(),
-            overfetch_multiplier: self.overfetch_multiplier,
-            overfetch_max: self.overfetch_max,
         };
         search_handler(
             &*self.client,
@@ -131,7 +115,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, 5, 50, None);
+        let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, None);
 
         let info = server.get_info();
         assert!(
@@ -161,17 +145,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let server = KagiMcpServer::new(
-            client,
-            4.0,
-            30.0,
-            10,
-            true,
-            None,
-            5,
-            50,
-            Some(Arc::new(store)),
-        );
+        let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, Some(Arc::new(store)));
 
         let info = server.get_info();
         assert!(

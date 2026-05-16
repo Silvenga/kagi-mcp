@@ -11,7 +11,7 @@ pub struct ExtractRequest {
     /// worked on - please send your feedback!
     #[serde(skip_serializing_if = "Option::is_none")]
     format: Option<String>,
-    /// Optional timeout in seconds for the extraction operation
+    /// Optional timeout in seconds for the extraction operation. Out of range values will be clamped back within range. All URLs are fetched concurrently. This timeout applies a time budget for the entire bulk fetch operation. Minimum 0.5, maximum 10.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "timeout")]
     timeout_seconds: Option<f64>,

@@ -5,6 +5,7 @@ use serde::Deserialize;
 pub(crate) struct ErrorDetail {
     #[expect(dead_code, reason = "field present in API response but not consumed")]
     pub(crate) code: String,
+    /// URL to error documentation. NOTE: These URLs are still a work in progress and will currently return a 404 error.
     #[expect(dead_code, reason = "field present in API response but not consumed")]
     pub(crate) url: String,
     pub(crate) message: Option<String>,

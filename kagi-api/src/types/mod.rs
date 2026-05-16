@@ -9,5 +9,8 @@ pub(crate) use error_response::ErrorDetail;
 pub(crate) use error_response::KagiErrorResponse;
 pub use extract_request::{ExtractPage, ExtractRequest};
 pub use extract_response::{ExtractData, ExtractError, ExtractResponse};
-pub use search_request::{Filters, SearchRequest};
+pub use search_request::{
+    DomainKind, Filters, Lens, PersonalizationDomain, PersonalizationRegex, Personalizations,
+    SearchExtractConfig, SearchRequest, TimeRelative,
+};
 pub use search_response::{Image, Meta, SearchData, SearchResponse, SearchResult};
