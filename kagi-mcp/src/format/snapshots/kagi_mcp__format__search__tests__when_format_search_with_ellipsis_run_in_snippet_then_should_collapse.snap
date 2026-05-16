@@ -1,0 +1,8 @@
+---
+source: kagi-mcp/src/format/search.rs
+expression: "format_search_markdown(&response).replace(\"\\r\\n\", \"\\n\")"
+---
+## Web Results
+
+1. **[Example](https://example.com)**
+   - Snippet: foo ... bar

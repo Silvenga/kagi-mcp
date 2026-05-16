@@ -1,0 +1,35 @@
+---
+source: kagi-mcp/src/format/search.rs
+expression: "format_search_markdown(&response).replace(\"\\r\\n\", \"\\n\")"
+---
+## Web Results
+
+1. **[Web](https://example.com)**
+
+## News
+
+1. **[News](https://example.com)**
+
+## Interesting News
+
+1. **[Interesting News](https://example.com)**
+
+## Interesting Finds
+
+1. **[Interesting Finds](https://example.com)**
+
+## Code Results
+
+1. **[Code](https://example.com)**
+
+## Public Records
+
+1. **[Public Records](https://example.com)**
+
+## Listicles
+
+1. **[Listicle](https://example.com)**
+
+## Web Archive
+
+1. **[Web Archive](https://example.com)**
