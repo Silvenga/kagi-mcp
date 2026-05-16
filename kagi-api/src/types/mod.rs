@@ -14,6 +14,8 @@ pub use extract_request::{ExtractPage, ExtractRequest};
 pub use extract_response::{ExtractData, ExtractError, ExtractResponse};
 pub use search_extract_config::SearchExtractConfig;
 pub use search_lens::{Lens, TimeRelative};
-pub use search_personalizations::{DomainKind, PersonalizationDomain, PersonalizationRegex, Personalizations};
+pub use search_personalizations::{
+    DomainKind, PersonalizationDomain, PersonalizationRegex, Personalizations,
+};
 pub use search_request::{Filters, SearchRequest};
 pub use search_response::{Image, Meta, SearchData, SearchResponse, SearchResult};

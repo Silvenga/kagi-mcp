@@ -70,10 +70,7 @@ mod tests {
             serde_json::to_string(&DomainKind::Raise).unwrap(),
             r#""raise""#
         );
-        assert_eq!(
-            serde_json::to_string(&DomainKind::Pin).unwrap(),
-            r#""pin""#
-        );
+        assert_eq!(serde_json::to_string(&DomainKind::Pin).unwrap(), r#""pin""#);
     }
 
     #[test]

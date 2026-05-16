@@ -75,7 +75,10 @@ mod tests {
 
     #[test]
     fn when_time_relative_variants_then_should_serialize_lowercase() {
-        assert_eq!(serde_json::to_string(&TimeRelative::Day).unwrap(), r#""day""#);
+        assert_eq!(
+            serde_json::to_string(&TimeRelative::Day).unwrap(),
+            r#""day""#
+        );
         assert_eq!(
             serde_json::to_string(&TimeRelative::Week).unwrap(),
             r#""week""#
