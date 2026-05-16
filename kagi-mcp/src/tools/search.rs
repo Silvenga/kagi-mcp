@@ -37,19 +37,15 @@ pub struct SearchConfig {
     pub limit: u32,
     pub safe_search: bool,
     pub region: Option<String>,
-    pub overfetch_multiplier: u32,
-    pub overfetch_max: u32,
 }
 
 impl Default for SearchConfig {
     fn default() -> Self {
         Self {
             search_timeout: 4.0,
-            limit: 10,
+            limit: 1024,
             safe_search: true,
             region: None,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
         }
     }
 }
@@ -68,13 +64,7 @@ pub async fn search_handler(
         ));
     }
 
-    let upstream_limit = match params.limit_per_domain {
-        Some(_) => {
-            let multiplied = config.limit.saturating_mul(config.overfetch_multiplier);
-            multiplied.min(config.overfetch_max).max(config.limit)
-        }
-        None => config.limit,
-    };
+    let upstream_limit = config.limit;
 
     let mut request = SearchRequest::new(params.query.clone())
         .with_format("json".to_owned())
@@ -541,205 +531,6 @@ mod tests {
             limit: 25,
             safe_search: false,
             region: Some("us-west".to_owned()),
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
-        };
-        let params = SearchParams {
-            query: "test".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn when_search_with_date_filters_then_filters_region_should_use_config_region() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_search()
-            .times(1)
-            .withf(|req| {
-                req.filters()
-                    .is_some_and(|f| f.region == Some("eu".to_owned()))
-            })
-            .returning(|_| Ok(make_search_response(vec![])));
-
-        let config = SearchConfig {
-            search_timeout: 4.0,
-            limit: 10,
-            safe_search: true,
-            region: Some("eu".to_owned()),
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
-        };
-        let params = SearchParams {
-            query: "test".to_owned(),
-            workflow: None,
-            after: Some("2023-01-01".to_owned()),
-            before: None,
-            output_format: None,
-            limit_per_domain: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn when_limit_per_domain_is_zero_then_handler_should_return_invalid_request() {
-        let mock = MockKagiApi::new();
-        let params = SearchParams {
-            query: "test".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: Some(0),
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(err.code, ErrorCode::INVALID_REQUEST);
-        assert!(err.to_string().contains("limit_per_domain must be >= 1"));
-    }
-
-    #[tokio::test]
-    async fn when_limit_per_domain_is_some_then_upstream_request_limit_should_be_multiplied() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_search()
-            .times(1)
-            .withf(|req| req.limit() == Some(50))
-            .returning(|_| Ok(make_search_response(vec![])));
-
-        let config = SearchConfig {
-            limit: 10,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
-            ..SearchConfig::default()
-        };
-        let params = SearchParams {
-            query: "test".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: Some(2),
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn when_limit_per_domain_is_some_with_small_max_then_upstream_should_not_drop_below_user_limit(
-    ) {
-        let mut mock = MockKagiApi::new();
-        mock.expect_search()
-            .times(1)
-            .withf(|req| req.limit() == Some(12))
-            .returning(|_| Ok(make_search_response(vec![])));
-
-        let config = SearchConfig {
-            limit: 10,
-            overfetch_multiplier: 5,
-            overfetch_max: 12,
-            ..SearchConfig::default()
-        };
-        let params = SearchParams {
-            query: "test".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: Some(2),
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn when_limit_per_domain_is_none_then_upstream_limit_should_equal_user_limit() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_search()
-            .times(1)
-            .withf(|req| req.limit() == Some(10))
-            .returning(|_| Ok(make_search_response(vec![])));
-
-        let config = SearchConfig {
-            limit: 10,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
-            ..SearchConfig::default()
-        };
-        let params = SearchParams {
-            query: "test".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn when_three_results_share_domain_and_lpd_is_one_then_only_first_should_remain() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_search().times(1).returning(|_| {
-            Ok(make_search_response(vec![
-                SearchResult {
-                    url: "https://example.com/1".to_owned(),
-                    title: "First".to_owned(),
-                    snippet: None,
-                    time: None,
-                    image: None,
-                    props: None,
-                },
-                SearchResult {
-                    url: "https://example.com/2".to_owned(),
-                    title: "Second".to_owned(),
-                    snippet: None,
-                    time: None,
-                    image: None,
-                    props: None,
-                },
-                SearchResult {
-                    url: "https://example.com/3".to_owned(),
-                    title: "Third".to_owned(),
-                    snippet: None,
-                    time: None,
-                    image: None,
-                    props: None,
-                },
-            ]))
-        });
-
-        let config = SearchConfig {
-            limit: 10,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
-            ..SearchConfig::default()
         };
         let params = SearchParams {
             query: "test".to_owned(),
@@ -754,11 +545,6 @@ mod tests {
 
         let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
-        let search = parsed["data"]["search"].as_array().unwrap();
-        assert_eq!(search.len(), 1);
-        assert_eq!(search[0]["title"], "First");
     }
 
     #[tokio::test]
@@ -795,8 +581,6 @@ mod tests {
 
         let config = SearchConfig {
             limit: 10,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
             ..SearchConfig::default()
         };
         let params = SearchParams {
@@ -852,8 +636,6 @@ mod tests {
 
         let config = SearchConfig {
             limit: 10,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
             ..SearchConfig::default()
         };
         let params = SearchParams {
@@ -911,8 +693,6 @@ mod tests {
 
         let config = SearchConfig {
             limit: 10,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
             ..SearchConfig::default()
         };
         let params = SearchParams {
@@ -969,10 +749,10 @@ mod tests {
         });
 
         let config = SearchConfig {
+            search_timeout: 4.0,
             limit: 2,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
-            ..SearchConfig::default()
+            safe_search: true,
+            region: None,
         };
         let params = SearchParams {
             query: "test".to_owned(),
@@ -1011,8 +791,6 @@ mod tests {
 
         let config = SearchConfig {
             limit: 10,
-            overfetch_multiplier: 5,
-            overfetch_max: 50,
             ..SearchConfig::default()
         };
         let params = SearchParams {
