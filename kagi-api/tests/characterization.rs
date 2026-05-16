@@ -1,4 +1,4 @@
-use kagi_api::types::{ExtractPage, ExtractRequest, SearchRequest};
+use kagi_api::{ExtractPage, ExtractRequest, SearchRequest};
 use serde::Serialize;
 use xxhash_rust::xxh3;
 

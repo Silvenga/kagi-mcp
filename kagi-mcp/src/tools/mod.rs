@@ -1,7 +1,7 @@
 pub mod extract;
 pub mod search;
 
-use kagi_api::error::KagiError;
+use kagi_api::KagiError;
 use rmcp::model::{ErrorData, ProgressNotificationParam};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;

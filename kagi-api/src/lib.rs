@@ -21,11 +21,11 @@
 //! # }
 //! ```
 
-pub mod api_trait;
-pub mod client;
-pub mod client_builder;
-pub mod error;
-pub mod types;
+mod api_trait;
+mod client;
+mod client_builder;
+mod error;
+mod types;
 
 pub use client::KagiClient;
 pub use client_builder::KagiClientBuilder;

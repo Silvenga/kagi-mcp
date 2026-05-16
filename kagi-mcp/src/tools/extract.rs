@@ -5,7 +5,7 @@ use crate::cache::store::CacheStore;
 use crate::format::{format_extract_markdown, format_json};
 use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use crate::validation::{validate_extract_pages_count, validate_extract_urls};
-use kagi_api::types::{ExtractPage, ExtractRequest, ExtractResponse};
+use kagi_api::{ExtractPage, ExtractRequest, ExtractResponse};
 use kagi_api::KagiApi;
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
@@ -131,8 +131,7 @@ pub async fn extract_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kagi_api::error::KagiError;
-    use kagi_api::types::{ExtractData, ExtractError, ExtractResponse, Meta};
+    use kagi_api::{ExtractData, ExtractError, ExtractResponse, KagiError, Meta};
     use kagi_api::MockKagiApi;
 
     #[tokio::test]

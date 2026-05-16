@@ -14,7 +14,7 @@ pub fn generate_cache_key(request: &impl Serialize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kagi_api::types::{ExtractPage, ExtractRequest, SearchRequest};
+    use kagi_api::{ExtractPage, ExtractRequest, SearchRequest};
 
     #[test]
     fn when_same_request_then_same_key_should_be_equal() {
