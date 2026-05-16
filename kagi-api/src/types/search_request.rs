@@ -1,10 +1,5 @@
 use serde::Serialize;
 
-use super::{Lens, Personalizations, SearchExtractConfig};
-
-#[cfg(test)]
-use super::{DomainKind, PersonalizationDomain, PersonalizationRegex};
-
 /// A search request to the Kagi Search API.
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchRequest {
@@ -313,4 +308,132 @@ mod tests {
         assert!(json.contains("\"extract\":{\"count\":3}"));
         assert!(json.contains("\"personalizations\":{\"regexes\""));
     }
+}
+
+/// A time-relative filter for search results.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TimeRelative {
+    /// Filter for the past day.
+    Day,
+    /// Filter for the past week.
+    Week,
+    /// Filter for the past month.
+    Month,
+}
+
+/// Inline description of a lens to apply to the search. Options supplied by
+/// the lens take precedence over those supplied by the user in their search
+/// terms (e.g., `site:` operators), allowing you to restrict the scope of the
+/// search to return more relevant results in specific applications.
+#[derive(Debug, Clone, Serialize)]
+pub struct Lens {
+    /// Search only these domains.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sites_included: Option<Vec<String>>,
+    /// Exclude these domains from the search.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sites_excluded: Option<Vec<String>>,
+    /// Return only results containing these keywords.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keywords_included: Option<Vec<String>>,
+    /// Exclude results containing these keywords.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keywords_excluded: Option<Vec<String>>,
+    /// A specific file type to search for. (e.g., `pdf`)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_type: Option<String>,
+    /// Filters for web pages that have been updated or published *after* the
+    /// given date.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_after: Option<String>,
+    /// Filters for web pages that have been updated or published *before* the
+    /// given date.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_before: Option<String>,
+    /// Filters for web pages that have been updated or published in the given
+    /// interval, relative to today's date.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_relative: Option<TimeRelative>,
+    /// Requests results localized to a specific region. Can be any valid
+    /// ISO-3166-1 Alpha-2 country code, or the special value `no_region`, that
+    /// will try to get the most general results possible.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_region: Option<String>,
+}
+
+/// Configuration for extracting page content from search results. When
+/// provided, the API will fetch and extract the content from the specified
+/// number of result pages.
+///
+/// The resulting page markdown will update the value of the `snippet` field on
+/// the respective result item.
+///
+/// **NOTE:** Use of this option incurs additional cost, billed at your
+/// account's rate for the Extract API based on the number of units requested.
+/// You will not be charged if there were no results to extract.
+#[derive(Debug, Clone, Serialize)]
+pub struct SearchExtractConfig {
+    /// Number of search results to extract content from. Must be between 1 and
+    /// 10.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<u32>,
+    /// Timeout in seconds for extraction of each page. If omitted, uses the
+    /// default timeout. This time budget is in addition to the allocated
+    /// top-level search timeout, so that you can control both independently.
+    #[serde(rename = "timeout")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<f64>,
+}
+
+/// Handling mode for a domain personalization rule.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DomainKind {
+    /// Block results from this domain entirely.
+    Block,
+    /// Lower the ranking of results from this domain.
+    Lower,
+    /// Boost the ranking of results from this domain.
+    Raise,
+    /// Pin results from this domain to the top.
+    Pin,
+}
+
+/// A domain-level personalization rule. Each rule can boost or lower the
+/// ranking of results from specific domains.
+#[derive(Debug, Clone, Serialize)]
+pub struct PersonalizationDomain {
+    /// Domain pattern to personalize (e.g., "example.com"). Can also be a tld
+    /// suffix like ".co.uk".
+    pub domain: String,
+    /// Handling mode for this domain pattern.
+    pub kind: DomainKind,
+}
+
+/// A regex-based personalization rule.
+#[derive(Debug, Clone, Serialize)]
+pub struct PersonalizationRegex {
+    /// The regex pattern to match.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub regex: Option<String>,
+    /// The replacement string to apply when the pattern matches. Will preserve
+    /// paths and query parameters if not overwritten. You can refer to capture
+    /// groups with "$1", "$2", etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replacement: Option<String>,
+}
+
+/// Personalization rules to customize search result ranking. Allows specifying
+/// domain biases and regex-based replacements.
+#[derive(Debug, Clone, Serialize)]
+pub struct Personalizations {
+    /// Domain-level personalization rules (maximum 1000 rules). Each rule can
+    /// boost or lower the ranking of results from specific domains.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domains: Option<Vec<PersonalizationDomain>>,
+    /// Regex-based personalization rules (maximum 1000 rules, max 1000 bytes
+    /// per pattern).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub regexes: Option<Vec<PersonalizationRegex>>,
 }
