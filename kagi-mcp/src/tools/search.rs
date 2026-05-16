@@ -5,8 +5,8 @@ use crate::cache::store::CacheStore;
 use crate::domain::extract_group_key;
 use crate::format::{format_json, format_search_markdown};
 use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::types::{Filters, SearchData, SearchRequest, SearchResponse, SearchResult};
 use kagi_api::KagiApi;
+use kagi_api::{Filters, SearchData, SearchRequest, SearchResponse, SearchResult};
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
@@ -76,17 +76,21 @@ pub async fn search_handler(
         None => config.limit,
     };
 
-    let request = SearchRequest {
-        query: params.query.clone(),
-        workflow: params.workflow.clone(),
-        format: Some("json".to_owned()),
-        timeout: Some(config.search_timeout),
-        page: None,
-        limit: Some(upstream_limit),
-        safe_search: Some(config.safe_search),
-        region: config.region.clone(),
-        filters: build_filters(params.after, params.before, config.region.clone()),
-    };
+    let mut request = SearchRequest::new(params.query.clone())
+        .with_format("json".to_owned())
+        .with_timeout_seconds(config.search_timeout)
+        .with_limit(upstream_limit)
+        .with_safe_search(config.safe_search);
+
+    if let Some(workflow) = params.workflow.clone() {
+        request = request.with_workflow(workflow);
+    }
+    if let Some(region) = config.region.clone() {
+        request = request.with_region(region);
+    }
+    if let Some(filters) = build_filters(params.after, params.before, config.region.clone()) {
+        request = request.with_filters(filters);
+    }
 
     if params.cache {
         if let Some(store) = cache_store {
@@ -226,9 +230,8 @@ fn dedup_by_domain(data: &mut SearchData, limit_per_domain: u32, final_limit: u3
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kagi_api::error::KagiError;
-    use kagi_api::types::{Meta, SearchData, SearchResponse, SearchResult};
     use kagi_api::MockKagiApi;
+    use kagi_api::{KagiError, Meta, SearchData, SearchResponse, SearchResult};
 
     fn empty_search_data() -> SearchData {
         SearchData {
@@ -526,10 +529,10 @@ mod tests {
         mock.expect_search()
             .times(1)
             .withf(|req| {
-                req.limit == Some(25)
-                    && req.safe_search == Some(false)
-                    && req.region == Some("us-west".to_owned())
-                    && req.timeout == Some(8.5)
+                req.limit() == Some(25)
+                    && req.safe_search() == Some(false)
+                    && req.region() == Some("us-west")
+                    && req.timeout_seconds() == Some(8.5)
             })
             .returning(|_| Ok(make_search_response(vec![])));
 
@@ -562,8 +565,7 @@ mod tests {
         mock.expect_search()
             .times(1)
             .withf(|req| {
-                req.filters
-                    .as_ref()
+                req.filters()
                     .is_some_and(|f| f.region == Some("eu".to_owned()))
             })
             .returning(|_| Ok(make_search_response(vec![])));
@@ -618,7 +620,7 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_search()
             .times(1)
-            .withf(|req| req.limit == Some(50))
+            .withf(|req| req.limit() == Some(50))
             .returning(|_| Ok(make_search_response(vec![])));
 
         let config = SearchConfig {
@@ -648,7 +650,7 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_search()
             .times(1)
-            .withf(|req| req.limit == Some(12))
+            .withf(|req| req.limit() == Some(12))
             .returning(|_| Ok(make_search_response(vec![])));
 
         let config = SearchConfig {
@@ -677,7 +679,7 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_search()
             .times(1)
-            .withf(|req| req.limit == Some(10))
+            .withf(|req| req.limit() == Some(10))
             .returning(|_| Ok(make_search_response(vec![])));
 
         let config = SearchConfig {
@@ -1067,17 +1069,11 @@ mod tests {
             image: None,
             props: None,
         }]);
-        let request = SearchRequest {
-            query: "test query".to_owned(),
-            workflow: None,
-            format: Some("json".to_owned()),
-            timeout: Some(SearchConfig::default().search_timeout),
-            page: None,
-            limit: Some(SearchConfig::default().limit),
-            safe_search: Some(SearchConfig::default().safe_search),
-            region: SearchConfig::default().region.clone(),
-            filters: None,
-        };
+        let request = SearchRequest::new("test query")
+            .with_format("json".to_owned())
+            .with_timeout_seconds(SearchConfig::default().search_timeout)
+            .with_limit(SearchConfig::default().limit)
+            .with_safe_search(SearchConfig::default().safe_search);
         let key = generate_cache_key(&request);
         store
             .set(
@@ -1140,17 +1136,11 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Fresh"));
 
-        let request = SearchRequest {
-            query: "test query".to_owned(),
-            workflow: None,
-            format: Some("json".to_owned()),
-            timeout: Some(SearchConfig::default().search_timeout),
-            page: None,
-            limit: Some(SearchConfig::default().limit),
-            safe_search: Some(SearchConfig::default().safe_search),
-            region: SearchConfig::default().region.clone(),
-            filters: None,
-        };
+        let request = SearchRequest::new("test query")
+            .with_format("json".to_owned())
+            .with_timeout_seconds(SearchConfig::default().search_timeout)
+            .with_limit(SearchConfig::default().limit)
+            .with_safe_search(SearchConfig::default().safe_search);
         let key = generate_cache_key(&request);
         let cached = store.get(&key).unwrap();
         assert!(cached.is_some());
@@ -1191,17 +1181,11 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Fresh"));
 
-        let request = SearchRequest {
-            query: "test query".to_owned(),
-            workflow: None,
-            format: Some("json".to_owned()),
-            timeout: Some(SearchConfig::default().search_timeout),
-            page: None,
-            limit: Some(SearchConfig::default().limit),
-            safe_search: Some(SearchConfig::default().safe_search),
-            region: SearchConfig::default().region.clone(),
-            filters: None,
-        };
+        let request = SearchRequest::new("test query")
+            .with_format("json".to_owned())
+            .with_timeout_seconds(SearchConfig::default().search_timeout)
+            .with_limit(SearchConfig::default().limit)
+            .with_safe_search(SearchConfig::default().safe_search);
         let key = generate_cache_key(&request);
         let cached = store.get(&key).unwrap();
         assert!(cached.is_some());
@@ -1212,17 +1196,11 @@ mod tests {
         let mock = MockKagiApi::new();
         let store = CacheStore::open_in_memory().unwrap();
 
-        let request = SearchRequest {
-            query: "test query".to_owned(),
-            workflow: None,
-            format: Some("json".to_owned()),
-            timeout: Some(SearchConfig::default().search_timeout),
-            page: None,
-            limit: Some(SearchConfig::default().limit),
-            safe_search: Some(SearchConfig::default().safe_search),
-            region: SearchConfig::default().region.clone(),
-            filters: None,
-        };
+        let request = SearchRequest::new("test query")
+            .with_format("json".to_owned())
+            .with_timeout_seconds(SearchConfig::default().search_timeout)
+            .with_limit(SearchConfig::default().limit)
+            .with_safe_search(SearchConfig::default().safe_search);
         let key = generate_cache_key(&request);
         store.set(&key, "search", b"invalid json").unwrap();
 

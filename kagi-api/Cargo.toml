@@ -22,19 +22,16 @@ reqwest-middleware = { workspace = true, features = ["json"] }
 reqwest-retry = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_with = { workspace = true }
-chrono = { workspace = true }
-url = { workspace = true }
 thiserror = { workspace = true }
-anyhow = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true }
 async-trait = { workspace = true }
 mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
 wiremock = "0.6.5"
+tokio = { workspace = true }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [features]
 mock = ["dep:mockall"]

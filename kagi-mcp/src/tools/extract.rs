@@ -5,8 +5,8 @@ use crate::cache::store::CacheStore;
 use crate::format::{format_extract_markdown, format_json};
 use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use crate::validation::{validate_extract_pages_count, validate_extract_urls};
-use kagi_api::types::{ExtractPage, ExtractRequest, ExtractResponse};
 use kagi_api::KagiApi;
+use kagi_api::{ExtractPage, ExtractRequest, ExtractResponse};
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
@@ -56,10 +56,7 @@ pub async fn extract_handler(
         .map(|u| ExtractPage { url: u.to_string() })
         .collect();
 
-    let request = ExtractRequest {
-        pages,
-        format: Some("json".to_owned()),
-    };
+    let request = ExtractRequest::new(pages).with_format("json".to_owned());
 
     if params.cache {
         if let Some(store) = cache_store {
@@ -134,9 +131,8 @@ pub async fn extract_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kagi_api::error::KagiError;
-    use kagi_api::types::{ExtractData, ExtractError, ExtractResponse, Meta};
     use kagi_api::MockKagiApi;
+    use kagi_api::{ExtractData, ExtractError, ExtractResponse, KagiError, Meta};
 
     #[tokio::test]
     async fn when_zero_pages_should_return_invalid_params_error_without_api_call() {
@@ -336,7 +332,7 @@ mod tests {
         let mut mock = MockKagiApi::new();
         mock.expect_extract()
             .times(1)
-            .withf(|req| req.pages.len() == 1)
+            .withf(|req| req.pages().len() == 1)
             .returning(|_| {
                 Ok(ExtractResponse {
                     meta: Meta {
@@ -396,12 +392,10 @@ mod tests {
             }],
             vec![],
         );
-        let request = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com/".to_owned(),
-            }],
-            format: Some("json".to_owned()),
-        };
+        let request = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }])
+        .with_format("json".to_owned());
         let key = generate_cache_key(&request);
         store
             .set(
@@ -452,12 +446,10 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Fresh content"));
 
-        let request = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com/".to_owned(),
-            }],
-            format: Some("json".to_owned()),
-        };
+        let request = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }])
+        .with_format("json".to_owned());
         let key = generate_cache_key(&request);
         let cached = store.get(&key).unwrap();
         assert!(cached.is_some());
@@ -495,12 +487,10 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Fresh content"));
 
-        let request = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com/".to_owned(),
-            }],
-            format: Some("json".to_owned()),
-        };
+        let request = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }])
+        .with_format("json".to_owned());
         let key = generate_cache_key(&request);
         let cached = store.get(&key).unwrap();
         assert!(cached.is_some());
@@ -511,12 +501,10 @@ mod tests {
         let mock = MockKagiApi::new();
         let store = CacheStore::open_in_memory().unwrap();
 
-        let request = ExtractRequest {
-            pages: vec![ExtractPage {
-                url: "https://example.com/".to_owned(),
-            }],
-            format: Some("json".to_owned()),
-        };
+        let request = ExtractRequest::new(vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }])
+        .with_format("json".to_owned());
         let key = generate_cache_key(&request);
         store.set(&key, "extract", b"invalid json").unwrap();
 

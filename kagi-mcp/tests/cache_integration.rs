@@ -1,6 +1,6 @@
-use kagi_api::client::KagiClientBuilder;
-use kagi_api::types::{Meta, SearchData, SearchRequest, SearchResponse, SearchResult};
+use kagi_api::KagiClientBuilder;
 use kagi_api::MockKagiApi;
+use kagi_api::{Meta, SearchData, SearchRequest, SearchResponse, SearchResult};
 use kagi_mcp::cache::key::generate_cache_key;
 use kagi_mcp::cache::store::CacheStore;
 use kagi_mcp::server::KagiMcpServer;
@@ -17,7 +17,7 @@ async fn test_request_context() -> RequestContext<RoleServer> {
     drop(client_transport);
 
     let client = KagiClientBuilder::new()
-        .api_key("test-key")
+        .with_api_key("test-key")
         .build()
         .expect("KagiClient should build in test");
     let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, 5, 50, None);
@@ -124,17 +124,11 @@ async fn when_cache_hit_then_api_should_not_be_called() {
     // that `search_handler` constructs internally.
     let cached_response = make_search_response("Cached Title", "Cached snippet");
 
-    let request = SearchRequest {
-        query: "test query".into(),
-        workflow: None,
-        format: Some("json".into()),
-        timeout: Some(SearchConfig::default().search_timeout),
-        page: None,
-        limit: Some(SearchConfig::default().limit),
-        safe_search: Some(SearchConfig::default().safe_search),
-        region: SearchConfig::default().region.clone(),
-        filters: None,
-    };
+    let request = SearchRequest::new("test query")
+        .with_format("json".to_owned())
+        .with_timeout_seconds(SearchConfig::default().search_timeout)
+        .with_limit(SearchConfig::default().limit)
+        .with_safe_search(SearchConfig::default().safe_search);
     let cache_key = generate_cache_key(&request);
     store
         .set(

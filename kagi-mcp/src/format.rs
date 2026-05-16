@@ -1,5 +1,5 @@
 use askama::Template;
-use kagi_api::types::{ExtractResponse, SearchResponse, SearchResult};
+use kagi_api::{ExtractResponse, SearchResponse, SearchResult};
 
 fn decode_entities(s: &str) -> String {
     if !s.contains('&') {
@@ -412,7 +412,7 @@ pub fn format_json<T: serde::Serialize>(response: &T) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kagi_api::types::{ExtractData, ExtractError, Image, Meta, SearchData};
+    use kagi_api::{ExtractData, ExtractError, Image, Meta, SearchData};
 
     #[test]
     fn when_search_data_is_empty_then_should_return_no_results() {
