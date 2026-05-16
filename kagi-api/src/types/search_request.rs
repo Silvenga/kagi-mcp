@@ -1,5 +1,10 @@
 use serde::Serialize;
 
+use super::{Lens, Personalizations, SearchExtractConfig};
+
+#[cfg(test)]
+use super::{DomainKind, PersonalizationDomain, PersonalizationRegex};
+
 /// A search request to the Kagi Search API.
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchRequest {
@@ -18,7 +23,7 @@ pub struct SearchRequest {
     /// Page number for paginated results. Must be between 1 and 10.
     #[serde(skip_serializing_if = "Option::is_none")]
     page: Option<u32>,
-    /// Maximum number of results to return. Must be between 1 and 1024.
+    /// Maximum number of results to return. Must be between 1 and 1024. This does not change the amount of results requested, it only limits the maximum amount returned. If omitted, the API always gives you the most results we can get in a single pass.
     #[serde(skip_serializing_if = "Option::is_none")]
     limit: Option<u32>,
     /// Whether safe search is enabled, omitting potentially NSFW content.
@@ -27,9 +32,21 @@ pub struct SearchRequest {
     /// Requests results localized to a specific region.
     #[serde(skip_serializing_if = "Option::is_none")]
     region: Option<String>,
-    /// Filters to apply to search results for more targeted queries.
+    /// Filters to apply to search results for more targeted queries. NOTE: Any parameter here that overlaps with lenses will take priority over the lens.
     #[serde(skip_serializing_if = "Option::is_none")]
     filters: Option<Filters>,
+    /// Lens to apply to the search. Can be a built-in lens's identifier or a lens ID.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lens_id: Option<String>,
+    /// Inline description of a lens to apply to the search.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lens: Option<Lens>,
+    /// Configuration for extracting page content from search results.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    extract: Option<SearchExtractConfig>,
+    /// Personalization rules to customize search result ranking.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    personalizations: Option<Personalizations>,
 }
 
 impl SearchRequest {
@@ -45,6 +62,10 @@ impl SearchRequest {
             safe_search: None,
             region: None,
             filters: None,
+            lens_id: None,
+            lens: None,
+            extract: None,
+            personalizations: None,
         }
     }
 
@@ -91,6 +112,26 @@ impl SearchRequest {
     /// The search filters, if set.
     pub fn filters(&self) -> Option<&Filters> {
         self.filters.as_ref()
+    }
+
+    /// The lens ID to apply, if set.
+    pub fn lens_id(&self) -> Option<&str> {
+        self.lens_id.as_deref()
+    }
+
+    /// The inline lens configuration, if set.
+    pub fn lens(&self) -> Option<&Lens> {
+        self.lens.as_ref()
+    }
+
+    /// The extract configuration, if set.
+    pub fn extract(&self) -> Option<&SearchExtractConfig> {
+        self.extract.as_ref()
+    }
+
+    /// The personalization rules, if set.
+    pub fn personalizations(&self) -> Option<&Personalizations> {
+        self.personalizations.as_ref()
     }
 
     /// Set the result type filter.
@@ -140,6 +181,30 @@ impl SearchRequest {
         self.filters = Some(filters);
         self
     }
+
+    /// Set the lens ID to apply.
+    pub fn with_lens_id(mut self, lens_id: impl Into<String>) -> Self {
+        self.lens_id = Some(lens_id.into());
+        self
+    }
+
+    /// Set the inline lens configuration.
+    pub fn with_lens(mut self, lens: Lens) -> Self {
+        self.lens = Some(lens);
+        self
+    }
+
+    /// Set the extract configuration.
+    pub fn with_extract(mut self, extract: SearchExtractConfig) -> Self {
+        self.extract = Some(extract);
+        self
+    }
+
+    /// Set the personalization rules.
+    pub fn with_personalizations(mut self, personalizations: Personalizations) -> Self {
+        self.personalizations = Some(personalizations);
+        self
+    }
 }
 
 /// Filters applied to search results.
@@ -181,10 +246,71 @@ mod tests {
                 after: Some("2023-01-01".to_owned()),
                 before: None,
                 region: Some("us".to_owned()),
+            })
+            .with_lens_id("built-in-lens")
+            .with_lens(Lens {
+                sites_included: Some(vec!["example.com".to_owned()]),
+                sites_excluded: None,
+                keywords_included: None,
+                keywords_excluded: None,
+                file_type: None,
+                time_after: None,
+                time_before: None,
+                time_relative: None,
+                search_region: None,
+            })
+            .with_extract(SearchExtractConfig {
+                count: Some(5),
+                timeout: Some(2.0),
+            })
+            .with_personalizations(Personalizations {
+                domains: Some(vec![PersonalizationDomain {
+                    domain: "example.com".to_owned(),
+                    kind: DomainKind::Raise,
+                }]),
+                regexes: None,
             });
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("\"query\":\"rust\""));
         assert!(json.contains("\"timeout\":4.0"));
         assert!(!json.contains("\"timeout_seconds\""));
+        assert!(json.contains("\"lens_id\":\"built-in-lens\""));
+        assert!(json.contains("\"lens\":"));
+        assert!(json.contains("\"extract\":"));
+        assert!(json.contains("\"personalizations\":"));
+    }
+
+    #[test]
+    fn when_search_request_with_new_fields_then_should_serialize_correctly() {
+        let request = SearchRequest::new("test")
+            .with_lens_id("my-lens")
+            .with_lens(Lens {
+                sites_included: None,
+                sites_excluded: None,
+                keywords_included: None,
+                keywords_excluded: None,
+                file_type: None,
+                time_after: None,
+                time_before: None,
+                time_relative: None,
+                search_region: None,
+            })
+            .with_extract(SearchExtractConfig {
+                count: Some(3),
+                timeout: None,
+            })
+            .with_personalizations(Personalizations {
+                domains: None,
+                regexes: Some(vec![PersonalizationRegex {
+                    regex: Some(r"^https?://.*".to_owned()),
+                    replacement: Some("https://example.com".to_owned()),
+                }]),
+            });
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"query\":\"test\""));
+        assert!(json.contains("\"lens_id\":\"my-lens\""));
+        assert!(json.contains("\"lens\":{}"));
+        assert!(json.contains("\"extract\":{\"count\":3}"));
+        assert!(json.contains("\"personalizations\":{\"regexes\""));
     }
 }
