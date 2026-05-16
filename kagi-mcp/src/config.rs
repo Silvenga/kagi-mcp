@@ -1,6 +1,15 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+fn parse_cache_dir(s: &str) -> Result<PathBuf, String> {
+    let expanded = shellexpand::tilde(s);
+    Ok(PathBuf::from(expanded.as_ref()))
+}
+
+fn parse_region(s: &str) -> Result<String, String> {
+    Ok(s.to_lowercase())
+}
+
 fn parse_cache_size_gb(s: &str) -> Result<f64, String> {
     let val: f64 = s
         .parse()
@@ -56,7 +65,7 @@ pub struct Config {
     )]
     pub safe_search: bool,
 
-    #[arg(long, env = "KAGI_REGION")]
+    #[arg(long, env = "KAGI_REGION", value_parser = parse_region)]
     pub region: Option<String>,
 
     #[arg(long, env = "KAGI_OVERFETCH_MULTIPLIER", default_value = "5")]
@@ -65,7 +74,12 @@ pub struct Config {
     #[arg(long, env = "KAGI_OVERFETCH_MAX", default_value = "50")]
     pub overfetch_max: u32,
 
-    #[arg(long, env = "KAGI_CACHE_DIR", default_value = "~/.cache/kagi-mcp/")]
+    #[arg(
+        long,
+        env = "KAGI_CACHE_DIR",
+        default_value = "~/.cache/kagi-mcp/",
+        value_parser = parse_cache_dir
+    )]
     pub cache_dir: PathBuf,
 
     #[arg(
@@ -104,7 +118,8 @@ mod tests {
         assert_eq!(config.region, None);
         assert_eq!(config.overfetch_multiplier, 5);
         assert_eq!(config.overfetch_max, 50);
-        assert_eq!(config.cache_dir, PathBuf::from("~/.cache/kagi-mcp/"));
+        let expected_cache_dir = shellexpand::tilde("~/.cache/kagi-mcp/");
+        assert_eq!(config.cache_dir, PathBuf::from(expected_cache_dir.as_ref()));
         assert_eq!(config.cache_size_gb, 5.0);
         assert_eq!(config.cache_ttl_days, 7);
     }
@@ -158,6 +173,15 @@ mod tests {
         assert_eq!(config.cache_dir, PathBuf::from("/custom/cache/dir"));
         assert_eq!(config.cache_size_gb, 10.0);
         assert_eq!(config.cache_ttl_days, 14);
+    }
+
+    #[test]
+    fn when_region_is_uppercase_then_should_be_lowercased() {
+        let config =
+            Config::try_parse_from(["kagi-mcp", "--api-key", "test-key", "--region", "US-WEST"])
+                .unwrap();
+
+        assert_eq!(config.region.as_deref(), Some("us-west"));
     }
 
     #[test]

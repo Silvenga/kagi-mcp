@@ -36,6 +36,7 @@ async-trait = { workspace = true }
 html-escape = "0.2.13"
 askama = { version = "0.16.0", features = ["serde_json"] }
 publicsuffix = { version = "2.3.0", default-features = false }
+shellexpand = "3.1.0"
 
 [dev-dependencies]
 mockall = { workspace = true }
