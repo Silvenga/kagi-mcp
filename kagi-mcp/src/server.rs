@@ -23,6 +23,10 @@ pub struct KagiMcpServer {
 }
 
 impl KagiMcpServer {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "constructor naturally needs many config values"
+    )]
     pub fn new(
         client: KagiClient,
         search_timeout: f64,
