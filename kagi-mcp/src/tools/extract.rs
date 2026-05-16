@@ -31,7 +31,7 @@ pub async fn extract_handler(
     client: &dyn KagiApi,
     params: ExtractParams,
     ctx: &RequestContext<RoleServer>,
-    _extract_timeout: f64,
+    extract_timeout: f64,
     cache_store: Option<&CacheStore>,
 ) -> Result<CallToolResult, ErrorData> {
     if let Err(e) = validate_extract_pages_count(&params.pages) {
@@ -56,7 +56,9 @@ pub async fn extract_handler(
         .map(|u| ExtractPage { url: u.to_string() })
         .collect();
 
-    let request = ExtractRequest::new(pages).with_format("json".to_owned());
+    let request = ExtractRequest::new(pages)
+        .with_format("json".to_owned())
+        .with_timeout_seconds(extract_timeout);
 
     if params.cache {
         if let Some(store) = cache_store {
@@ -145,7 +147,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, None).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -166,7 +168,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, None).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -211,7 +213,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, None).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -245,7 +247,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, None).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -264,7 +266,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, None).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -286,7 +288,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, None).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -318,7 +320,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, None).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -352,7 +354,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, None).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, None).await;
         assert!(result.is_ok());
     }
 
@@ -395,7 +397,8 @@ mod tests {
         let request = ExtractRequest::new(vec![ExtractPage {
             url: "https://example.com/".to_owned(),
         }])
-        .with_format("json".to_owned());
+        .with_format("json".to_owned())
+        .with_timeout_seconds(10.0);
         let key = generate_cache_key(&request);
         store
             .set(
@@ -412,7 +415,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, Some(&store)).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, Some(&store)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -440,7 +443,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, Some(&store)).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, Some(&store)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -449,7 +452,8 @@ mod tests {
         let request = ExtractRequest::new(vec![ExtractPage {
             url: "https://example.com/".to_owned(),
         }])
-        .with_format("json".to_owned());
+        .with_format("json".to_owned())
+        .with_timeout_seconds(10.0);
         let key = generate_cache_key(&request);
         let cached = store.get(&key).unwrap();
         assert!(cached.is_some());
@@ -481,7 +485,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, Some(&store)).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, Some(&store)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -490,7 +494,8 @@ mod tests {
         let request = ExtractRequest::new(vec![ExtractPage {
             url: "https://example.com/".to_owned(),
         }])
-        .with_format("json".to_owned());
+        .with_format("json".to_owned())
+        .with_timeout_seconds(10.0);
         let key = generate_cache_key(&request);
         let cached = store.get(&key).unwrap();
         assert!(cached.is_some());
@@ -504,7 +509,8 @@ mod tests {
         let request = ExtractRequest::new(vec![ExtractPage {
             url: "https://example.com/".to_owned(),
         }])
-        .with_format("json".to_owned());
+        .with_format("json".to_owned())
+        .with_timeout_seconds(10.0);
         let key = generate_cache_key(&request);
         store.set(&key, "extract", b"invalid json").unwrap();
 
@@ -515,7 +521,7 @@ mod tests {
         };
         let ctx = super::super::test_request_context().await;
 
-        let result = extract_handler(&mock, params, &ctx, 30.0, Some(&store)).await;
+        let result = extract_handler(&mock, params, &ctx, 10.0, Some(&store)).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();

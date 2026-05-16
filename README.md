@@ -58,14 +58,13 @@ But you likely want to configure it in your MCP client:
 | `--api-key` / `KAGI_API_KEY`                           | Kagi API key                                         | *required*             |
 | `--base-url` / `KAGI_BASE_URL`                         | Kagi API base URL                                    | `https://kagi.com/api` |
 | `--search-timeout` / `KAGI_SEARCH_TIMEOUT`             | Search API request timeout (seconds)                 | `4`                    |
-| `--extract-timeout` / `KAGI_EXTRACT_TIMEOUT`           | Extract API request timeout (seconds)                | `30`                   |
-| `--client-timeout` / `KAGI_CLIENT_TIMEOUT`             | Client-side HTTP timeout (seconds)                   | `32`                   |
+| `--extract-timeout` / `KAGI_EXTRACT_TIMEOUT`           | Extract API request timeout (seconds)                | `10`                   |
+| `--client-timeout` / `KAGI_CLIENT_TIMEOUT`             | Client-side HTTP timeout (seconds)                   | `12`                   |
 | `--retries` / `KAGI_RETRIES`                           | Number of retries for transient failures             | `3`                    |
-| `--limit` / `KAGI_LIMIT`                               | Default result limit for search                      | `10`                   |
+| `--limit` / `KAGI_LIMIT`                               | Default result limit for search                      | `1024`                 |
 | `--safe-search` / `KAGI_SAFE_SEARCH`                   | Enable safe search                                   | `true`                 |
 | `--region` / `KAGI_REGION`                             | Default region filter (ISO 3166-1 alpha-2)           | *none*                 |
-| `--overfetch-multiplier` / `KAGI_OVERFETCH_MULTIPLIER` | Over-fetch multiplier when `limit_per_domain` is set | `5`                    |
-| `--overfetch-max` / `KAGI_OVERFETCH_MAX`               | Absolute cap on over-fetch request size              | `50`                   |
+
 
 ## Tools
 
