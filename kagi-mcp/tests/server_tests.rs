@@ -1,5 +1,5 @@
 use common::spawn_server;
-use rmcp::model::CallToolRequestParams;
+use rmcp::model::{CallToolRequestParams, ErrorCode};
 use rmcp::service::ServiceError;
 use serde_json::json;
 use std::time::Duration;
@@ -114,6 +114,64 @@ async fn when_extract_with_valid_urls_then_returns_markdown() {
     assert!(text.contains("https://www.rust-lang.org"));
     assert!(text.contains("Performance"));
     assert!(text.contains("Reliability"));
+
+    harness.cleanup().await;
+}
+
+#[tokio::test]
+async fn when_extract_with_private_ip_then_returns_validation_error() {
+    let mock_server = MockServer::start().await;
+    let harness = spawn_server(&mock_server.uri(), &[]).await;
+
+    let arguments = json!({"pages": ["https://192.168.1.1/"]})
+        .as_object()
+        .unwrap()
+        .clone();
+    let params = CallToolRequestParams::new("extract").with_arguments(arguments);
+
+    let result = harness.running.peer().call_tool(params).await;
+
+    match result {
+        Err(ServiceError::McpError(err)) => {
+            assert!(
+                err.to_string().contains("URL validation failed"),
+                "error should mention URL validation, got: {err}"
+            );
+            assert!(
+                err.to_string().contains("private IP"),
+                "error should mention private IP, got: {err}"
+            );
+        }
+        other => panic!("expected McpError, got: {other:?}"),
+    }
+
+    harness.cleanup().await;
+}
+
+#[tokio::test]
+async fn when_extract_with_zero_pages_then_returns_invalid_params_error() {
+    let mock_server = MockServer::start().await;
+    let harness = spawn_server(&mock_server.uri(), &[]).await;
+
+    let arguments = json!({"pages": []}).as_object().unwrap().clone();
+    let params = CallToolRequestParams::new("extract").with_arguments(arguments);
+
+    let result = harness.running.peer().call_tool(params).await;
+
+    match result {
+        Err(ServiceError::McpError(err)) => {
+            assert!(
+                err.to_string().contains("Pages validation failed"),
+                "error should mention Pages validation, got: {err}"
+            );
+            assert_eq!(
+                err.code,
+                ErrorCode::INVALID_PARAMS,
+                "error code should be INVALID_PARAMS"
+            );
+        }
+        other => panic!("expected McpError, got: {other:?}"),
+    }
 
     harness.cleanup().await;
 }
