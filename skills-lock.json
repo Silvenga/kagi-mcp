@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "resolve-human-reviews": {
+      "source": "pbakaus/agent-reviews",
+      "sourceType": "github",
+      "skillPath": "skills/resolve-human-reviews/SKILL.md",
+      "computedHash": "156270ae63bf2ed096a4c21b6d3176dc797594d2308e663f1c1425d386db12d5"
+    }
+  }
+}
