@@ -1,4 +1,4 @@
-use super::{default_true, map_kagi_error, send_progress};
+use super::{default_markdown, default_true, map_kagi_error, send_progress};
 use crate::cache::error::CacheError;
 use crate::cache::key::generate_cache_key;
 use crate::cache::store::CacheStore;
@@ -13,19 +13,28 @@ use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use serde::Deserialize;
 
+/// Parameters for the `search` tool.
+#[warn(missing_docs)]
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SearchParams {
+    /// Search query. Supports Kagi operators: site:, "exact phrases", -negation, inurl:.
     pub query: String,
+    /// Result type filter. Use 'images', 'videos', 'news', or 'podcasts' to narrow results.
+    /// Omit for general web search.
     pub workflow: Option<String>,
+    /// Date filter (YYYY-MM-DD). Use when the query is time-sensitive.
     pub after: Option<String>,
+    /// Date filter (YYYY-MM-DD). Use when the query is time-sensitive.
     pub before: Option<String>,
-    pub output_format: Option<String>,
-    /// Maximum number of results to return per domain group.
-    /// When set, over-fetches from Kagi and deduplicates by Kagi's
-    /// grouping key (with eTLD+1 fallback). Must be >= 1. Default:
-    /// no per-domain limit.
+    /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
+    /// Use 'json' only when the caller explicitly requests raw structured data.
+    #[serde(default = "default_markdown")]
+    #[schemars(default = "default_markdown")]
+    pub output_format: String,
+    /// Max results per domain group. Use when results feel repetitive from the same site.
+    /// Must be >= 1 if set.
     pub limit_per_domain: Option<u32>,
-    /// Whether to use cached results. Default: true.
+    /// Whether to use cached results. Set to false only if freshness is critical.
     #[serde(default = "default_true")]
     #[schemars(default = "default_true")]
     pub cache: bool,
@@ -92,8 +101,7 @@ pub async fn search_handler(
                     if let Some(lpd) = params.limit_per_domain {
                         dedup_by_domain(&mut cached_response.data, lpd, config.limit);
                     }
-                    let output_format = params.output_format.as_deref().unwrap_or("markdown");
-                    let content = if output_format == "json" {
+                    let content = if params.output_format == "json" {
                         format_json(&cached_response)
                     } else {
                         format_search_markdown(&cached_response)
@@ -143,8 +151,7 @@ pub async fn search_handler(
             if let Some(lpd) = params.limit_per_domain {
                 dedup_by_domain(&mut response.data, lpd, config.limit);
             }
-            let output_format = params.output_format.as_deref().unwrap_or("markdown");
-            let content = if output_format == "json" {
+            let content = if params.output_format == "json" {
                 format_json(&response)
             } else {
                 format_search_markdown(&response)
@@ -280,7 +287,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: None,
+            output_format: "markdown".to_owned(),
             limit_per_domain: None,
             cache: true,
         };
@@ -326,7 +333,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: None,
+            output_format: "markdown".to_owned(),
             limit_per_domain: None,
             cache: true,
         };
@@ -361,7 +368,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_owned()),
+            output_format: "json".to_owned(),
             limit_per_domain: None,
             cache: true,
         };
@@ -394,7 +401,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: None,
+            output_format: "markdown".to_owned(),
             limit_per_domain: None,
             cache: true,
         };
@@ -419,7 +426,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: None,
+            output_format: "markdown".to_owned(),
             limit_per_domain: None,
             cache: true,
         };
@@ -445,7 +452,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: None,
+            output_format: "markdown".to_owned(),
             limit_per_domain: None,
             cache: true,
         };
@@ -472,7 +479,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: None,
+            output_format: "markdown".to_owned(),
             limit_per_domain: None,
             cache: true,
         };
@@ -499,7 +506,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: None,
+            output_format: "markdown".to_owned(),
             limit_per_domain: None,
             cache: true,
         };
@@ -538,7 +545,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_owned()),
+            output_format: "json".to_owned(),
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -589,7 +596,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_owned()),
+            output_format: "json".to_owned(),
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -644,7 +651,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_owned()),
+            output_format: "json".to_owned(),
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -701,7 +708,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_owned()),
+            output_format: "json".to_owned(),
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -760,7 +767,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: Some("json".to_owned()),
+            output_format: "json".to_owned(),
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -799,7 +806,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: None,
+            output_format: "markdown".to_owned(),
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -833,5 +840,13 @@ mod tests {
         let params: SearchParams = serde_json::from_str(json).unwrap();
 
         assert!(params.cache);
+    }
+
+    #[test]
+    fn when_search_params_deserialized_without_output_format_then_should_default_to_markdown() {
+        let json = r#"{"query": "test"}"#;
+        let params: SearchParams = serde_json::from_str(json).unwrap();
+
+        assert_eq!(params.output_format, "markdown");
     }
 }
