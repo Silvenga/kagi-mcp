@@ -309,8 +309,7 @@ mod tests {
         // Clear env var to avoid interference from parallel env tests
         env::remove_var("KAGI_TRANSPORT");
 
-        let config =
-            Config::try_parse_from(["kagi-mcp", "--api-key", "test-key"]).unwrap();
+        let config = Config::try_parse_from(["kagi-mcp", "--api-key", "test-key"]).unwrap();
 
         assert_eq!(config.bind, "127.0.0.1:3000");
         assert!(matches!(config.transport, TransportMode::Stdio));
@@ -348,8 +347,7 @@ mod tests {
     fn when_env_transport_set_then_should_parse() {
         let prior = env::var_os("KAGI_TRANSPORT");
         env::set_var("KAGI_TRANSPORT", "streamable-http");
-        let config =
-            Config::try_parse_from(["kagi-mcp", "--api-key", "test-key"]).unwrap();
+        let config = Config::try_parse_from(["kagi-mcp", "--api-key", "test-key"]).unwrap();
         match prior {
             Some(v) => env::set_var("KAGI_TRANSPORT", v),
             None => env::remove_var("KAGI_TRANSPORT"),
