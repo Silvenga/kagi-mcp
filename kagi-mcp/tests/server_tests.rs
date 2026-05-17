@@ -1,5 +1,3 @@
-mod common;
-
 use common::spawn_server;
 use rmcp::model::{CallToolRequestParams, ErrorCode};
 use rmcp::service::ServiceError;
@@ -9,6 +7,8 @@ use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
 };
+
+mod common;
 
 #[tokio::test]
 async fn when_initialize_then_returns_server_name_kagi() {

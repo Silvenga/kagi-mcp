@@ -1,6 +1,6 @@
-use kagi_api::KagiClientBuilder;
-use kagi_api::MockKagiApi;
-use kagi_api::{Meta, SearchData, SearchRequest, SearchResponse, SearchResult};
+use kagi_api::{
+    KagiClientBuilder, Meta, MockKagiApi, SearchData, SearchRequest, SearchResponse, SearchResult,
+};
 use kagi_mcp::cache::{generate_cache_key, CacheStore};
 use kagi_mcp::tools::{search_handler, SearchConfig, SearchParams};
 use kagi_mcp::KagiMcpServer;
@@ -10,74 +10,6 @@ use rmcp::RoleServer;
 use tempfile::TempDir;
 use tokio::io::duplex;
 use tokio_util::sync::CancellationToken;
-
-async fn test_request_context() -> RequestContext<RoleServer> {
-    let (server_transport, client_transport) = duplex(4096);
-    drop(client_transport);
-
-    let client = KagiClientBuilder::new()
-        .with_api_key("test-key")
-        .build()
-        .expect("KagiClient should build in test");
-    let server = KagiMcpServer::new(client)
-        .with_search_timeout(4.0)
-        .with_extract_timeout(30.0);
-    let server_svc = serve_directly_with_ct(
-        server,
-        server_transport,
-        None::<ClientInfo>,
-        CancellationToken::new(),
-    );
-
-    let peer = server_svc.peer().clone();
-    drop(server_svc);
-
-    RequestContext::new(RequestId::Number(1), peer)
-}
-
-fn empty_search_data() -> SearchData {
-    SearchData {
-        search: None,
-        image: None,
-        video: None,
-        podcast: None,
-        podcast_creator: None,
-        news: None,
-        adjacent_question: None,
-        direct_answer: None,
-        interesting_news: None,
-        interesting_finds: None,
-        infobox: None,
-        code: None,
-        package_tracking: None,
-        public_records: None,
-        weather: None,
-        related_search: None,
-        listicle: None,
-        web_archive: None,
-    }
-}
-
-fn make_search_response(title: &str, snippet: &str) -> SearchResponse {
-    SearchResponse {
-        meta: Meta {
-            trace: "cache-integration-test".into(),
-            node: None,
-            ms: None,
-        },
-        data: SearchData {
-            search: Some(vec![SearchResult {
-                url: "https://example.com/".into(),
-                title: title.into(),
-                snippet: Some(snippet.into()),
-                time: None,
-                image: None,
-                props: None,
-            }]),
-            ..empty_search_data()
-        },
-    }
-}
 
 #[tokio::test]
 async fn when_cache_persists_across_instances_then_data_should_be_readable() {
@@ -144,7 +76,7 @@ async fn when_cache_hit_then_api_should_not_be_called() {
 
     let mock = MockKagiApi::new();
 
-    let ctx = test_request_context().await;
+    let ctx = fake_request_context().await;
     let params = SearchParams {
         query: "test query".into(),
         workflow: None,
@@ -161,4 +93,72 @@ async fn when_cache_hit_then_api_should_not_be_called() {
     let text = result.unwrap().content[0].as_text().unwrap().text.clone();
     assert!(text.contains("Cached Title"));
     assert!(text.contains("Cached snippet"));
+}
+
+async fn fake_request_context() -> RequestContext<RoleServer> {
+    let (server_transport, client_transport) = duplex(4096);
+    drop(client_transport);
+
+    let client = KagiClientBuilder::new()
+        .with_api_key("test-key")
+        .build()
+        .expect("KagiClient should build in test");
+    let server = KagiMcpServer::new(client)
+        .with_search_timeout(4.0)
+        .with_extract_timeout(30.0);
+    let server_svc = serve_directly_with_ct(
+        server,
+        server_transport,
+        None::<ClientInfo>,
+        CancellationToken::new(),
+    );
+
+    let peer = server_svc.peer().clone();
+    drop(server_svc);
+
+    RequestContext::new(RequestId::Number(1), peer)
+}
+
+fn empty_search_data() -> SearchData {
+    SearchData {
+        search: None,
+        image: None,
+        video: None,
+        podcast: None,
+        podcast_creator: None,
+        news: None,
+        adjacent_question: None,
+        direct_answer: None,
+        interesting_news: None,
+        interesting_finds: None,
+        infobox: None,
+        code: None,
+        package_tracking: None,
+        public_records: None,
+        weather: None,
+        related_search: None,
+        listicle: None,
+        web_archive: None,
+    }
+}
+
+fn make_search_response(title: &str, snippet: &str) -> SearchResponse {
+    SearchResponse {
+        meta: Meta {
+            trace: "cache-integration-test".into(),
+            node: None,
+            ms: None,
+        },
+        data: SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://example.com/".into(),
+                title: title.into(),
+                snippet: Some(snippet.into()),
+                time: None,
+                image: None,
+                props: None,
+            }]),
+            ..empty_search_data()
+        },
+    }
 }

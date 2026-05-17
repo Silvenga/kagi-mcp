@@ -1,14 +1,19 @@
 use crate::cache::CacheStore;
 use crate::tools::{extract_handler, ExtractParams};
 use crate::tools::{search_handler, SearchConfig, SearchParams};
-use kagi_api::KagiApi;
-use kagi_api::KagiClient;
+use kagi_api::{KagiApi, KagiClient};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::service::RequestContext;
-use rmcp::RoleServer;
 use rmcp::{tool, tool_handler, tool_router, ErrorData as McpError};
+use rmcp::{RoleServer, ServerHandler};
 use std::sync::Arc;
+
+const DEFAULT_SEARCH_TIMEOUT: f64 = 4.0;
+const DEFAULT_EXTRACT_TIMEOUT: f64 = 10.0;
+const DEFAULT_LIMIT: u32 = 10;
+const DEFAULT_SAFE_SEARCH: bool = true;
+const DEFAULT_SPLIT_EXTRACT_REQUESTS: bool = true;
 
 #[derive(Clone)]
 pub struct KagiMcpServer {
@@ -21,12 +26,6 @@ pub struct KagiMcpServer {
     pub split_extract_requests: bool,
     pub cache_store: Option<Arc<CacheStore>>,
 }
-
-const DEFAULT_SEARCH_TIMEOUT: f64 = 4.0;
-const DEFAULT_EXTRACT_TIMEOUT: f64 = 10.0;
-const DEFAULT_LIMIT: u32 = 10;
-const DEFAULT_SAFE_SEARCH: bool = true;
-const DEFAULT_SPLIT_EXTRACT_REQUESTS: bool = true;
 
 impl KagiMcpServer {
     /// Create a new server with the given client and default settings.
@@ -145,13 +144,12 @@ impl KagiMcpServer {
 }
 
 #[tool_handler(name = "Kagi", router = Self::tool_router())]
-impl rmcp::ServerHandler for KagiMcpServer {}
+impl ServerHandler for KagiMcpServer {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use kagi_api::KagiClientBuilder;
-    use rmcp::ServerHandler;
 
     #[test]
     fn when_server_created_then_tools_should_be_registered() {
