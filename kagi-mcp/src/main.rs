@@ -11,6 +11,7 @@ use config::{Config, TransportMode};
 use kagi_api::KagiClientBuilder;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::tower::StreamableHttpService;
+use rmcp::transport::streamable_http_server::StreamableHttpServerConfig;
 use rmcp::ServiceExt;
 use server::KagiMcpServer;
 use std::io::{self, stderr};
@@ -69,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
             let service = StreamableHttpService::new(
                 move || -> Result<_, io::Error> { Ok(server.clone()) },
                 session_manager,
-                Default::default(),
+                StreamableHttpServerConfig::default().disable_allowed_hosts(),
             );
             let app = Router::new().route_service("/mcp", service);
             axum::serve(listener, app).await?;
