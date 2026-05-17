@@ -24,21 +24,16 @@
 #![warn(missing_docs)]
 
 mod api_trait;
+mod builder;
 mod client;
-mod client_builder;
 mod error;
 mod types;
 
-pub use client::KagiClient;
-pub use client_builder::KagiClientBuilder;
-pub use error::KagiError;
-pub use types::{
-    DomainKind, ExtractData, ExtractError, ExtractPage, ExtractRequest, ExtractResponse, Filters,
-    Image, Lens, Meta, PersonalizationDomain, PersonalizationRegex, Personalizations, SearchData,
-    SearchExtractConfig, SearchRequest, SearchResponse, SearchResult, TimeRelative,
-};
+pub use builder::*;
+pub use client::*;
+pub use error::*;
+pub use types::*;
 
 pub use api_trait::KagiApi;
-
 #[cfg(any(test, feature = "mock"))]
 pub use api_trait::MockKagiApi;

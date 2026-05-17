@@ -1,5 +1,4 @@
-use crate::error::KagiError;
-use crate::KagiClient;
+use crate::{KagiClient, KagiError};
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::policies::ExponentialBackoff;
 use reqwest_retry::RetryTransientMiddleware;

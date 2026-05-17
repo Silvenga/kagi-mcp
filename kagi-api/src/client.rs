@@ -1,8 +1,7 @@
-use crate::error::{from_http_status, KagiError};
-use crate::types::{
-    ExtractRequest, ExtractResponse, KagiErrorResponse, SearchRequest, SearchResponse,
+use crate::{
+    ExtractRequest, ExtractResponse, KagiApi, KagiError, KagiErrorResponse, SearchRequest,
+    SearchResponse,
 };
-use crate::KagiApi;
 use reqwest_middleware::ClientWithMiddleware;
 use reqwest_retry::RetryError;
 use serde::de::DeserializeOwned;
@@ -18,11 +17,11 @@ pub struct KagiClient {
 #[async_trait::async_trait]
 impl KagiApi for KagiClient {
     async fn search(&self, request: SearchRequest) -> Result<SearchResponse, KagiError> {
-        KagiClient::search(self, request).await
+        Self::search(self, request).await
     }
 
     async fn extract(&self, request: ExtractRequest) -> Result<ExtractResponse, KagiError> {
-        KagiClient::extract(self, request).await
+        Self::extract(self, request).await
     }
 }
 
@@ -73,7 +72,7 @@ async fn handle_response<T: DeserializeOwned>(response: reqwest::Response) -> Re
         Ok(body)
     } else {
         let error_body = response.json::<KagiErrorResponse>().await.ok();
-        Err(from_http_status(status, error_body))
+        Err(KagiError::from_http_status(status, error_body))
     }
 }
 

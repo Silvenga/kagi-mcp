@@ -1304,7 +1304,6 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
- "xxhash-rust",
 ]
 
 [[package]]

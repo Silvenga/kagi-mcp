@@ -1,5 +1,4 @@
-use kagi_api::SearchRequest;
-use kagi_api::{KagiClientBuilder, KagiError};
+use kagi_api::{KagiClientBuilder, KagiError, SearchRequest};
 use wiremock::{
     matchers::{body_json, header, method, path},
     Mock, MockServer, ResponseTemplate,

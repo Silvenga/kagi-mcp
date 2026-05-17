@@ -1,6 +1,5 @@
-use serde::{Deserialize, Serialize};
-
 use crate::Meta;
+use serde::{Deserialize, Serialize};
 
 /// An extract response from the Kagi Extract API.
 #[derive(Debug, Clone, Deserialize, Serialize)]

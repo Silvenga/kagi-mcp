@@ -4,9 +4,7 @@ mod extract_response;
 mod search_request;
 mod search_response;
 
-#[cfg(test)]
-pub(crate) use error_response::ErrorDetail;
-pub(crate) use error_response::KagiErrorResponse;
+pub use error_response::{ErrorDetail, KagiErrorResponse};
 pub use extract_request::{ExtractPage, ExtractRequest};
 pub use extract_response::{ExtractData, ExtractError, ExtractResponse};
 pub use search_request::{

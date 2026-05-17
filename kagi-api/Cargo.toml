@@ -31,7 +31,6 @@ mockall = { workspace = true, optional = true }
 mockall = { workspace = true }
 wiremock = "0.6.5"
 tokio = { workspace = true }
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [features]
 mock = ["dep:mockall"]
