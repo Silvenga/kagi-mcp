@@ -52,36 +52,6 @@ But you likely want to configure it in your MCP client:
 }
 ```
 
-## Transports
-
-The server supports two transport modes:
-
-- **`stdio`** (default) — Standard input/output for local MCP clients.
-- **`streamable-http`** — HTTP server for remote MCP clients.
-
-Use `--transport` to select the mode and `--bind` to configure the listen address:
-
-```bash
-# stdio mode (default)
-kagi-mcp --api-key "your-api-key"
-
-# streamable-http mode
-kagi-mcp --api-key "your-api-key" --transport streamable-http --bind 127.0.0.1:3000
-```
-
-When using `streamable-http`, configure your MCP client with a remote URL:
-
-```json
-{
-  "mcp": {
-    "kagi": {
-      "type": "remote",
-      "url": "http://localhost:3000/mcp"
-    }
-  }
-}
-```
-
 ## Options
 
 | Flag / Env Var                                         | Description                                          | Default                |
@@ -101,15 +71,6 @@ When using `streamable-http`, configure your MCP client with a remote URL:
 | `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`               | Cache entry TTL in days                              | `7`                    |
 | `--transport` / `KAGI_TRANSPORT`                         | Transport mode: `stdio` or `streamable-http`         | `stdio`                |
 | `--bind` / `KAGI_BIND`                                   | Bind address for HTTP transport                      | `127.0.0.1:3000`       |
-
-## Docker
-
-Build and run with Docker:
-
-```bash
-docker build -t kagi-mcp .
-docker run -e KAGI_API_KEY=your-api-key -p 3000:3000 kagi-mcp
-```
 
 ## Tools
 

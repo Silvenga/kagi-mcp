@@ -1,5 +1,5 @@
-.git/
-.github/
-target/
-.sisyphus/
-*.md
+*
+!Cargo.toml
+!Cargo.lock
+!kagi-mcp/
+!kagi-api/
