@@ -41,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
             config.cache_size_gb,
             config.cache_ttl_days,
         )
+        .await
         .map_err(|e| anyhow::anyhow!("failed to initialize cache: {e}"))?,
     );
 
