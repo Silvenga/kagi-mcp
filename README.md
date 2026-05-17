@@ -69,7 +69,8 @@ But you likely want to configure it in your MCP client:
 | `--cache-dir` / `KAGI_CACHE_DIR`                         | Directory for the local response cache               | `~/.cache/kagi-mcp/` |
 | `--cache-size-gb` / `KAGI_CACHE_SIZE_GB`                 | Maximum cache size in gigabytes                      | `5.0`                  |
 | `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`               | Cache entry TTL in days                              | `7`                    |
-
+| `--transport` / `KAGI_TRANSPORT`                         | Transport mode: `stdio` or `streamable-http`         | `stdio`                |
+| `--bind` / `KAGI_BIND`                                   | Bind address for HTTP transport                      | `127.0.0.1:3000`       |
 
 ## Tools
 

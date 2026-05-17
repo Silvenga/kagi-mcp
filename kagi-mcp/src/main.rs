@@ -8,14 +8,19 @@ mod tools;
 pub(crate) mod validation;
 
 use crate::cache::store::CacheStore;
+use axum::Router;
 use clap::Parser;
-use config::Config;
+use config::{Config, TransportMode};
 use kagi_api::KagiClientBuilder;
+use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
+use rmcp::transport::streamable_http_server::tower::StreamableHttpService;
 use rmcp::ServiceExt;
 use server::KagiMcpServer;
-use std::io::stderr;
+use std::io::{self, stderr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{stdin, stdout};
+use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -56,9 +61,25 @@ async fn main() -> anyhow::Result<()> {
         Some(cache_store),
     );
 
-    let transport = (stdin(), stdout());
-    let service = server.serve(transport).await?;
-    service.waiting().await?;
+    match config.transport {
+        TransportMode::Stdio => {
+            let transport = (stdin(), stdout());
+            let service = server.serve(transport).await?;
+            service.waiting().await?;
+        }
+        TransportMode::StreamableHttp => {
+            let addr: SocketAddr = config.bind.parse()?;
+            let listener = TcpListener::bind(addr).await?;
+            let session_manager = Arc::new(LocalSessionManager::default());
+            let service = StreamableHttpService::new(
+                move || -> Result<_, io::Error> { Ok(server.clone()) },
+                session_manager,
+                Default::default(),
+            );
+            let app = Router::new().route_service("/mcp", service);
+            axum::serve(listener, app).await?;
+        }
+    }
 
     Ok(())
 }
