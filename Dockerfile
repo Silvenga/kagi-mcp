@@ -15,7 +15,11 @@ RUN cargo build --release -p kagi-mcp
 FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y ca-certificates libsqlite3-0 && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/kagi-mcp /usr/local/bin/kagi-mcp
+
 EXPOSE 3000
-ENV KAGI_TRANSPORT=streamable-http
-ENV KAGI_BIND=0.0.0.0:3000
+VOLUME ["/cache"]
+ENV KAGI_TRANSPORT=streamable-http \
+    KAGI_BIND=0.0.0.0:3000 \
+    KAGI_CACHE_DIR=/cache
+
 ENTRYPOINT ["kagi-mcp"]
