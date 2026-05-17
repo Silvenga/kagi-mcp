@@ -31,16 +31,16 @@ impl KagiErrorResponse {
 #[derive(Debug, Deserialize)]
 pub struct ErrorDetail {
     /// Namespaced error code.
-    /// Example: "extract.invalid_url"
+    /// Example: `extract.invalid_url`
     pub code: String,
     /// URL to error documentation.
     /// NOTE: These URLs are still a work in progress and will currently return a 404 error.
-    /// Example: "https://help.kagi.com/api/errors#extract.invalid_url"
+    /// Example: `https://help.kagi.com/api/errors#extract.invalid_url`
     pub url: String,
     /// Human-readable error message.
-    ///  Example: "URL must be a valid HTTPS URL"
+    ///  Example: `URL must be a valid HTTPS URL`
     pub message: Option<String>,
     /// Field location where the error occurred.
-    /// Example: "pages[0].url"
+    /// Example: `pages[0].url`
     pub location: Option<String>,
 }
