@@ -1316,6 +1316,7 @@ dependencies = [
  "async-trait",
  "axum",
  "clap",
+ "dirs",
  "html-escape",
  "insta",
  "kagi-api",

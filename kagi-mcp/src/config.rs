@@ -49,10 +49,9 @@ pub struct Config {
     #[arg(
         long,
         env = "KAGI_CACHE_DIR",
-        default_value = "~/.cache/kagi-mcp/",
         value_parser = parse_cache_dir
     )]
-    pub cache_dir: PathBuf,
+    pub cache_dir: Option<PathBuf>,
 
     #[arg(
         long,
@@ -75,6 +74,22 @@ pub struct Config {
 
     #[arg(long, env = "KAGI_BIND", default_value = "127.0.0.1:3000")]
     pub bind: String,
+}
+
+impl Config {
+    pub fn resolved_cache_dir(&self) -> Result<PathBuf, String> {
+        match &self.cache_dir {
+            Some(path) => Ok(path.clone()),
+            None => {
+                dirs::cache_dir()
+                    .ok_or(
+                        "unable to determine platform cache directory; set --cache-dir or KAGI_CACHE_DIR"
+                            .to_owned(),
+                    )
+                    .map(|p| p.join("kagi-mcp"))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, ValueEnum, Default)]
@@ -133,8 +148,7 @@ mod tests {
         assert!(config.safe_search);
         assert!(config.split_extract_requests);
         assert_eq!(config.region, None);
-        let expected_cache_dir = shellexpand::tilde("~/.cache/kagi-mcp/");
-        assert_eq!(config.cache_dir, PathBuf::from(expected_cache_dir.as_ref()));
+        assert!(config.cache_dir.is_none());
         assert_eq!(config.cache_size_gb, 5.0);
         assert_eq!(config.cache_ttl_days, 7);
     }
@@ -182,7 +196,7 @@ mod tests {
         assert!(!config.safe_search);
         assert!(!config.split_extract_requests);
         assert_eq!(config.region.as_deref(), Some("us-west"));
-        assert_eq!(config.cache_dir, PathBuf::from("/custom/cache/dir"));
+        assert_eq!(config.cache_dir, Some(PathBuf::from("/custom/cache/dir")));
         assert_eq!(config.cache_size_gb, 10.0);
         assert_eq!(config.cache_ttl_days, 14);
     }
@@ -329,5 +343,45 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.bind, "0.0.0.0:8080");
+    }
+
+    #[test]
+    fn when_no_cache_dir_then_resolved_default_should_match_dirs() {
+        let config = Config::try_parse_from(["kagi-mcp", "--api-key", "test-key"]).unwrap();
+        let resolved = config.resolved_cache_dir().unwrap();
+        let expected = dirs::cache_dir().unwrap().join("kagi-mcp");
+        assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn when_cache_dir_provided_then_resolved_should_return_override() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--cache-dir",
+            "/custom/cache/dir",
+        ])
+        .unwrap();
+        let resolved = config.resolved_cache_dir().unwrap();
+        assert_eq!(resolved, PathBuf::from("/custom/cache/dir"));
+    }
+
+    #[test]
+    fn when_cache_dir_has_tilde_then_should_expand() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--cache-dir",
+            "~/custom/cache",
+        ])
+        .unwrap();
+        let resolved = config.resolved_cache_dir().unwrap();
+        let resolved_str = resolved.to_string_lossy();
+        assert!(
+            !resolved_str.contains('~'),
+            "resolved path should not contain literal tilde: {resolved_str}"
+        );
     }
 }
