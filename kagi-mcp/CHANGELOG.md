@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.2.1...kagi-mcp-v0.2.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* avoid nullable type unions in search tool schema for LLM compatibility ([#41](https://github.com/Silvenga/kagi-mcp/issues/41)) ([2d0eaa6](https://github.com/Silvenga/kagi-mcp/commit/2d0eaa6442824556a70e884895b28279b97b18b4))
+* **cache:** use platform-specific default cache directory ([#43](https://github.com/Silvenga/kagi-mcp/issues/43)) ([eb8c1d2](https://github.com/Silvenga/kagi-mcp/commit/eb8c1d2b9a227023168d18e03f80077540044a6f))
+
 ## [0.2.1](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.2.0...kagi-mcp-v0.2.1) (2026-05-17)
 
 
