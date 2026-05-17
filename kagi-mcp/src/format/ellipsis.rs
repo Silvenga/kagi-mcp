@@ -1,4 +1,4 @@
-pub(crate) fn collapse_snippet_ellipses(s: &str) -> String {
+pub fn collapse_snippet_ellipses(s: &str) -> String {
     // First, normalize runs of 3+ consecutive dots to space-padded `...`,
     // which handles directly concatenated ellipsis like `......`.
     let normalized = {

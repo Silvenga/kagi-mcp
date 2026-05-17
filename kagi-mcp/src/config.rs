@@ -1,44 +1,6 @@
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
-fn parse_cache_dir(s: &str) -> Result<PathBuf, String> {
-    let expanded = shellexpand::tilde(s);
-    Ok(PathBuf::from(expanded.as_ref()))
-}
-
-fn parse_region(s: &str) -> Result<String, String> {
-    Ok(s.to_lowercase())
-}
-
-fn parse_cache_size_gb(s: &str) -> Result<f64, String> {
-    let val: f64 = s
-        .parse()
-        .map_err(|_| format!("`{s}` is not a valid float"))?;
-    if val <= 0.0 {
-        Err(format!("cache size must be positive, got {val}"))
-    } else {
-        Ok(val)
-    }
-}
-
-fn parse_cache_ttl_days(s: &str) -> Result<u64, String> {
-    let val: u64 = s
-        .parse()
-        .map_err(|_| format!("`{s}` is not a valid integer"))?;
-    if val == 0 {
-        Err(format!("cache TTL must be positive, got {val}"))
-    } else {
-        Ok(val)
-    }
-}
-
-#[derive(Debug, Clone, ValueEnum, Default)]
-pub enum TransportMode {
-    #[default]
-    Stdio,
-    StreamableHttp,
-}
-
 #[derive(Debug, Parser, Clone)]
 #[command(name = "kagi-mcp", about = "Kagi MCP server")]
 pub struct Config {
@@ -113,6 +75,44 @@ pub struct Config {
 
     #[arg(long, env = "KAGI_BIND", default_value = "127.0.0.1:3000")]
     pub bind: String,
+}
+
+#[derive(Debug, Clone, ValueEnum, Default)]
+pub enum TransportMode {
+    #[default]
+    Stdio,
+    StreamableHttp,
+}
+
+fn parse_cache_dir(s: &str) -> Result<PathBuf, String> {
+    let expanded = shellexpand::tilde(s);
+    Ok(PathBuf::from(expanded.as_ref()))
+}
+
+fn parse_region(s: &str) -> Result<String, String> {
+    Ok(s.to_lowercase())
+}
+
+fn parse_cache_size_gb(s: &str) -> Result<f64, String> {
+    let val: f64 = s
+        .parse()
+        .map_err(|_| format!("`{s}` is not a valid float"))?;
+    if val <= 0.0 {
+        Err(format!("cache size must be positive, got {val}"))
+    } else {
+        Ok(val)
+    }
+}
+
+fn parse_cache_ttl_days(s: &str) -> Result<u64, String> {
+    let val: u64 = s
+        .parse()
+        .map_err(|_| format!("`{s}` is not a valid integer"))?;
+    if val == 0 {
+        Err(format!("cache TTL must be positive, got {val}"))
+    } else {
+        Ok(val)
+    }
 }
 
 #[cfg(test)]
@@ -301,14 +301,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.cache_size_gb, 0.5);
-    }
-
-    #[test]
-    fn when_default_args_then_transport_should_default_to_stdio() {
-        let config = Config::try_parse_from(["kagi-mcp", "--api-key", "test-key"]).unwrap();
-
-        assert_eq!(config.bind, "127.0.0.1:3000");
-        assert!(matches!(config.transport, TransportMode::Stdio));
     }
 
     #[test]

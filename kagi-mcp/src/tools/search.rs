@@ -1,12 +1,9 @@
-use super::{default_markdown, default_true, map_kagi_error, send_progress};
-use crate::cache::error::CacheError;
-use crate::cache::key::generate_cache_key;
-use crate::cache::store::CacheStore;
+use crate::cache::{generate_cache_key, CacheError, CacheStore};
 use crate::domain::extract_group_key;
 use crate::format::{format_json, format_search_markdown};
 use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::KagiApi;
-use kagi_api::{Filters, SearchData, SearchRequest, SearchResponse, SearchResult};
+use crate::tools::shared::{map_kagi_error, send_progress};
+use kagi_api::{Filters, KagiApi, SearchData, SearchRequest, SearchResponse, SearchResult};
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
@@ -28,15 +25,15 @@ pub struct SearchParams {
     pub before: Option<String>,
     /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
     /// Use 'json' only when the caller explicitly requests raw structured data.
-    #[serde(default = "default_markdown")]
-    #[schemars(default = "default_markdown")]
+    #[serde(default = "crate::tools::shared::default_markdown")]
+    #[schemars(default = "crate::tools::shared::default_markdown")]
     pub output_format: String,
     /// Max results per domain group. Use when results feel repetitive from the same site.
     /// Must be >= 1 if set.
     pub limit_per_domain: Option<u32>,
     /// Whether to use cached results. Set to false only if freshness is critical.
-    #[serde(default = "default_true")]
-    #[schemars(default = "default_true")]
+    #[serde(default = "crate::tools::shared::default_true")]
+    #[schemars(default = "crate::tools::shared::default_true")]
     pub cache: bool,
 }
 
@@ -228,31 +225,14 @@ fn dedup_by_domain(data: &mut SearchData, limit_per_domain: u32, final_limit: u3
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::server::KagiMcpServer;
     use kagi_api::MockKagiApi;
     use kagi_api::{KagiError, Meta, SearchData, SearchResponse, SearchResult};
-
-    fn empty_search_data() -> SearchData {
-        SearchData {
-            search: None,
-            image: None,
-            video: None,
-            podcast: None,
-            podcast_creator: None,
-            news: None,
-            adjacent_question: None,
-            direct_answer: None,
-            interesting_news: None,
-            interesting_finds: None,
-            infobox: None,
-            code: None,
-            package_tracking: None,
-            public_records: None,
-            weather: None,
-            related_search: None,
-            listicle: None,
-            web_archive: None,
-        }
-    }
+    use rmcp::model::{ClientInfo, RequestId};
+    use rmcp::service::serve_directly_with_ct;
+    use std::sync::Arc;
+    use tokio::io::duplex;
+    use tokio_util::sync::CancellationToken;
 
     fn make_search_response(results: Vec<SearchResult>) -> SearchResponse {
         SearchResponse {
@@ -291,7 +271,7 @@ mod tests {
             limit_per_domain: None,
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
@@ -337,7 +317,7 @@ mod tests {
             limit_per_domain: None,
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
@@ -372,7 +352,7 @@ mod tests {
             limit_per_domain: None,
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
@@ -405,7 +385,7 @@ mod tests {
             limit_per_domain: None,
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
@@ -430,7 +410,7 @@ mod tests {
             limit_per_domain: None,
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
@@ -456,7 +436,7 @@ mod tests {
             limit_per_domain: None,
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
@@ -483,7 +463,7 @@ mod tests {
             limit_per_domain: None,
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
 
@@ -510,7 +490,7 @@ mod tests {
             limit_per_domain: None,
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
         ctx.ct.cancel();
 
         let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
@@ -549,7 +529,7 @@ mod tests {
             limit_per_domain: Some(1),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
@@ -600,7 +580,7 @@ mod tests {
             limit_per_domain: Some(1),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
@@ -655,7 +635,7 @@ mod tests {
             limit_per_domain: Some(1),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
@@ -712,7 +692,7 @@ mod tests {
             limit_per_domain: Some(1),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
@@ -771,7 +751,7 @@ mod tests {
             limit_per_domain: Some(1),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
@@ -810,7 +790,7 @@ mod tests {
             limit_per_domain: Some(1),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = search_handler(&mock, params, &ctx, &config, None).await;
         assert!(result.is_ok());
@@ -848,5 +828,46 @@ mod tests {
         let params: SearchParams = serde_json::from_str(json).unwrap();
 
         assert_eq!(params.output_format, "markdown");
+    }
+
+    async fn fake_request_context() -> RequestContext<RoleServer> {
+        let (server_transport, client_transport) = duplex(4096);
+        drop(client_transport);
+
+        let server = KagiMcpServer::with_client(Arc::new(MockKagiApi::new()));
+        let server_svc = serve_directly_with_ct(
+            server,
+            server_transport,
+            None::<ClientInfo>,
+            CancellationToken::new(),
+        );
+
+        let peer = server_svc.peer().clone();
+        drop(server_svc);
+
+        RequestContext::new(RequestId::Number(1), peer)
+    }
+
+    fn empty_search_data() -> SearchData {
+        SearchData {
+            search: None,
+            image: None,
+            video: None,
+            podcast: None,
+            podcast_creator: None,
+            news: None,
+            adjacent_question: None,
+            direct_answer: None,
+            interesting_news: None,
+            interesting_finds: None,
+            infobox: None,
+            code: None,
+            package_tracking: None,
+            public_records: None,
+            weather: None,
+            related_search: None,
+            listicle: None,
+            web_archive: None,
+        }
     }
 }

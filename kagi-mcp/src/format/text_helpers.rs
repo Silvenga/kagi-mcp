@@ -1,15 +1,15 @@
-pub(crate) fn decode_entities(s: &str) -> String {
+pub fn decode_entities(s: &str) -> String {
     if !s.contains('&') {
         return s.to_owned();
     }
     html_escape::decode_html_entities(s).into_owned()
 }
 
-pub(crate) fn normalize_title_whitespace(s: &str) -> String {
+pub fn normalize_title_whitespace(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-pub(crate) fn trim_iso_date(s: &str) -> String {
+pub fn trim_iso_date(s: &str) -> String {
     let bytes = s.as_bytes();
     if s.len() >= 11 && bytes[4] == b'-' && bytes[7] == b'-' && bytes[10] == b'T' {
         s[..10].to_string()

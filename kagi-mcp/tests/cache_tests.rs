@@ -1,10 +1,9 @@
 use kagi_api::KagiClientBuilder;
 use kagi_api::MockKagiApi;
 use kagi_api::{Meta, SearchData, SearchRequest, SearchResponse, SearchResult};
-use kagi_mcp::cache::key::generate_cache_key;
-use kagi_mcp::cache::store::CacheStore;
-use kagi_mcp::server::KagiMcpServer;
-use kagi_mcp::tools::search::{search_handler, SearchConfig, SearchParams};
+use kagi_mcp::cache::{generate_cache_key, CacheStore};
+use kagi_mcp::tools::{search_handler, SearchConfig, SearchParams};
+use kagi_mcp::KagiMcpServer;
 use rmcp::model::{ClientInfo, RequestId};
 use rmcp::service::{serve_directly_with_ct, RequestContext};
 use rmcp::RoleServer;

@@ -1,12 +1,9 @@
-use super::{default_markdown, default_true, map_kagi_error, send_progress};
-use crate::cache::error::CacheError;
-use crate::cache::key::generate_cache_key;
-use crate::cache::store::CacheStore;
+use crate::cache::{generate_cache_key, CacheError, CacheStore};
 use crate::format::{format_extract_markdown, format_json};
 use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
+use crate::tools::shared::{map_kagi_error, send_progress};
 use crate::validation::{validate_extract_pages_count, validate_extract_urls};
-use kagi_api::KagiApi;
-use kagi_api::{ExtractPage, ExtractRequest, ExtractResponse};
+use kagi_api::{ExtractPage, ExtractRequest, ExtractResponse, KagiApi};
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::schemars;
 use rmcp::service::RequestContext;
@@ -23,12 +20,12 @@ pub struct ExtractParams {
     pub pages: Vec<String>,
     /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
     /// Use 'json' only when the caller explicitly requests raw structured data.
-    #[serde(default = "default_markdown")]
-    #[schemars(default = "default_markdown")]
+    #[serde(default = "crate::tools::shared::default_markdown")]
+    #[schemars(default = "crate::tools::shared::default_markdown")]
     pub output_format: String,
     /// Whether to use cached results. Set to false only if freshness is critical.
-    #[serde(default = "default_true")]
-    #[schemars(default = "default_true")]
+    #[serde(default = "crate::tools::shared::default_true")]
+    #[schemars(default = "crate::tools::shared::default_true")]
     pub cache: bool,
 }
 
@@ -376,7 +373,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
 
@@ -397,7 +394,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
 
@@ -430,7 +427,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
@@ -464,7 +461,7 @@ mod tests {
             output_format: "json".to_owned(),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
@@ -483,7 +480,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
 
@@ -505,7 +502,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
 
@@ -537,7 +534,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
 
@@ -571,7 +568,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: true,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
         assert!(result.is_ok());
@@ -628,7 +625,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: false,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
@@ -668,7 +665,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: false,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
@@ -707,7 +704,7 @@ mod tests {
             output_format: "json".to_owned(),
             cache: false,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
@@ -751,7 +748,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: false,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
@@ -802,7 +799,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: false,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
 
@@ -845,7 +842,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: false,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
@@ -883,7 +880,7 @@ mod tests {
             output_format: "markdown".to_owned(),
             cache: false,
         };
-        let ctx = super::super::test_request_context().await;
+        let ctx = fake_request_context().await;
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
 
@@ -898,5 +895,31 @@ mod tests {
         let params: ExtractParams = serde_json::from_str(json).unwrap();
 
         assert_eq!(params.output_format, "markdown");
+    }
+
+    pub async fn fake_request_context() -> RequestContext<RoleServer> {
+        use crate::server::KagiMcpServer;
+        use kagi_api::MockKagiApi;
+        use rmcp::model::{ClientInfo, RequestId};
+        use rmcp::service::serve_directly_with_ct;
+        use std::sync::Arc;
+        use tokio::io::duplex;
+        use tokio_util::sync::CancellationToken;
+
+        let (server_transport, client_transport) = duplex(4096);
+        drop(client_transport);
+
+        let server = KagiMcpServer::with_client(Arc::new(MockKagiApi::new()));
+        let server_svc = serve_directly_with_ct(
+            server,
+            server_transport,
+            None::<ClientInfo>,
+            CancellationToken::new(),
+        );
+
+        let peer = server_svc.peer().clone();
+        drop(server_svc);
+
+        RequestContext::new(RequestId::Number(1), peer)
     }
 }

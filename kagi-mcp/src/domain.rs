@@ -27,7 +27,7 @@ static PSL_LIST: LazyLock<List> =
 /// result's URL using the Public Suffix List.
 ///
 /// Returns `None` when the URL is malformed or has no host.
-pub(crate) fn extract_group_key(result: &kagi_api::SearchResult) -> Option<String> {
+pub fn extract_group_key(result: &kagi_api::SearchResult) -> Option<String> {
     if let Some(props) = &result.props {
         if let Some(group_id) = props.get("group_id").and_then(|v| v.as_str()) {
             if !group_id.is_empty() {
