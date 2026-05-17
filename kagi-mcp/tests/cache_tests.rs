@@ -62,7 +62,7 @@ async fn when_cache_hit_then_api_should_not_be_called() {
     let request = SearchRequest::new("test query")
         .with_format("json".to_owned())
         .with_timeout_seconds(SearchConfig::default().search_timeout)
-        .with_limit(SearchConfig::default().limit)
+        .with_limit(1024)
         .with_safe_search(SearchConfig::default().safe_search);
     let cache_key = generate_cache_key(&request);
     store

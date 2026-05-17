@@ -22,7 +22,7 @@ impl Default for SearchConfig {
     fn default() -> Self {
         Self {
             search_timeout: 4.0,
-            limit: 1024,
+            limit: 10,
             safe_search: true,
             region: None,
         }
@@ -43,12 +43,12 @@ pub async fn search_handler(
         ));
     }
 
-    let upstream_limit = config.limit;
+    const UPSTREAM_LIMIT: u32 = 1024;
 
     let mut request = SearchRequest::new(params.query.clone())
         .with_format("json".to_owned())
         .with_timeout_seconds(config.search_timeout)
-        .with_limit(upstream_limit)
+        .with_limit(UPSTREAM_LIMIT)
         .with_safe_search(config.safe_search);
 
     if let Some(workflow) = params.workflow.clone() {
@@ -68,9 +68,8 @@ pub async fn search_handler(
                 Ok(Some(cached_bytes)) => {
                     let mut cached_response: SearchResponse = serde_json::from_slice(&cached_bytes)
                         .map_err(|e| map_cache_error(e.into()))?;
-                    if let Some(lpd) = params.limit_per_domain {
-                        dedup_by_domain(&mut cached_response.data, lpd, config.limit);
-                    }
+                    let lpd = params.limit_per_domain.unwrap_or(u32::MAX);
+                    dedup_by_domain(&mut cached_response.data, lpd, config.limit);
                     let content = if params.output_format == "json" {
                         format_json(&cached_response)
                     } else {
@@ -118,9 +117,8 @@ pub async fn search_handler(
                     .map_err(map_cache_error)?;
             }
 
-            if let Some(lpd) = params.limit_per_domain {
-                dedup_by_domain(&mut response.data, lpd, config.limit);
-            }
+            let lpd = params.limit_per_domain.unwrap_or(u32::MAX);
+            dedup_by_domain(&mut response.data, lpd, config.limit);
             let content = if params.output_format == "json" {
                 format_json(&response)
             } else {
@@ -438,7 +436,7 @@ mod tests {
         mock.expect_search()
             .times(1)
             .withf(|req| {
-                req.limit() == Some(25)
+                req.limit() == Some(1024)
                     && req.safe_search() == Some(false)
                     && req.region() == Some("us-west")
                     && req.timeout_seconds() == Some(8.5)
