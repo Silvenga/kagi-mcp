@@ -22,44 +22,80 @@ pub struct KagiMcpServer {
     pub cache_store: Option<Arc<CacheStore>>,
 }
 
+const DEFAULT_SEARCH_TIMEOUT: f64 = 4.0;
+const DEFAULT_EXTRACT_TIMEOUT: f64 = 10.0;
+const DEFAULT_LIMIT: u32 = 10;
+const DEFAULT_SAFE_SEARCH: bool = true;
+const DEFAULT_SPLIT_EXTRACT_REQUESTS: bool = true;
+
 impl KagiMcpServer {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "constructor naturally needs many config values"
-    )]
-    pub fn new(
-        client: KagiClient,
-        search_timeout: f64,
-        extract_timeout: f64,
-        limit: u32,
-        safe_search: bool,
-        region: Option<String>,
-        split_extract_requests: bool,
-        cache_store: Option<Arc<CacheStore>>,
-    ) -> Self {
+    /// Create a new server with the given client and default settings.
+    pub fn new(client: KagiClient) -> Self {
         Self {
             client: Arc::new(client),
-            search_timeout,
-            extract_timeout,
-            limit,
-            safe_search,
-            region,
-            split_extract_requests,
-            cache_store,
+            search_timeout: DEFAULT_SEARCH_TIMEOUT,
+            extract_timeout: DEFAULT_EXTRACT_TIMEOUT,
+            limit: DEFAULT_LIMIT,
+            safe_search: DEFAULT_SAFE_SEARCH,
+            region: None,
+            split_extract_requests: DEFAULT_SPLIT_EXTRACT_REQUESTS,
+            cache_store: None,
         }
     }
 
+    /// Set the search timeout in seconds.
+    pub fn with_search_timeout(mut self, timeout: f64) -> Self {
+        self.search_timeout = timeout;
+        self
+    }
+
+    /// Set the extract timeout in seconds.
+    pub fn with_extract_timeout(mut self, timeout: f64) -> Self {
+        self.extract_timeout = timeout;
+        self
+    }
+
+    /// Set the default result limit for search.
+    pub fn with_limit(mut self, limit: u32) -> Self {
+        self.limit = limit;
+        self
+    }
+
+    /// Enable or disable safe search.
+    pub fn with_safe_search(mut self, safe_search: bool) -> Self {
+        self.safe_search = safe_search;
+        self
+    }
+
+    /// Set the default region filter.
+    pub fn with_region(mut self, region: Option<String>) -> Self {
+        self.region = region;
+        self
+    }
+
+    /// Enable or disable splitting extract requests per URL.
+    pub fn with_split_extract_requests(mut self, split: bool) -> Self {
+        self.split_extract_requests = split;
+        self
+    }
+
+    /// Set the cache store.
+    pub fn with_cache_store(mut self, cache_store: Option<Arc<CacheStore>>) -> Self {
+        self.cache_store = cache_store;
+        self
+    }
+
     #[cfg(test)]
-    pub fn with_client(client: Arc<dyn KagiApi>, cache_store: Option<Arc<CacheStore>>) -> Self {
+    pub fn with_client(client: Arc<dyn KagiApi>) -> Self {
         Self {
             client,
-            search_timeout: 4.0,
+            search_timeout: DEFAULT_SEARCH_TIMEOUT,
             extract_timeout: 30.0,
-            limit: 10,
-            safe_search: true,
+            limit: DEFAULT_LIMIT,
+            safe_search: DEFAULT_SAFE_SEARCH,
             region: None,
-            split_extract_requests: true,
-            cache_store,
+            split_extract_requests: DEFAULT_SPLIT_EXTRACT_REQUESTS,
+            cache_store: None,
         }
     }
 }
@@ -124,7 +160,9 @@ mod tests {
             .build()
             .unwrap();
 
-        let server = KagiMcpServer::new(client, 4.0, 30.0, 10, true, None, true, None);
+        let server = KagiMcpServer::new(client)
+            .with_search_timeout(4.0)
+            .with_extract_timeout(30.0);
 
         let info = server.get_info();
         assert!(
@@ -136,7 +174,7 @@ mod tests {
     #[test]
     fn when_mock_client_provided_then_server_should_accept_it() {
         let mock = kagi_api::MockKagiApi::new();
-        let server = KagiMcpServer::with_client(Arc::new(mock), None);
+        let server = KagiMcpServer::with_client(Arc::new(mock));
 
         let info = server.get_info();
         assert!(
@@ -146,7 +184,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn when_server_created_with_cache_store_then_it_should_compile() {
+    async fn when_server_created_with_cache_store_then_tools_and_cache_should_be_present() {
         let store = CacheStore::open_in_memory()
             .await
             .expect("failed to create in-memory cache store");
@@ -156,16 +194,10 @@ mod tests {
             .build()
             .unwrap();
 
-        let server = KagiMcpServer::new(
-            client,
-            4.0,
-            30.0,
-            10,
-            true,
-            None,
-            true,
-            Some(Arc::new(store)),
-        );
+        let server = KagiMcpServer::new(client)
+            .with_search_timeout(4.0)
+            .with_extract_timeout(30.0)
+            .with_cache_store(Some(Arc::new(store)));
 
         let info = server.get_info();
         assert!(
