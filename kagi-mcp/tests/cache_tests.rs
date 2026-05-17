@@ -2,7 +2,7 @@ use kagi_api::{
     KagiClientBuilder, Meta, MockKagiApi, SearchData, SearchRequest, SearchResponse, SearchResult,
 };
 use kagi_mcp::cache::{generate_cache_key, CacheStore};
-use kagi_mcp::tools::{search_handler, SearchConfig, SearchParams};
+use kagi_mcp::tools::search::{search_handler, SearchConfig, SearchParams};
 use kagi_mcp::KagiMcpServer;
 use rmcp::model::{ClientInfo, RequestId};
 use rmcp::service::{serve_directly_with_ct, RequestContext};
@@ -57,7 +57,7 @@ async fn when_cache_hit_then_api_should_not_be_called() {
     let cache_dir = tmp.path().join("cache");
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
 
-    let cached_response = make_search_response("Cached Title", "Cached snippet");
+    let cached_response = fake_search_response("Cached Title", "Cached snippet");
 
     let request = SearchRequest::new("test query")
         .with_format("json".to_owned())
@@ -142,7 +142,7 @@ fn empty_search_data() -> SearchData {
     }
 }
 
-fn make_search_response(title: &str, snippet: &str) -> SearchResponse {
+fn fake_search_response(title: &str, snippet: &str) -> SearchResponse {
     SearchResponse {
         meta: Meta {
             trace: "cache-integration-test".into(),

@@ -3,6 +3,6 @@ mod evict;
 mod key;
 mod store;
 
-pub use error::*;
-pub use key::*;
-pub use store::*;
+pub use error::CacheError;
+pub use key::generate_cache_key;
+pub use store::CacheStore;

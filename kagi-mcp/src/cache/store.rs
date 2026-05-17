@@ -1,5 +1,5 @@
-use crate::cache::error::CacheError;
 use crate::cache::evict::evict_if_needed;
+use crate::cache::CacheError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{ConnectOptions, Connection, SqliteConnection};
 use std::fs;

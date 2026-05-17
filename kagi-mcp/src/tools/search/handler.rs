@@ -1,41 +1,14 @@
 use crate::cache::{generate_cache_key, CacheError, CacheStore};
-use crate::domain::extract_group_key;
 use crate::format::{format_json, format_search_markdown};
-use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use crate::tools::shared::{map_kagi_error, send_progress};
-use kagi_api::{Filters, KagiApi, SearchData, SearchRequest, SearchResponse, SearchResult};
+use crate::tools::errors::map_kagi_error;
+use crate::tools::progress::send_progress;
+use crate::tools::search::dedup::dedup_by_domain;
+use crate::tools::search::SearchParams;
+use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
+use kagi_api::{Filters, KagiApi, SearchRequest, SearchResponse};
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
-use rmcp::schemars;
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
-use serde::Deserialize;
-
-/// Parameters for the `search` tool.
-#[warn(missing_docs)]
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct SearchParams {
-    /// Search query. Supports Kagi operators: site:, "exact phrases", -negation, inurl:.
-    pub query: String,
-    /// Result type filter. Use 'images', 'videos', 'news', or 'podcasts' to narrow results.
-    /// Omit for general web search.
-    pub workflow: Option<String>,
-    /// Date filter (YYYY-MM-DD). Use when the query is time-sensitive.
-    pub after: Option<String>,
-    /// Date filter (YYYY-MM-DD). Use when the query is time-sensitive.
-    pub before: Option<String>,
-    /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
-    /// Use 'json' only when the caller explicitly requests raw structured data.
-    #[serde(default = "crate::tools::shared::default_markdown")]
-    #[schemars(default = "crate::tools::shared::default_markdown")]
-    pub output_format: String,
-    /// Max results per domain group. Use when results feel repetitive from the same site.
-    /// Must be >= 1 if set.
-    pub limit_per_domain: Option<u32>,
-    /// Whether to use cached results. Set to false only if freshness is critical.
-    #[serde(default = "crate::tools::shared::default_true")]
-    #[schemars(default = "crate::tools::shared::default_true")]
-    pub cache: bool,
-}
 
 #[derive(Clone, Debug)]
 pub struct SearchConfig {
@@ -180,48 +153,6 @@ fn build_filters(
     }
 }
 
-fn dedup_by_domain(data: &mut SearchData, limit_per_domain: u32, final_limit: u32) {
-    use std::collections::HashMap;
-
-    let dedup_vec = |vec: &mut Option<Vec<SearchResult>>| {
-        if let Some(results) = vec {
-            let mut counts: HashMap<String, u32> = HashMap::new();
-            let mut kept: Vec<SearchResult> = Vec::new();
-            for result in results.drain(..) {
-                match extract_group_key(&result) {
-                    Some(key) => {
-                        let count = counts.entry(key).or_insert(0);
-                        if *count < limit_per_domain {
-                            *count += 1;
-                            kept.push(result);
-                        }
-                    }
-                    None => kept.push(result),
-                }
-            }
-            kept.truncate(final_limit as usize);
-            *results = kept;
-        }
-    };
-
-    dedup_vec(&mut data.search);
-    dedup_vec(&mut data.news);
-    dedup_vec(&mut data.interesting_news);
-    dedup_vec(&mut data.interesting_finds);
-    dedup_vec(&mut data.code);
-    dedup_vec(&mut data.public_records);
-    dedup_vec(&mut data.listicle);
-    dedup_vec(&mut data.web_archive);
-    dedup_vec(&mut data.image);
-    dedup_vec(&mut data.video);
-    dedup_vec(&mut data.podcast);
-    dedup_vec(&mut data.podcast_creator);
-    // The following categories are intentionally skipped because they do not
-    // represent ranked web results that benefit from per-domain deduplication:
-    // adjacent_question, direct_answer, infobox, related_search, weather,
-    // package_tracking.
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,7 +165,7 @@ mod tests {
     use tokio::io::duplex;
     use tokio_util::sync::CancellationToken;
 
-    fn make_search_response(results: Vec<SearchResult>) -> SearchResponse {
+    fn fake_search_response(results: Vec<SearchResult>) -> SearchResponse {
         SearchResponse {
             meta: Meta {
                 trace: "test".to_owned(),
@@ -252,7 +183,7 @@ mod tests {
     async fn when_search_succeeds_then_should_return_markdown() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
-            Ok(make_search_response(vec![SearchResult {
+            Ok(fake_search_response(vec![SearchResult {
                 url: "https://example.com".to_owned(),
                 title: "Example".to_owned(),
                 snippet: Some("Snippet text".to_owned()),
@@ -333,7 +264,7 @@ mod tests {
     async fn when_search_succeeds_with_json_format_then_should_return_raw_json() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
-            Ok(make_search_response(vec![SearchResult {
+            Ok(fake_search_response(vec![SearchResult {
                 url: "https://example.com".to_owned(),
                 title: "Example".to_owned(),
                 snippet: None,
@@ -512,7 +443,7 @@ mod tests {
                     && req.region() == Some("us-west")
                     && req.timeout_seconds() == Some(8.5)
             })
-            .returning(|_| Ok(make_search_response(vec![])));
+            .returning(|_| Ok(fake_search_response(vec![])));
 
         let config = SearchConfig {
             search_timeout: 8.5,
@@ -594,7 +525,7 @@ mod tests {
     async fn when_dedup_applied_then_original_order_should_be_preserved() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
-            Ok(make_search_response(vec![
+            Ok(fake_search_response(vec![
                 SearchResult {
                     url: "https://a.com/1".to_owned(),
                     title: "A1".to_owned(),
@@ -651,7 +582,7 @@ mod tests {
     async fn when_props_group_id_present_then_should_dedup_by_it_over_etld1() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
-            Ok(make_search_response(vec![
+            Ok(fake_search_response(vec![
                 SearchResult {
                     url: "https://blog.example.com/1".to_owned(),
                     title: "Blog 1".to_owned(),
@@ -708,7 +639,7 @@ mod tests {
     async fn when_final_count_after_dedup_exceeds_limit_then_should_truncate_to_limit() {
         let mut mock = MockKagiApi::new();
         mock.expect_search().times(1).returning(|_| {
-            Ok(make_search_response(vec![
+            Ok(fake_search_response(vec![
                 SearchResult {
                     url: "https://a.com/1".to_owned(),
                     title: "A1".to_owned(),
@@ -796,38 +727,6 @@ mod tests {
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert_eq!(text, "No results found.");
-    }
-
-    #[test]
-    fn when_search_params_deserialized_without_cache_should_default_to_true() {
-        let json = r#"{"query": "test"}"#;
-        let params: SearchParams = serde_json::from_str(json).unwrap();
-
-        assert!(params.cache);
-    }
-
-    #[test]
-    fn when_search_params_deserialized_with_cache_false_should_be_false() {
-        let json = r#"{"query": "test", "cache": false}"#;
-        let params: SearchParams = serde_json::from_str(json).unwrap();
-
-        assert!(!params.cache);
-    }
-
-    #[test]
-    fn when_search_params_deserialized_with_cache_true_should_be_true() {
-        let json = r#"{"query": "test", "cache": true}"#;
-        let params: SearchParams = serde_json::from_str(json).unwrap();
-
-        assert!(params.cache);
-    }
-
-    #[test]
-    fn when_search_params_deserialized_without_output_format_then_should_default_to_markdown() {
-        let json = r#"{"query": "test"}"#;
-        let params: SearchParams = serde_json::from_str(json).unwrap();
-
-        assert_eq!(params.output_format, "markdown");
     }
 
     async fn fake_request_context() -> RequestContext<RoleServer> {

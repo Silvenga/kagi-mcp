@@ -1,6 +1,8 @@
-pub fn format_json<T: serde::Serialize>(response: &T) -> String {
-    serde_json::to_string_pretty(response)
-        .unwrap_or_else(|e| format!("JSON serialization error: {}", e))
+use serde::Serialize;
+use serde_json::to_string_pretty;
+
+pub fn format_json<T: Serialize>(response: &T) -> String {
+    to_string_pretty(response).unwrap_or_else(|e| format!("JSON serialization error: {}", e))
 }
 
 #[cfg(test)]

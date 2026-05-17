@@ -16,16 +16,10 @@ pub enum ValidationError {
     InvalidPageCount { count: usize },
 }
 
-/// Validates a list of URLs for the extract tool.
-///
-/// Returns parsed `url::Url` objects or the first validation error encountered.
 pub fn validate_extract_urls(urls: &[String]) -> Result<Vec<url::Url>, ValidationError> {
     urls.iter().map(|u| validate_url(u)).collect()
 }
 
-/// Validates the number of pages for an extract request.
-///
-/// The Kagi Extract API accepts between 1 and 10 pages per call.
 pub fn validate_extract_pages_count(pages: &[String]) -> Result<(), ValidationError> {
     let count = pages.len();
     if !(1..=10).contains(&count) {

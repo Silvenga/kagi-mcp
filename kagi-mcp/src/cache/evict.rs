@@ -1,4 +1,4 @@
-use crate::cache::error::CacheError;
+use crate::cache::CacheError;
 use sqlx::SqliteConnection;
 
 /// Evicts the oldest cache entries until the total size is at or below `max_size_bytes`.

@@ -1,58 +1,13 @@
-use crate::cache::{generate_cache_key, CacheError, CacheStore};
-use crate::format::{format_extract_markdown, format_json};
-use crate::guard::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use crate::tools::shared::{map_kagi_error, send_progress};
-use crate::validation::{validate_extract_pages_count, validate_extract_urls};
-use kagi_api::{ExtractPage, ExtractRequest, ExtractResponse, KagiApi};
-use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
-use rmcp::schemars;
+use crate::cache::CacheStore;
+use crate::tools::extract::batch::extract_batch;
+use crate::tools::extract::split::extract_split;
+use crate::tools::extract::validation::{validate_extract_pages_count, validate_extract_urls};
+use crate::tools::extract::ExtractParams;
+use kagi_api::{ExtractPage, KagiApi};
+use rmcp::model::{CallToolResult, ErrorData};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
-use serde::Deserialize;
 use std::sync::Arc;
-use tokio::task::JoinSet;
-
-/// Parameters for the extract tool.
-#[warn(missing_docs)]
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct ExtractParams {
-    /// HTTPS URLs to extract content from. 1-10 URLs per call.
-    pub pages: Vec<String>,
-    /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
-    /// Use 'json' only when the caller explicitly requests raw structured data.
-    #[serde(default = "crate::tools::shared::default_markdown")]
-    #[schemars(default = "crate::tools::shared::default_markdown")]
-    pub output_format: String,
-    /// Whether to use cached results. Set to false only if freshness is critical.
-    #[serde(default = "crate::tools::shared::default_true")]
-    #[schemars(default = "crate::tools::shared::default_true")]
-    pub cache: bool,
-}
-
-fn map_cache_error(error: CacheError) -> ErrorData {
-    ErrorData::internal_error(format!("Cache error: {error}"), None)
-}
-
-fn kagi_error_to_extract_error(url: &str, error: kagi_api::KagiError) -> kagi_api::ExtractError {
-    use kagi_api::KagiError;
-    let (code, message) = match &error {
-        KagiError::InvalidRequest { message: msg } => ("invalid_request", Some(msg.clone())),
-        KagiError::Unauthorized => ("unauthorized", Some(error.to_string())),
-        KagiError::Forbidden => ("forbidden", Some(error.to_string())),
-        KagiError::RateLimited => ("rate_limited", Some(error.to_string())),
-        KagiError::ServerError => ("server_error", Some(error.to_string())),
-        KagiError::Network { source } => ("network_error", Some(source.to_string())),
-        KagiError::Api {
-            status,
-            message: msg,
-        } => ("api_error", Some(format!("HTTP {status}: {msg}"))),
-    };
-    kagi_api::ExtractError {
-        url: url.to_owned(),
-        code: code.to_owned(),
-        message,
-    }
-}
 
 pub async fn extract_handler(
     client: Arc<dyn KagiApi>,
@@ -91,261 +46,12 @@ pub async fn extract_handler(
     }
 }
 
-async fn extract_batch(
-    client: Arc<dyn KagiApi>,
-    params: ExtractParams,
-    ctx: &RequestContext<RoleServer>,
-    extract_timeout: f64,
-    pages: Vec<ExtractPage>,
-    cache_store: Option<&CacheStore>,
-) -> Result<CallToolResult, ErrorData> {
-    let request = ExtractRequest::new(pages)
-        .with_format("json".to_owned())
-        .with_timeout_seconds(extract_timeout);
-
-    if params.cache {
-        if let Some(store) = cache_store {
-            let key = generate_cache_key(&request);
-            match store.get(&key).await {
-                Ok(Some(cached_bytes)) => {
-                    let cached_response: ExtractResponse = serde_json::from_slice(&cached_bytes)
-                        .map_err(|e| map_cache_error(e.into()))?;
-                    let content = if params.output_format == "json" {
-                        format_json(&cached_response)
-                    } else {
-                        format_extract_markdown(&cached_response)
-                    };
-                    let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-                    return Ok(CallToolResult::success(vec![Content::text(truncated)]));
-                }
-                Ok(None) => {}
-                Err(e) => return Err(map_cache_error(e)),
-            }
-        }
-    }
-
-    let total_pages = params.pages.len();
-
-    let _ = send_progress(
-        ctx,
-        0.0,
-        Some(100.0),
-        format!("Extracting {total_pages} pages..."),
-    )
-    .await;
-
-    if ctx.ct.is_cancelled() {
-        return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
-    }
-
-    let result = tokio::select! {
-        _ = ctx.ct.cancelled() => {
-            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
-        }
-        result = client.extract(request.clone()) => result,
-    };
-
-    match result {
-        Ok(response) => {
-            let _ =
-                send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
-
-            if let Some(store) = cache_store {
-                let key = generate_cache_key(&request);
-                let json_bytes =
-                    serde_json::to_vec(&response).map_err(|e| map_cache_error(e.into()))?;
-                store
-                    .set(&key, "extract", &json_bytes)
-                    .await
-                    .map_err(map_cache_error)?;
-            }
-
-            let content = if params.output_format == "json" {
-                format_json(&response)
-            } else {
-                format_extract_markdown(&response)
-            };
-            let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-            Ok(CallToolResult::success(vec![Content::text(truncated)]))
-        }
-        Err(e) => Err(map_kagi_error(e)),
-    }
-}
-
-async fn extract_split(
-    client: Arc<dyn KagiApi>,
-    params: ExtractParams,
-    ctx: &RequestContext<RoleServer>,
-    extract_timeout: f64,
-    pages: Vec<ExtractPage>,
-    cache_store: Option<&CacheStore>,
-) -> Result<CallToolResult, ErrorData> {
-    let total_pages = pages.len();
-
-    let _ = send_progress(
-        ctx,
-        0.0,
-        Some(100.0),
-        format!("Extracting {total_pages} pages..."),
-    )
-    .await;
-
-    if ctx.ct.is_cancelled() {
-        return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
-    }
-
-    let mut results: Vec<Option<ExtractResponse>> = vec![None; total_pages];
-    let mut pending: Vec<usize> = Vec::new();
-
-    for (i, page) in pages.iter().enumerate() {
-        let single_req = ExtractRequest::new(vec![page.clone()])
-            .with_format("json".to_owned())
-            .with_timeout_seconds(extract_timeout);
-
-        let mut cache_hit = false;
-        if params.cache {
-            if let Some(store) = cache_store {
-                let key = generate_cache_key(&single_req);
-                if let Ok(Some(cached_bytes)) = store.get(&key).await {
-                    if let Ok(cached_response) =
-                        serde_json::from_slice::<ExtractResponse>(&cached_bytes)
-                    {
-                        let _ = send_progress(
-                            ctx,
-                            ((i + 1) as f64 / total_pages as f64) * 100.0,
-                            Some(100.0),
-                            format!("Page {}/{} (cached)", i + 1, total_pages),
-                        )
-                        .await;
-                        results[i] = Some(cached_response);
-                        cache_hit = true;
-                    }
-                }
-            }
-        }
-        if !cache_hit {
-            pending.push(i);
-        }
-    }
-
-    let mut set = JoinSet::new();
-    for &idx in &pending {
-        if ctx.ct.is_cancelled() {
-            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
-        }
-        let client = Arc::clone(&client);
-        let page = pages[idx].clone();
-        let single_req = ExtractRequest::new(vec![page])
-            .with_format("json".to_owned())
-            .with_timeout_seconds(extract_timeout);
-
-        set.spawn(async move {
-            let result = client.extract(single_req).await;
-            (idx, result)
-        });
-    }
-
-    let mut collected = 0usize;
-    while let Some(join_result) = set.join_next().await {
-        if ctx.ct.is_cancelled() {
-            set.abort_all();
-            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
-        }
-
-        match join_result {
-            Ok((idx, Ok(api_response))) => {
-                if params.cache {
-                    if let Some(store) = cache_store {
-                        let store_req = ExtractRequest::new(vec![pages[idx].clone()])
-                            .with_format("json".to_owned())
-                            .with_timeout_seconds(extract_timeout);
-                        let key = generate_cache_key(&store_req);
-                        if let Ok(json_bytes) = serde_json::to_vec(&api_response) {
-                            let _ = store.set(&key, "extract", &json_bytes).await;
-                        }
-                    }
-                }
-                collected += 1;
-                let _ = send_progress(
-                    ctx,
-                    ((total_pages - pending.len() + collected) as f64 / total_pages as f64) * 100.0,
-                    Some(100.0),
-                    format!("Page {}/{}", idx + 1, total_pages),
-                )
-                .await;
-                results[idx] = Some(api_response);
-            }
-            Ok((idx, Err(kagi_err))) => {
-                collected += 1;
-                let _ = send_progress(
-                    ctx,
-                    ((total_pages - pending.len() + collected) as f64 / total_pages as f64) * 100.0,
-                    Some(100.0),
-                    format!("Page {}/{} (error)", idx + 1, total_pages),
-                )
-                .await;
-                let extract_err = kagi_error_to_extract_error(&pages[idx].url, kagi_err);
-                results[idx] = Some(ExtractResponse {
-                    meta: kagi_api::Meta {
-                        trace: String::new(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: None,
-                    errors: Some(vec![extract_err]),
-                });
-            }
-            Err(_join_err) => {
-                return Err(ErrorData::internal_error(
-                    "Internal error: extract task panicked",
-                    None,
-                ));
-            }
-        }
-    }
-
-    let mut data: Vec<kagi_api::ExtractData> = Vec::new();
-    let mut errors: Vec<kagi_api::ExtractError> = Vec::new();
-
-    for result in results.into_iter().flatten() {
-        if let Some(d) = result.data {
-            data.extend(d);
-        }
-        if let Some(e) = result.errors {
-            errors.extend(e);
-        }
-    }
-
-    let response = ExtractResponse {
-        meta: kagi_api::Meta {
-            trace: String::new(),
-            node: None,
-            ms: None,
-        },
-        data: if data.is_empty() { None } else { Some(data) },
-        errors: if errors.is_empty() {
-            None
-        } else {
-            Some(errors)
-        },
-    };
-
-    let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
-
-    let content = if params.output_format == "json" {
-        format_json(&response)
-    } else {
-        format_extract_markdown(&response)
-    };
-    let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-    Ok(CallToolResult::success(vec![Content::text(truncated)]))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kagi_api::MockKagiApi;
     use kagi_api::{ExtractData, ExtractError, Meta};
+    use kagi_api::{ExtractResponse, MockKagiApi};
+    use rmcp::model::ErrorCode;
     use std::sync::Arc;
 
     fn test_client() -> Arc<MockKagiApi> {
@@ -572,30 +278,6 @@ mod tests {
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn when_extract_params_deserialized_without_cache_should_default_to_true() {
-        let json = r#"{"pages": ["https://example.com"]}"#;
-        let params: ExtractParams = serde_json::from_str(json).unwrap();
-
-        assert!(params.cache);
-    }
-
-    #[test]
-    fn when_extract_params_deserialized_with_cache_false_should_be_false() {
-        let json = r#"{"pages": ["https://example.com"], "cache": false}"#;
-        let params: ExtractParams = serde_json::from_str(json).unwrap();
-
-        assert!(!params.cache);
-    }
-
-    #[test]
-    fn when_extract_params_deserialized_with_cache_true_should_be_true() {
-        let json = r#"{"pages": ["https://example.com"], "cache": true}"#;
-        let params: ExtractParams = serde_json::from_str(json).unwrap();
-
-        assert!(params.cache);
     }
 
     #[tokio::test]
@@ -887,14 +569,6 @@ mod tests {
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Single content"));
-    }
-
-    #[test]
-    fn when_extract_params_deserialized_without_output_format_then_should_default_to_markdown() {
-        let json = r#"{"pages": ["https://example.com"]}"#;
-        let params: ExtractParams = serde_json::from_str(json).unwrap();
-
-        assert_eq!(params.output_format, "markdown");
     }
 
     pub async fn fake_request_context() -> RequestContext<RoleServer> {
