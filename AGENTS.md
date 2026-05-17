@@ -9,10 +9,17 @@ kagi-mcp/
 ├── kagi-api/               # Library crate | Kagi API client
 │   ├── Cargo.toml
 │   └── src/
-│       ├── lib.rs          # Module declarations
-│       ├── client.rs       # HTTP client (reqwest-based)
+│       ├── lib.rs          # Module declarations + re-exports
+│       ├── api_trait.rs    # Async trait for testability (mockall)
+│       ├── builder.rs      # KagiClientBuilder with defaults
+│       ├── client.rs       # HTTP client (reqwest + middleware)
 │       ├── error.rs        # Domain error types (thiserror)
-│       └── types.rs        # Request/response types (serde)
+│       └── types/
+│           ├── search_request.rs
+│           ├── search_response.rs
+│           ├── extract_request.rs
+│           ├── extract_response.rs
+│           └── error_response.rs
 └── kagi-mcp/               # Binary crate | MCP server
     ├── Cargo.toml
     └── src/
