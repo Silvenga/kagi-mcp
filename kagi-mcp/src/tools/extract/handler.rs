@@ -54,6 +54,10 @@ mod tests {
     use rmcp::model::ErrorCode;
     use std::sync::Arc;
 
+    fn test_client() -> Arc<MockKagiApi> {
+        Arc::new(MockKagiApi::new())
+    }
+
     fn make_extract_response(data: Vec<ExtractData>, errors: Vec<ExtractError>) -> ExtractResponse {
         ExtractResponse {
             meta: Meta {
@@ -64,6 +68,46 @@ mod tests {
             data: Some(data),
             errors: Some(errors),
         }
+    }
+
+    #[tokio::test]
+    async fn when_zero_pages_should_return_invalid_params_error_without_api_call() {
+        let mock = test_client();
+
+        let params = ExtractParams {
+            pages: vec![],
+            output_format: "markdown".to_owned(),
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Pages validation failed"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn when_eleven_pages_should_return_invalid_params_error_without_api_call() {
+        let mock = test_client();
+
+        let params = ExtractParams {
+            pages: (1..=11)
+                .map(|i| format!("https://example{i}.com"))
+                .collect(),
+            output_format: "markdown".to_owned(),
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Pages validation failed"));
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     #[tokio::test]
@@ -131,6 +175,25 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("\"trace\""));
         assert!(text.contains("\"data\""));
+    }
+
+    #[tokio::test]
+    async fn when_extract_with_private_ip_then_should_return_validation_error_without_api_call() {
+        let mock = test_client();
+
+        let params = ExtractParams {
+            pages: vec!["https://192.168.1.1/".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("URL validation failed"));
+        assert!(err.to_string().contains("private IP"));
     }
 
     #[tokio::test]
