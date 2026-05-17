@@ -1,6 +1,5 @@
 FROM rust:1-trixie AS chef
 RUN cargo install cargo-chef --locked
-RUN apt-get update && apt-get install -y libsqlite3-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 FROM chef AS planner
