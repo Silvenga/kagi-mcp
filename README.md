@@ -89,11 +89,19 @@ But you likely want to configure it in your MCP client:
 | `--safe-search` / `KAGI_SAFE_SEARCH`                       | Enable safe search                                | `true`                 |
 | `--region` / `KAGI_REGION`                                 | Default region filter (ISO 3166-1 alpha-2)        | *none*                 |
 | `--split-extract-requests` / `KAGI_SPLIT_EXTRACT_REQUESTS` | Extract each URL individually instead of batching | `true`                 |
-| `--cache-dir` / `KAGI_CACHE_DIR`                           | Directory for the local response cache            | `~/.cache/kagi-mcp/`   |
+| `--cache-dir` / `KAGI_CACHE_DIR`                           | Directory for the local response cache            | *See below*            |
 | `--cache-size-gb` / `KAGI_CACHE_SIZE_GB`                   | Maximum cache size in gigabytes                   | `5.0`                  |
 | `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`                 | Cache entry TTL in days                           | `7`                    |
 | `--transport` / `KAGI_TRANSPORT`                           | Transport mode: `stdio` or `streamable-http`      | `stdio`                |
 | `--bind` / `KAGI_BIND`                                     | Bind address for HTTP transport                   | `127.0.0.1:3000`       |
+
+The default cache directory depends on the platform:
+
+- **Linux**: `$XDG_CACHE_HOME/kagi-mcp` or `~/.cache/kagi-mcp`
+- **macOS**: `~/Library/Caches/kagi-mcp`
+- **Windows**: `%LOCALAPPDATA%\kagi-mcp`
+
+Override with `--cache-dir` or `KAGI_CACHE_DIR`.
 
 ## Tools
 
