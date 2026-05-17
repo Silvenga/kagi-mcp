@@ -58,9 +58,10 @@ async fn when_search_with_valid_query_then_returns_markdown() {
 
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(include_str!(
-            "../../docs/test-fixtures/search-response.json"
-        )))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(include_str!("fixtures/search-response.json")),
+        )
         .mount(&mock_server)
         .await;
 
@@ -89,9 +90,10 @@ async fn when_extract_with_valid_urls_then_returns_markdown() {
 
     Mock::given(method("POST"))
         .and(path("/v1/extract"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(include_str!(
-            "../../docs/test-fixtures/extract-response.json"
-        )))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(include_str!("fixtures/extract-response.json")),
+        )
         .mount(&mock_server)
         .await;
 
@@ -184,9 +186,7 @@ async fn when_search_times_out_then_returns_network_error() {
         .and(path("/v1/search"))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_body_string(include_str!(
-                    "../../docs/test-fixtures/search-response.json"
-                ))
+                .set_body_string(include_str!("fixtures/search-response.json"))
                 .set_delay(Duration::from_secs(2)),
         )
         .mount(&mock_server)
@@ -226,9 +226,7 @@ async fn when_extract_times_out_then_returns_network_error() {
         .and(path("/v1/extract"))
         .respond_with(
             ResponseTemplate::new(200)
-                .set_body_string(include_str!(
-                    "../../docs/test-fixtures/extract-response.json"
-                ))
+                .set_body_string(include_str!("fixtures/extract-response.json"))
                 .set_delay(Duration::from_secs(2)),
         )
         .mount(&mock_server)
@@ -287,9 +285,10 @@ async fn when_search_fails_transiently_then_retries_and_succeeds() {
 
     Mock::given(method("POST"))
         .and(path("/v1/search"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(include_str!(
-            "../../docs/test-fixtures/search-response.json"
-        )))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(include_str!("fixtures/search-response.json")),
+        )
         .mount(&mock_server)
         .await;
 
@@ -332,9 +331,10 @@ async fn when_extract_fails_transiently_then_retries_and_succeeds() {
 
     Mock::given(method("POST"))
         .and(path("/v1/extract"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(include_str!(
-            "../../docs/test-fixtures/extract-response.json"
-        )))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(include_str!("fixtures/extract-response.json")),
+        )
         .mount(&mock_server)
         .await;
 
