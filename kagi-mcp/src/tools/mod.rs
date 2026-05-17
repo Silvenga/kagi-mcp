@@ -10,6 +10,10 @@ pub(crate) fn default_true() -> bool {
     true
 }
 
+pub(crate) fn default_markdown() -> String {
+    "markdown".to_owned()
+}
+
 pub(crate) async fn send_progress(
     ctx: &RequestContext<RoleServer>,
     progress: f64,

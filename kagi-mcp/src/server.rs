@@ -67,7 +67,7 @@ impl KagiMcpServer {
 #[tool_router(vis = "pub")]
 impl KagiMcpServer {
     #[tool(
-        description = "Search the web via Kagi's premium search engine. Returns markdown-formatted results with sections for Web Results, News, Videos, Podcasts, Images, and related entities. Supports Kagi query operators: `site:domain`, `\"exact phrase\"`, `-negation`, `inurl:keyword`. Use `workflow` to scope results (search, images, videos, news, podcasts). Use `after` / `before` (YYYY-MM-DD) to filter by date. Set `limit_per_domain` to deduplicate same-domain results (e.g. 1 = one result per domain). Set `output_format=\"json\"` for raw structured response."
+        description = "Search the web via Kagi. Returns results in markdown by default. Use when you need current information from the web, news, images, videos, or podcasts."
     )]
     async fn search(
         &self,

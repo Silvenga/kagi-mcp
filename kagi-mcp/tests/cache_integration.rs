@@ -149,7 +149,7 @@ async fn when_cache_hit_then_api_should_not_be_called() {
         workflow: None,
         after: None,
         before: None,
-        output_format: None,
+        output_format: "markdown".to_owned(),
         limit_per_domain: None,
         cache: true,
     };

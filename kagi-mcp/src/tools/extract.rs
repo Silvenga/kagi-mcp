@@ -1,4 +1,4 @@
-use super::{default_true, map_kagi_error, send_progress};
+use super::{default_markdown, default_true, map_kagi_error, send_progress};
 use crate::cache::error::CacheError;
 use crate::cache::key::generate_cache_key;
 use crate::cache::store::CacheStore;
@@ -15,11 +15,18 @@ use serde::Deserialize;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 
+/// Parameters for the extract tool.
+#[warn(missing_docs)]
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ExtractParams {
+    /// HTTPS URLs to extract content from. 1-10 URLs per call.
     pub pages: Vec<String>,
-    pub output_format: Option<String>,
-    /// Whether to use cached results. Default: true.
+    /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
+    /// Use 'json' only when the caller explicitly requests raw structured data.
+    #[serde(default = "default_markdown")]
+    #[schemars(default = "default_markdown")]
+    pub output_format: String,
+    /// Whether to use cached results. Set to false only if freshness is critical.
     #[serde(default = "default_true")]
     #[schemars(default = "default_true")]
     pub cache: bool,
@@ -106,8 +113,7 @@ async fn extract_batch(
                 Ok(Some(cached_bytes)) => {
                     let cached_response: ExtractResponse = serde_json::from_slice(&cached_bytes)
                         .map_err(|e| map_cache_error(e.into()))?;
-                    let output_format = params.output_format.as_deref().unwrap_or("markdown");
-                    let content = if output_format == "json" {
+                    let content = if params.output_format == "json" {
                         format_json(&cached_response)
                     } else {
                         format_extract_markdown(&cached_response)
@@ -157,8 +163,7 @@ async fn extract_batch(
                     .map_err(map_cache_error)?;
             }
 
-            let output_format = params.output_format.as_deref().unwrap_or("markdown");
-            let content = if output_format == "json" {
+            let content = if params.output_format == "json" {
                 format_json(&response)
             } else {
                 format_extract_markdown(&response)
@@ -330,8 +335,7 @@ async fn extract_split(
 
     let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
 
-    let output_format = params.output_format.as_deref().unwrap_or("markdown");
-    let content = if output_format == "json" {
+    let content = if params.output_format == "json" {
         format_json(&response)
     } else {
         format_extract_markdown(&response)
@@ -369,7 +373,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec![],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: true,
         };
         let ctx = super::super::test_request_context().await;
@@ -390,7 +394,7 @@ mod tests {
             pages: (1..=11)
                 .map(|i| format!("https://example{i}.com"))
                 .collect(),
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: true,
         };
         let ctx = super::super::test_request_context().await;
@@ -423,7 +427,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: true,
         };
         let ctx = super::super::test_request_context().await;
@@ -457,7 +461,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            output_format: Some("json".to_owned()),
+            output_format: "json".to_owned(),
             cache: true,
         };
         let ctx = super::super::test_request_context().await;
@@ -476,7 +480,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://192.168.1.1/".to_owned()],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: true,
         };
         let ctx = super::super::test_request_context().await;
@@ -498,7 +502,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: true,
         };
         let ctx = super::super::test_request_context().await;
@@ -530,7 +534,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://ok.com".to_owned(), "https://fail.com".to_owned()],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: true,
         };
         let ctx = super::super::test_request_context().await;
@@ -564,7 +568,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: true,
         };
         let ctx = super::super::test_request_context().await;
@@ -621,7 +625,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: false,
         };
         let ctx = super::super::test_request_context().await;
@@ -661,7 +665,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://ok.com".to_owned(), "https://fail.com".to_owned()],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: false,
         };
         let ctx = super::super::test_request_context().await;
@@ -700,7 +704,7 @@ mod tests {
                 "https://second.com".to_owned(),
                 "https://third.com".to_owned(),
             ],
-            output_format: Some("json".to_owned()),
+            output_format: "json".to_owned(),
             cache: false,
         };
         let ctx = super::super::test_request_context().await;
@@ -744,7 +748,7 @@ mod tests {
                 "https://b.com".to_owned(),
                 "https://c.com".to_owned(),
             ],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: false,
         };
         let ctx = super::super::test_request_context().await;
@@ -795,7 +799,7 @@ mod tests {
                 "https://b.com".to_owned(),
                 "https://c.com".to_owned(),
             ],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: false,
         };
         let ctx = super::super::test_request_context().await;
@@ -838,7 +842,7 @@ mod tests {
                 "https://fail.com".to_owned(),
                 "https://ok2.com".to_owned(),
             ],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: false,
         };
         let ctx = super::super::test_request_context().await;
@@ -876,7 +880,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://only.com".to_owned()],
-            output_format: None,
+            output_format: "markdown".to_owned(),
             cache: false,
         };
         let ctx = super::super::test_request_context().await;
@@ -886,5 +890,13 @@ mod tests {
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Single content"));
+    }
+
+    #[test]
+    fn when_extract_params_deserialized_without_output_format_then_should_default_to_markdown() {
+        let json = r#"{"pages": ["https://example.com"]}"#;
+        let params: ExtractParams = serde_json::from_str(json).unwrap();
+
+        assert_eq!(params.output_format, "markdown");
     }
 }
