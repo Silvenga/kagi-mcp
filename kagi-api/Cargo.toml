@@ -26,7 +26,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 async-trait = { workspace = true }
 mockall = { workspace = true, optional = true }
-openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 mockall = { workspace = true }
