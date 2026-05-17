@@ -12,9 +12,32 @@ An MCP (Model Context Protocol) server for the [Kagi Search API](https://kagi.co
 
 ## Installation
 
-TODO - GitHub Releases
+Linux and Windows binaries can be downloaded from [releases](https://github.com/Silvenga/kagi-mcp/releases).
 
-Or from Source:
+```bash
+curl -L https://github.com/Silvenga/kagi-mcp/releases/latest/download/kagi-mcp -o kagi-mcp
+install kagi-mcp ~/.local/bin/
+rm kagi-mcp
+```
+
+```pwsh
+Invoke-WebRequest `
+    -Uri https://github.com/Silvenga/kagi-mcp/releases/latest/download/kagi-mcp.exe `
+    -UseBasicParsing `
+    -OutFile kagi-mcp.exe
+# Add add to your PATH.
+```
+
+Linux container images are also available (defaults to running in HTTP SSE mode):
+
+```bash
+docker run -it \
+  --rm \
+  -p 3000:3000 \
+  ghcr.io/silvenga/kagi-mcp:latest
+```
+
+And building from source is always possible:
 
 ```bash
 cargo install --git https://github.com/Silvenga/kagi-mcp.git
@@ -54,23 +77,23 @@ But you likely want to configure it in your MCP client:
 
 ## Options
 
-| Flag / Env Var                                         | Description                                          | Default                |
-|--------------------------------------------------------|------------------------------------------------------|------------------------|
-| `--api-key` / `KAGI_API_KEY`                           | Kagi API key                                         | *required*             |
-| `--base-url` / `KAGI_BASE_URL`                         | Kagi API base URL                                    | `https://kagi.com/api` |
-| `--search-timeout` / `KAGI_SEARCH_TIMEOUT`             | Search API request timeout (seconds)                 | `4`                    |
-| `--extract-timeout` / `KAGI_EXTRACT_TIMEOUT`           | Extract API request timeout (seconds)                | `10`                   |
-| `--client-timeout` / `KAGI_CLIENT_TIMEOUT`             | Client-side HTTP timeout (seconds)                   | `12`                   |
-| `--retries` / `KAGI_RETRIES`                           | Number of retries for transient failures             | `3`                    |
-| `--limit` / `KAGI_LIMIT`                               | Default result limit for search                      | `10`                   |
-| `--safe-search` / `KAGI_SAFE_SEARCH`                   | Enable safe search                                   | `true`                 |
-| `--region` / `KAGI_REGION`                             | Default region filter (ISO 3166-1 alpha-2)           | *none*                 |
-| `--split-extract-requests` / `KAGI_SPLIT_EXTRACT_REQUESTS` | Extract each URL individually instead of batching    | `true`                 |
-| `--cache-dir` / `KAGI_CACHE_DIR`                         | Directory for the local response cache               | `~/.cache/kagi-mcp/` |
-| `--cache-size-gb` / `KAGI_CACHE_SIZE_GB`                 | Maximum cache size in gigabytes                      | `5.0`                  |
-| `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`               | Cache entry TTL in days                              | `7`                    |
-| `--transport` / `KAGI_TRANSPORT`                         | Transport mode: `stdio` or `streamable-http`         | `stdio`                |
-| `--bind` / `KAGI_BIND`                                   | Bind address for HTTP transport                      | `127.0.0.1:3000`       |
+| Flag / Env Var                                             | Description                                       | Default                |
+|------------------------------------------------------------|---------------------------------------------------|------------------------|
+| `--api-key` / `KAGI_API_KEY`                               | Kagi API key                                      | *required*             |
+| `--base-url` / `KAGI_BASE_URL`                             | Kagi API base URL                                 | `https://kagi.com/api` |
+| `--search-timeout` / `KAGI_SEARCH_TIMEOUT`                 | Search API request timeout (seconds)              | `4`                    |
+| `--extract-timeout` / `KAGI_EXTRACT_TIMEOUT`               | Extract API request timeout (seconds)             | `10`                   |
+| `--client-timeout` / `KAGI_CLIENT_TIMEOUT`                 | Client-side HTTP timeout (seconds)                | `12`                   |
+| `--retries` / `KAGI_RETRIES`                               | Number of retries for transient failures          | `3`                    |
+| `--limit` / `KAGI_LIMIT`                                   | Default result limit for search                   | `10`                   |
+| `--safe-search` / `KAGI_SAFE_SEARCH`                       | Enable safe search                                | `true`                 |
+| `--region` / `KAGI_REGION`                                 | Default region filter (ISO 3166-1 alpha-2)        | *none*                 |
+| `--split-extract-requests` / `KAGI_SPLIT_EXTRACT_REQUESTS` | Extract each URL individually instead of batching | `true`                 |
+| `--cache-dir` / `KAGI_CACHE_DIR`                           | Directory for the local response cache            | `~/.cache/kagi-mcp/`   |
+| `--cache-size-gb` / `KAGI_CACHE_SIZE_GB`                   | Maximum cache size in gigabytes                   | `5.0`                  |
+| `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`                 | Cache entry TTL in days                           | `7`                    |
+| `--transport` / `KAGI_TRANSPORT`                           | Transport mode: `stdio` or `streamable-http`      | `stdio`                |
+| `--bind` / `KAGI_BIND`                                     | Bind address for HTTP transport                   | `127.0.0.1:3000`       |
 
 ## Tools
 
@@ -100,9 +123,11 @@ Extract clean Markdown content from URLs.
 
 ## Additional Metadata in Markdown Output
 
-When using the default Markdown output, the server enriches results with additional metadata to help LLMs interpret the content:
+When using the default Markdown output, the server enriches results with additional metadata to help LLMs interpret the
+content:
 
 Search results may include:
+
 - Paywall indicator - Flags results that are behind a paywall.
 - AI content labels - Marks results as "generated" or "possibly AI-generated" when detected.
 - Language - Non-English results include a language code (e.g., `ja`, `fr`).
@@ -115,4 +140,5 @@ Extract results include per-page Markdown content with explicit error messages f
 
 ## Known Issues
 
-- The Kagi Extract API uses a cumulative timeout, not per-page. If the cumulative timeout is exceeded during a multi-page extraction, a blank result may be returned. This has been reported to Kagi.
+- The Kagi Extract API uses a cumulative timeout, not per-page. If the cumulative timeout is exceeded during a
+  multi-page extraction, a blank result may be returned. This has been reported to Kagi.
