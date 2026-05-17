@@ -29,17 +29,23 @@ kagi-mcp/
 ## Build & Test Commands
 
 ```bash
-# Check entire workspace
+# Check
 cargo check --workspace
 
-# Build all crates
+# Format
+cargo fmt
+
+# Build
 cargo build --workspace
 
-# Run all tests
+# Test
 cargo test --workspace
 
-# Run clippy
+# Lint
 cargo clippy --workspace --all-targets --all-features
+
+# Docs
+cargo doc --workspace --no-deps
 ```
 
 ## Key Architecture Decisions
@@ -61,7 +67,6 @@ cargo clippy --workspace --all-targets --all-features
 ### Testing strategy
 - `mockall` for trait-based mocking of the API client in unit tests.
 - `wiremock` for HTTP-level integration tests (stubbing Kagi API endpoints).
-- `async-trait` enables async trait methods on the client, which `mockall` can mock.
 
 ### Error handling
 - Domain errors in `kagi-api` use `thiserror` for typed error enums.
