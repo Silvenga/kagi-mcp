@@ -37,14 +37,13 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .map_err(|e| anyhow::anyhow!("failed to create Kagi client: {e}"))?;
 
+    let cache_dir = config
+        .resolved_cache_dir()
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
     let cache_store = Arc::new(
-        CacheStore::new(
-            &config.cache_dir,
-            config.cache_size_gb,
-            config.cache_ttl_days,
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to initialize cache: {e}"))?,
+        CacheStore::new(&cache_dir, config.cache_size_gb, config.cache_ttl_days)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to initialize cache: {e}"))?,
     );
 
     let server = KagiMcpServer::new(client)
