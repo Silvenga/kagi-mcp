@@ -145,9 +145,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn when_server_created_with_cache_store_then_it_should_compile() {
-        let store = CacheStore::open_in_memory().expect("failed to create in-memory cache store");
+    #[tokio::test]
+    async fn when_server_created_with_cache_store_then_it_should_compile() {
+        let store = CacheStore::open_in_memory()
+            .await
+            .expect("failed to create in-memory cache store");
 
         let client = KagiClientBuilder::new()
             .with_api_key("test-key")

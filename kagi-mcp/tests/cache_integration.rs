@@ -83,14 +83,15 @@ async fn when_cache_persists_across_instances_then_data_should_be_readable() {
     let tmp = TempDir::new().unwrap();
     let cache_dir = tmp.path().join("cache");
 
-    let store = CacheStore::new(&cache_dir, 1.0, 7).unwrap();
+    let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
     store
         .set("key-persist", "search", b"persistent_payload")
+        .await
         .unwrap();
     drop(store);
 
-    let store = CacheStore::new(&cache_dir, 1.0, 7).unwrap();
-    let result = store.get("key-persist").unwrap();
+    let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
+    let result = store.get("key-persist").await.unwrap();
 
     assert_eq!(result, Some(b"persistent_payload".to_vec()));
 }
@@ -100,15 +101,18 @@ async fn when_concurrent_readers_then_both_should_read_same_entry() {
     let tmp = TempDir::new().unwrap();
     let cache_dir = tmp.path().join("cache");
 
-    let store = CacheStore::new(&cache_dir, 1.0, 7).unwrap();
-    store.set("key-shared", "search", b"shared_data").unwrap();
+    let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
+    store
+        .set("key-shared", "search", b"shared_data")
+        .await
+        .unwrap();
     drop(store);
 
-    let store_a = CacheStore::new(&cache_dir, 1.0, 7).unwrap();
-    let store_b = CacheStore::new(&cache_dir, 1.0, 7).unwrap();
+    let store_a = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
+    let store_b = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
 
-    let result_a = store_a.get("key-shared").unwrap();
-    let result_b = store_b.get("key-shared").unwrap();
+    let result_a = store_a.get("key-shared").await.unwrap();
+    let result_b = store_b.get("key-shared").await.unwrap();
 
     assert_eq!(result_a, Some(b"shared_data".to_vec()));
     assert_eq!(result_b, Some(b"shared_data".to_vec()));
@@ -118,10 +122,8 @@ async fn when_concurrent_readers_then_both_should_read_same_entry() {
 async fn when_cache_hit_then_api_should_not_be_called() {
     let tmp = TempDir::new().unwrap();
     let cache_dir = tmp.path().join("cache");
-    let store = CacheStore::new(&cache_dir, 1.0, 7).unwrap();
+    let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
 
-    // Pre-populate the cache with a response whose key matches the request
-    // that `search_handler` constructs internally.
     let cached_response = make_search_response("Cached Title", "Cached snippet");
 
     let request = SearchRequest::new("test query")
@@ -136,9 +138,9 @@ async fn when_cache_hit_then_api_should_not_be_called() {
             "search",
             &serde_json::to_vec(&cached_response).unwrap(),
         )
+        .await
         .unwrap();
 
-    // MockKagiApi with NO expectations — calling `.search()` would panic.
     let mock = MockKagiApi::new();
 
     let ctx = test_request_context().await;

@@ -1,3 +1,4 @@
+use sqlx::migrate::MigrateError;
 use std::io;
 
 /// Error type for cache operations.
@@ -7,9 +8,13 @@ pub enum CacheError {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 
-    /// SQLite error.
-    #[error("SQLite error: {0}")]
-    Sqlite(#[from] rusqlite::Error),
+    /// SQLx error.
+    #[error("database error: {0}")]
+    Sqlx(#[from] sqlx::Error),
+
+    /// Migration error.
+    #[error("migration error: {0}")]
+    Migrate(#[from] MigrateError),
 
     /// JSON serialization/deserialization error.
     #[error("serialization error: {0}")]

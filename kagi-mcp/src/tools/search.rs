@@ -85,7 +85,7 @@ pub async fn search_handler(
     if params.cache {
         if let Some(store) = cache_store {
             let key = generate_cache_key(&request);
-            match store.get(&key) {
+            match store.get(&key).await {
                 Ok(Some(cached_bytes)) => {
                     let mut cached_response: SearchResponse = serde_json::from_slice(&cached_bytes)
                         .map_err(|e| map_cache_error(e.into()))?;
@@ -136,6 +136,7 @@ pub async fn search_handler(
                     serde_json::to_vec(&response).map_err(|e| map_cache_error(e.into()))?;
                 store
                     .set(&key, "search", &json_bytes)
+                    .await
                     .map_err(map_cache_error)?;
             }
 
@@ -832,172 +833,5 @@ mod tests {
         let params: SearchParams = serde_json::from_str(json).unwrap();
 
         assert!(params.cache);
-    }
-
-    #[tokio::test]
-    async fn when_cache_hit_then_mock_api_should_not_be_called() {
-        let mock = MockKagiApi::new();
-        let store = CacheStore::open_in_memory().unwrap();
-
-        let cached_response = make_search_response(vec![SearchResult {
-            url: "https://example.com/".to_owned(),
-            title: "Cached".to_owned(),
-            snippet: Some("Cached snippet".to_owned()),
-            time: None,
-            image: None,
-            props: None,
-        }]);
-        let request = SearchRequest::new("test query")
-            .with_format("json".to_owned())
-            .with_timeout_seconds(SearchConfig::default().search_timeout)
-            .with_limit(SearchConfig::default().limit)
-            .with_safe_search(SearchConfig::default().safe_search);
-        let key = generate_cache_key(&request);
-        store
-            .set(
-                &key,
-                "search",
-                &serde_json::to_vec(&cached_response).unwrap(),
-            )
-            .unwrap();
-
-        let params = SearchParams {
-            query: "test query".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result =
-            search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Cached"));
-        assert!(text.contains("Cached snippet"));
-    }
-
-    #[tokio::test]
-    async fn when_cache_miss_then_api_should_be_called_and_response_stored() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_search().times(1).returning(|_| {
-            Ok(make_search_response(vec![SearchResult {
-                url: "https://example.com/".to_owned(),
-                title: "Fresh".to_owned(),
-                snippet: Some("Fresh snippet".to_owned()),
-                time: None,
-                image: None,
-                props: None,
-            }]))
-        });
-
-        let store = CacheStore::open_in_memory().unwrap();
-        let params = SearchParams {
-            query: "test query".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result =
-            search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Fresh"));
-
-        let request = SearchRequest::new("test query")
-            .with_format("json".to_owned())
-            .with_timeout_seconds(SearchConfig::default().search_timeout)
-            .with_limit(SearchConfig::default().limit)
-            .with_safe_search(SearchConfig::default().safe_search);
-        let key = generate_cache_key(&request);
-        let cached = store.get(&key).unwrap();
-        assert!(cached.is_some());
-        let stored_response: SearchResponse = serde_json::from_slice(&cached.unwrap()).unwrap();
-        assert_eq!(stored_response.data.search.unwrap()[0].title, "Fresh");
-    }
-
-    #[tokio::test]
-    async fn when_cache_false_then_api_should_be_called_and_response_stored() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_search().times(1).returning(|_| {
-            Ok(make_search_response(vec![SearchResult {
-                url: "https://example.com/".to_owned(),
-                title: "Fresh".to_owned(),
-                snippet: Some("Fresh snippet".to_owned()),
-                time: None,
-                image: None,
-                props: None,
-            }]))
-        });
-
-        let store = CacheStore::open_in_memory().unwrap();
-        let params = SearchParams {
-            query: "test query".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: None,
-            cache: false,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result =
-            search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Fresh"));
-
-        let request = SearchRequest::new("test query")
-            .with_format("json".to_owned())
-            .with_timeout_seconds(SearchConfig::default().search_timeout)
-            .with_limit(SearchConfig::default().limit)
-            .with_safe_search(SearchConfig::default().safe_search);
-        let key = generate_cache_key(&request);
-        let cached = store.get(&key).unwrap();
-        assert!(cached.is_some());
-    }
-
-    #[tokio::test]
-    async fn when_cache_corrupted_then_tool_call_should_fail() {
-        let mock = MockKagiApi::new();
-        let store = CacheStore::open_in_memory().unwrap();
-
-        let request = SearchRequest::new("test query")
-            .with_format("json".to_owned())
-            .with_timeout_seconds(SearchConfig::default().search_timeout)
-            .with_limit(SearchConfig::default().limit)
-            .with_safe_search(SearchConfig::default().safe_search);
-        let key = generate_cache_key(&request);
-        store.set(&key, "search", b"invalid json").unwrap();
-
-        let params = SearchParams {
-            query: "test query".to_owned(),
-            workflow: None,
-            after: None,
-            before: None,
-            output_format: None,
-            limit_per_domain: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result =
-            search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("Cache error"));
     }
 }

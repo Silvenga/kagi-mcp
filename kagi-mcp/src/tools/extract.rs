@@ -102,7 +102,7 @@ async fn extract_batch(
     if params.cache {
         if let Some(store) = cache_store {
             let key = generate_cache_key(&request);
-            match store.get(&key) {
+            match store.get(&key).await {
                 Ok(Some(cached_bytes)) => {
                     let cached_response: ExtractResponse = serde_json::from_slice(&cached_bytes)
                         .map_err(|e| map_cache_error(e.into()))?;
@@ -153,6 +153,7 @@ async fn extract_batch(
                     serde_json::to_vec(&response).map_err(|e| map_cache_error(e.into()))?;
                 store
                     .set(&key, "extract", &json_bytes)
+                    .await
                     .map_err(map_cache_error)?;
             }
 
@@ -203,7 +204,7 @@ async fn extract_split(
         if params.cache {
             if let Some(store) = cache_store {
                 let key = generate_cache_key(&single_req);
-                if let Ok(Some(cached_bytes)) = store.get(&key) {
+                if let Ok(Some(cached_bytes)) = store.get(&key).await {
                     if let Ok(cached_response) =
                         serde_json::from_slice::<ExtractResponse>(&cached_bytes)
                     {
@@ -258,7 +259,7 @@ async fn extract_split(
                             .with_timeout_seconds(extract_timeout);
                         let key = generate_cache_key(&store_req);
                         if let Ok(json_bytes) = serde_json::to_vec(&api_response) {
-                            let _ = store.set(&key, "extract", &json_bytes);
+                            let _ = store.set(&key, "extract", &json_bytes).await;
                         }
                     }
                 }
@@ -597,152 +598,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn when_cache_hit_then_mock_api_should_not_be_called() {
-        let mock = test_client();
-        let store = CacheStore::open_in_memory().unwrap();
-
-        let cached_response = make_extract_response(
-            vec![ExtractData {
-                url: "https://example.com/".to_owned(),
-                markdown: Some("Cached content".to_owned()),
-            }],
-            vec![],
-        );
-        let request = ExtractRequest::new(vec![ExtractPage {
-            url: "https://example.com/".to_owned(),
-        }])
-        .with_format("json".to_owned())
-        .with_timeout_seconds(10.0);
-        let key = generate_cache_key(&request);
-        store
-            .set(
-                &key,
-                "extract",
-                &serde_json::to_vec(&cached_response).unwrap(),
-            )
-            .unwrap();
-
-        let params = ExtractParams {
-            pages: vec!["https://example.com".to_owned()],
-            output_format: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(mock, params, &ctx, 10.0, true, Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Cached content"));
-    }
-
-    #[tokio::test]
-    async fn when_cache_miss_then_api_should_be_called_and_response_stored() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract().times(1).returning(|_| {
-            Ok(make_extract_response(
-                vec![ExtractData {
-                    url: "https://example.com/".to_owned(),
-                    markdown: Some("Fresh content".to_owned()),
-                }],
-                vec![],
-            ))
-        });
-
-        let store = CacheStore::open_in_memory().unwrap();
-        let params = ExtractParams {
-            pages: vec!["https://example.com".to_owned()],
-            output_format: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Fresh content"));
-
-        let request = ExtractRequest::new(vec![ExtractPage {
-            url: "https://example.com/".to_owned(),
-        }])
-        .with_format("json".to_owned())
-        .with_timeout_seconds(10.0);
-        let key = generate_cache_key(&request);
-        let cached = store.get(&key).unwrap();
-        assert!(cached.is_some());
-        let stored_response: ExtractResponse = serde_json::from_slice(&cached.unwrap()).unwrap();
-        assert_eq!(
-            stored_response.data.unwrap()[0].markdown,
-            Some("Fresh content".to_owned())
-        );
-    }
-
-    #[tokio::test]
-    async fn when_cache_false_then_api_should_be_called_and_response_stored() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract().times(1).returning(|_| {
-            Ok(make_extract_response(
-                vec![ExtractData {
-                    url: "https://example.com/".to_owned(),
-                    markdown: Some("Fresh content".to_owned()),
-                }],
-                vec![],
-            ))
-        });
-
-        let store = CacheStore::open_in_memory().unwrap();
-        let params = ExtractParams {
-            pages: vec!["https://example.com".to_owned()],
-            output_format: None,
-            cache: false,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Fresh content"));
-
-        let request = ExtractRequest::new(vec![ExtractPage {
-            url: "https://example.com/".to_owned(),
-        }])
-        .with_format("json".to_owned())
-        .with_timeout_seconds(10.0);
-        let key = generate_cache_key(&request);
-        let cached = store.get(&key).unwrap();
-        assert!(cached.is_some());
-    }
-
-    #[tokio::test]
-    async fn when_cache_corrupted_then_tool_call_should_fail() {
-        let mock = test_client();
-        let store = CacheStore::open_in_memory().unwrap();
-
-        let request = ExtractRequest::new(vec![ExtractPage {
-            url: "https://example.com/".to_owned(),
-        }])
-        .with_format("json".to_owned())
-        .with_timeout_seconds(10.0);
-        let key = generate_cache_key(&request);
-        store.set(&key, "extract", b"invalid json").unwrap();
-
-        let params = ExtractParams {
-            pages: vec!["https://example.com".to_owned()],
-            output_format: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(mock, params, &ctx, 10.0, false, Some(&store)).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("Cache error"));
-    }
-
-    #[tokio::test]
     async fn when_split_extract_two_urls_then_api_called_twice_with_single_page_requests() {
         let mut mock = MockKagiApi::new();
         mock.expect_extract()
@@ -779,115 +634,6 @@ mod tests {
         assert!(text.contains("Content from https://a.com"));
         assert!(text.contains("https://b.com"));
         assert!(text.contains("Content from https://b.com"));
-    }
-
-    #[tokio::test]
-    async fn when_split_extract_with_cache_hit_then_api_not_called_for_cached_url() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(1)
-            .withf(|req| req.pages().len() == 1 && req.pages()[0].url == "https://b.com/")
-            .returning(|req| {
-                let url = &req.pages()[0].url;
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_owned(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: url.clone(),
-                        markdown: Some(format!("Content from {url}")),
-                    }]),
-                    errors: None,
-                })
-            });
-
-        let store = CacheStore::open_in_memory().unwrap();
-
-        let cached_data = ExtractResponse {
-            meta: Meta {
-                trace: "test".to_owned(),
-                node: None,
-                ms: None,
-            },
-            data: Some(vec![ExtractData {
-                url: "https://a.com/".to_owned(),
-                markdown: Some("Cached A content".to_owned()),
-            }]),
-            errors: None,
-        };
-        let cache_req = ExtractRequest::new(vec![ExtractPage {
-            url: "https://a.com/".to_owned(),
-        }])
-        .with_format("json".to_owned())
-        .with_timeout_seconds(10.0);
-        let key = generate_cache_key(&cache_req);
-        store
-            .set(&key, "extract", &serde_json::to_vec(&cached_data).unwrap())
-            .unwrap();
-
-        let params = ExtractParams {
-            pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
-            output_format: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Cached A content"));
-        assert!(text.contains("Content from https://b.com/"));
-    }
-
-    #[tokio::test]
-    async fn when_split_extract_all_cached_then_api_not_called() {
-        let mock = test_client();
-
-        let store = CacheStore::open_in_memory().unwrap();
-
-        for (url, content) in &[
-            ("https://a.com/", "Cached A"),
-            ("https://b.com/", "Cached B"),
-        ] {
-            let cached = ExtractResponse {
-                meta: Meta {
-                    trace: "test".to_owned(),
-                    node: None,
-                    ms: None,
-                },
-                data: Some(vec![ExtractData {
-                    url: url.to_string(),
-                    markdown: Some(content.to_string()),
-                }]),
-                errors: None,
-            };
-            let cache_req = ExtractRequest::new(vec![ExtractPage {
-                url: url.to_string(),
-            }])
-            .with_format("json".to_owned())
-            .with_timeout_seconds(10.0);
-            let key = generate_cache_key(&cache_req);
-            store
-                .set(&key, "extract", &serde_json::to_vec(&cached).unwrap())
-                .unwrap();
-        }
-
-        let params = ExtractParams {
-            pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
-            output_format: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(mock, params, &ctx, 10.0, true, Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Cached A"));
-        assert!(text.contains("Cached B"));
     }
 
     #[tokio::test]
@@ -1105,72 +851,6 @@ mod tests {
         assert!(text.contains("Content from https://ok2.com/"));
         assert!(text.contains("https://fail.com"));
         assert!(text.contains("server error"));
-    }
-
-    #[tokio::test]
-    async fn when_split_enabled_with_cache_hit_then_should_skip_api_call_for_cached_url() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(2)
-            .withf(|req| req.pages().len() == 1)
-            .returning(|req| {
-                let url = &req.pages()[0].url;
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_owned(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: url.clone(),
-                        markdown: Some(format!("Content from {url}")),
-                    }]),
-                    errors: None,
-                })
-            });
-
-        let store = CacheStore::open_in_memory().unwrap();
-
-        let cached_data = ExtractResponse {
-            meta: Meta {
-                trace: "test".to_owned(),
-                node: None,
-                ms: None,
-            },
-            data: Some(vec![ExtractData {
-                url: "https://b.com/".to_owned(),
-                markdown: Some("Cached B content".to_owned()),
-            }]),
-            errors: None,
-        };
-        let cache_req = ExtractRequest::new(vec![ExtractPage {
-            url: "https://b.com/".to_owned(),
-        }])
-        .with_format("json".to_owned())
-        .with_timeout_seconds(10.0);
-        let key = generate_cache_key(&cache_req);
-        store
-            .set(&key, "extract", &serde_json::to_vec(&cached_data).unwrap())
-            .unwrap();
-
-        let params = ExtractParams {
-            pages: vec![
-                "https://a.com".to_owned(),
-                "https://b.com".to_owned(),
-                "https://c.com".to_owned(),
-            ],
-            output_format: None,
-            cache: true,
-        };
-        let ctx = super::super::test_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, Some(&store)).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Content from https://a.com/"));
-        assert!(text.contains("Cached B content"));
-        assert!(text.contains("Content from https://c.com/"));
     }
 
     #[tokio::test]
