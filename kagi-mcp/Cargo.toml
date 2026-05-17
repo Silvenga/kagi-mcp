@@ -18,9 +18,10 @@ workspace = true
 
 [dependencies]
 kagi-api = { path = "../kagi-api" }
-rmcp = { version = "1.7.0", features = ["server", "client", "transport-io", "transport-async-rw", "schemars"] }
+rmcp = { version = "1.7.0", features = ["server", "client", "transport-io", "transport-async-rw", "transport-streamable-http-server", "schemars"] }
+axum = "0.8.9"
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "migrate"] }
-tokio = { workspace = true, features = ["io-std", "io-util", "process", "rt"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "process", "rt", "net", "signal"] }
 tokio-util = "0.7.18"
 clap = { workspace = true }
 tracing = { workspace = true }

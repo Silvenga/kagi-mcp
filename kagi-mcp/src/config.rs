@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
 fn parse_cache_dir(s: &str) -> Result<PathBuf, String> {
@@ -30,6 +30,13 @@ fn parse_cache_ttl_days(s: &str) -> Result<u64, String> {
     } else {
         Ok(val)
     }
+}
+
+#[derive(Debug, Clone, ValueEnum, Default)]
+pub enum TransportMode {
+    #[default]
+    Stdio,
+    StreamableHttp,
 }
 
 #[derive(Debug, Parser, Clone)]
@@ -100,11 +107,18 @@ pub struct Config {
         value_parser = parse_cache_ttl_days,
     )]
     pub cache_ttl_days: u64,
+
+    #[arg(long, env = "KAGI_TRANSPORT", value_enum, default_value_t = TransportMode::Stdio)]
+    pub transport: TransportMode,
+
+    #[arg(long, env = "KAGI_BIND", default_value = "127.0.0.1:3000")]
+    pub bind: String,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
     fn when_default_args_then_default_values_should_apply() {
@@ -288,5 +302,59 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.cache_size_gb, 0.5);
+    }
+
+    #[test]
+    fn when_default_args_then_transport_should_default_to_stdio() {
+        // Clear env var to avoid interference from parallel env tests
+        env::remove_var("KAGI_TRANSPORT");
+
+        let config =
+            Config::try_parse_from(["kagi-mcp", "--api-key", "test-key"]).unwrap();
+
+        assert_eq!(config.bind, "127.0.0.1:3000");
+        assert!(matches!(config.transport, TransportMode::Stdio));
+    }
+
+    #[test]
+    fn when_transport_streamable_http_then_should_parse() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--transport",
+            "streamable-http",
+        ])
+        .unwrap();
+
+        assert!(matches!(config.transport, TransportMode::StreamableHttp));
+    }
+
+    #[test]
+    fn when_bind_custom_then_should_parse() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--bind",
+            "0.0.0.0:8080",
+        ])
+        .unwrap();
+
+        assert_eq!(config.bind, "0.0.0.0:8080");
+    }
+
+    #[test]
+    fn when_env_transport_set_then_should_parse() {
+        let prior = env::var_os("KAGI_TRANSPORT");
+        env::set_var("KAGI_TRANSPORT", "streamable-http");
+        let config =
+            Config::try_parse_from(["kagi-mcp", "--api-key", "test-key"]).unwrap();
+        match prior {
+            Some(v) => env::set_var("KAGI_TRANSPORT", v),
+            None => env::remove_var("KAGI_TRANSPORT"),
+        }
+
+        assert!(matches!(config.transport, TransportMode::StreamableHttp));
     }
 }
