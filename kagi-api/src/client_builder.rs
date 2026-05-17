@@ -107,40 +107,16 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn when_default_builder_then_should_have_default_base_url() {
+    fn when_default_builder_then_all_defaults_should_apply() {
         let builder = KagiClientBuilder::new();
 
         assert_eq!(builder.base_url, DEFAULT_BASE_URL);
-    }
-
-    #[test]
-    fn when_default_builder_then_should_have_default_user_agent() {
-        let builder = KagiClientBuilder::new();
-
         assert_eq!(builder.user_agent, DEFAULT_USER_AGENT);
-    }
-
-    #[test]
-    fn when_default_builder_then_should_have_default_timeout() {
-        let builder = KagiClientBuilder::new();
-
         assert_eq!(
             builder.timeout,
             Duration::from_secs_f64(DEFAULT_TIMEOUT_SECS)
         );
-    }
-
-    #[test]
-    fn when_default_builder_then_should_have_default_retries() {
-        let builder = KagiClientBuilder::new();
-
         assert_eq!(builder.retries, DEFAULT_RETRIES);
-    }
-
-    #[test]
-    fn when_default_builder_then_should_have_no_api_key() {
-        let builder = KagiClientBuilder::new();
-
         assert!(builder.api_key.is_none());
     }
 

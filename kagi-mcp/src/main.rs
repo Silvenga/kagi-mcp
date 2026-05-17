@@ -50,16 +50,14 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("failed to initialize cache: {e}"))?,
     );
 
-    let server = KagiMcpServer::new(
-        client,
-        config.search_timeout,
-        config.extract_timeout,
-        config.limit,
-        config.safe_search,
-        config.region,
-        config.split_extract_requests,
-        Some(cache_store),
-    );
+    let server = KagiMcpServer::new(client)
+        .with_search_timeout(config.search_timeout)
+        .with_extract_timeout(config.extract_timeout)
+        .with_limit(config.limit)
+        .with_safe_search(config.safe_search)
+        .with_region(config.region)
+        .with_split_extract_requests(config.split_extract_requests)
+        .with_cache_store(Some(cache_store));
 
     match config.transport {
         TransportMode::Stdio => {
