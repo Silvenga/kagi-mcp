@@ -1,5 +1,19 @@
 use serde::Deserialize;
 
+fn option_string_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "string"
+    })
+}
+
+fn option_u32_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 1
+    })
+}
+
 /// Parameters for the `search` tool.
 #[warn(missing_docs)]
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -8,10 +22,16 @@ pub struct SearchParams {
     pub query: String,
     /// Result type filter. Use 'images', 'videos', 'news', or 'podcasts' to narrow results.
     /// Omit for general web search.
+    #[serde(default)]
+    #[schemars(schema_with = "option_string_schema")]
     pub workflow: Option<String>,
     /// Date filter (YYYY-MM-DD). Use when the query is time-sensitive.
+    #[serde(default)]
+    #[schemars(schema_with = "option_string_schema")]
     pub after: Option<String>,
     /// Date filter (YYYY-MM-DD). Use when the query is time-sensitive.
+    #[serde(default)]
+    #[schemars(schema_with = "option_string_schema")]
     pub before: Option<String>,
     /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
     /// Use 'json' only when the caller explicitly requests raw structured data.
@@ -20,6 +40,8 @@ pub struct SearchParams {
     pub output_format: String,
     /// Max results per domain group. Use when results feel repetitive from the same site.
     /// Must be >= 1 if set.
+    #[serde(default)]
+    #[schemars(schema_with = "option_u32_schema")]
     pub limit_per_domain: Option<u32>,
     /// Whether to use cached results. Set to false only if freshness is critical.
     #[serde(default = "default_true")]
