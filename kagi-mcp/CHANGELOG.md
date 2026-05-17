@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.2.0...kagi-mcp-v0.2.1) (2026-05-17)
+
+
+### Bug Fixes
+
+* disable allowed hosts validation in streamable HTTP mode ([#39](https://github.com/Silvenga/kagi-mcp/issues/39)) ([89d244d](https://github.com/Silvenga/kagi-mcp/commit/89d244d0d9202317deaf4817685d08abe37f9913))
+
 ## [0.2.0](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.1.0...kagi-mcp-v0.2.0) (2026-05-17)
 
 

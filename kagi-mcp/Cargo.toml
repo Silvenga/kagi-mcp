@@ -1,6 +1,6 @@
 [package]
 name = "kagi-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "MCP server for the Kagi Search API"
 edition.workspace = true
 license.workspace = true
