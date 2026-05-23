@@ -69,7 +69,9 @@ pub async fn extract_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::generate_cache_key;
     use crate::cache::CacheStore;
+    use crate::config::FallbackRule;
     use kagi_api::{ExtractData, ExtractError, Meta};
     use kagi_api::{ExtractResponse, MockKagiApi};
     use rmcp::model::ErrorCode;
@@ -597,7 +599,7 @@ mod tests {
         let mock = MockKagiApi::new();
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "blocked.com".to_owned(),
                 message: "Blocked by policy".to_owned(),
                 always_block: true,
@@ -643,7 +645,7 @@ mod tests {
             });
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "blocked.com".to_owned(),
                 message: "Blocked by policy".to_owned(),
                 always_block: true,
@@ -679,7 +681,7 @@ mod tests {
         let mock = MockKagiApi::new();
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "blocked.com".to_owned(),
                 message: "Blocked by policy".to_owned(),
                 always_block: true,
@@ -708,7 +710,7 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Blocked by policy"));
 
-        let key = crate::cache::generate_cache_key(
+        let key = generate_cache_key(
             &kagi_api::ExtractRequest::new(vec![kagi_api::ExtractPage {
                 url: "https://blocked.com/page".to_owned(),
             }])
@@ -738,7 +740,7 @@ mod tests {
         });
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "fallback.com".to_owned(),
                 message: "Fallback message".to_owned(),
                 always_block: false,
@@ -779,7 +781,7 @@ mod tests {
         });
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "fallback.com".to_owned(),
                 message: "Fallback message".to_owned(),
                 always_block: false,
@@ -820,7 +822,7 @@ mod tests {
         });
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "fallback.com".to_owned(),
                 message: "Fallback message".to_owned(),
                 always_block: false,
@@ -861,7 +863,7 @@ mod tests {
         });
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "fallback.com".to_owned(),
                 message: "Fallback message".to_owned(),
                 always_block: false,
@@ -940,13 +942,13 @@ mod tests {
         }])
         .with_format("json".to_owned())
         .with_timeout_seconds(10.0);
-        let key = crate::cache::generate_cache_key(&single_req);
+        let key = generate_cache_key(&single_req);
         store.set(&key, "extract", &cached_bytes).await.unwrap();
 
         let mock = MockKagiApi::new();
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "fallback.com".to_owned(),
                 message: "Fallback message".to_owned(),
                 always_block: false,
@@ -981,7 +983,7 @@ mod tests {
         let mock = MockKagiApi::new();
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "blocked.com".to_owned(),
                 message: "Blocked by policy".to_owned(),
                 always_block: true,
@@ -1039,7 +1041,7 @@ mod tests {
         });
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "blocked.com".to_owned(),
                 message: "Blocked by policy".to_owned(),
                 always_block: true,
@@ -1105,7 +1107,7 @@ mod tests {
         });
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "fallback.com".to_owned(),
                 message: "Fallback message".to_owned(),
                 always_block: false,
@@ -1168,7 +1170,7 @@ mod tests {
         });
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "blocked.com".to_owned(),
                 message: "Blocked by policy".to_owned(),
                 always_block: true,
@@ -1215,7 +1217,7 @@ mod tests {
         let mock = MockKagiApi::new();
 
         let rules = FallbackRules {
-            rules: vec![crate::config::FallbackRule {
+            rules: vec![FallbackRule {
                 domain: "blocked.com".to_owned(),
                 message: "Blocked by policy".to_owned(),
                 always_block: true,
@@ -1247,7 +1249,7 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Blocked by policy"));
 
-        let key = crate::cache::generate_cache_key(
+        let key = generate_cache_key(
             &kagi_api::ExtractRequest::new(vec![])
                 .with_format("json".to_owned())
                 .with_timeout_seconds(10.0),
