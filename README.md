@@ -94,6 +94,8 @@ But you likely want to configure it in your MCP client:
 | `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`                 | Cache entry TTL in days                           | `7`                    |
 | `--transport` / `KAGI_TRANSPORT`                           | Transport mode: `stdio` or `streamable-http`      | `stdio`                |
 | `--bind` / `KAGI_BIND`                                     | Bind address for HTTP transport                   | `127.0.0.1:3000`       |
+| `--fallback-message` / `KAGI_FALLBACK_MESSAGE`             | Per-domain fallback message (format: `domain=message`) | *none*             |
+| `--fallback-always` / `KAGI_FALLBACK_ALWAYS`               | Always-block domains (skip extraction)            | *none*                 |
 
 The default cache directory depends on the platform:
 
@@ -145,6 +147,40 @@ Search results may include:
 - Direct answers - Inline answer snippets.
 
 Extract results include per-page Markdown content with explicit error messages for any URLs that could not be extracted.
+
+## Fallback Messages
+
+When extraction fails for certain domains (e.g., rate-limited sites), you can configure per-domain fallback messages to return custom text to the LLM instead of empty or failed content.
+
+### Post-Extract Fallback
+
+Triggered when the Kagi API returns empty content (`markdown: null`, empty string, or whitespace-only) for a matched domain. The configured message is substituted into the result.
+
+```bash
+kagi-mcp --fallback-message github.com="Use github-mcp instead"
+```
+
+### Pre-Extract Skip (Always Block)
+
+Skips the Kagi API call entirely for matched domains and returns the fallback message immediately. Useful for domains that should never be extracted.
+
+```bash
+kagi-mcp --fallback-always github.com --fallback-message github.com="Use github-mcp instead"
+```
+
+### Environment Variables
+
+Both options support comma-separated values via environment variables:
+
+```bash
+export KAGI_FALLBACK_MESSAGE="github.com=Use github-mcp,reddit.com=Use reddit search"
+export KAGI_FALLBACK_ALWAYS="github.com"
+kagi-mcp
+```
+
+### Domain Matching
+
+Domains are matched using eTLD+1 (registrable domain) extraction. Subdomains are automatically resolved to their registrable domain (e.g., `www.github.com` matches `github.com`). Matching is case-insensitive.
 
 ## Known Issues
 
