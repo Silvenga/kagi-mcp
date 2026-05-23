@@ -1,0 +1,11 @@
+---
+source: kagi-mcp/src/format/extract.rs
+expression: "result.replace(\"\\r\\n\", \"\\n\")"
+---
+## Extracted Content
+
+### https://example.com/unavailable
+
+This URL could not be extracted. The content was not available.
+
+---

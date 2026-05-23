@@ -1,3 +1,4 @@
+pub mod domain;
 pub mod extract;
 pub mod search;
 

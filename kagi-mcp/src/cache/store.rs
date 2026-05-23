@@ -68,7 +68,7 @@ impl CacheStore {
         Self::new(&cache_dir, 1.0, 1).await
     }
 
-    async fn open_connection(&self) -> Result<SqliteConnection, CacheError> {
+    pub(crate) async fn open_connection(&self) -> Result<SqliteConnection, CacheError> {
         self.connect_options.connect().await.map_err(Into::into)
     }
 

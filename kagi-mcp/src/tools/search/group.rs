@@ -1,24 +1,4 @@
-use publicsuffix::{List, Psl};
-use std::str::from_utf8;
-use std::sync::LazyLock;
-use url::Url;
-
-/// Minimal public suffix data for eTLD+1 extraction.
-///
-/// Covers common TLDs and well-known second-level public suffixes so that
-/// registrable domain extraction works correctly for URLs from popular
-/// registries (`.uk`, `.au`, `.jp`, etc.) without shipping the full PSL.
-const PSL_DATA: &[u8] = b"\
-// BEGIN ICANN DOMAINS\n\
-com\norg\nnet\ngov\nedu\nmil\n\
-uk\nde\njp\nfr\nau\nbr\n\
-co.uk\norg.uk\nac.uk\ngov.uk\nme.uk\nnet.uk\nsch.uk\n\
-com.au\nnet.au\norg.au\n\
-co.jp\nne.jp\nor.jp\n\
-co.nz\nnet.nz\norg.nz\n";
-
-static PSL_LIST: LazyLock<List> =
-    LazyLock::new(|| List::from_bytes(PSL_DATA).expect("embedded PSL data is valid"));
+use crate::tools::domain::extract_registrable_domain;
 
 /// Extract a grouping key for a search result.
 ///
@@ -36,31 +16,7 @@ pub fn extract_group_key(result: &kagi_api::SearchResult) -> Option<String> {
         }
     }
 
-    let url = Url::parse(&result.url).ok()?;
-    let host = url.host()?;
-
-    match host {
-        url::Host::Ipv4(addr) => Some(addr.to_string()),
-        url::Host::Ipv6(addr) => Some(addr.to_string()),
-        url::Host::Domain(domain) => {
-            let list = &*PSL_LIST;
-            match list.domain(domain.as_bytes()) {
-                Some(parsed) => {
-                    let registrable = from_utf8(parsed.as_bytes())
-                        .expect("domain from URL parsing is valid UTF-8");
-                    Some(registrable.to_owned())
-                }
-                None => {
-                    let labels: Vec<&str> = domain.split('.').collect();
-                    Some(if labels.len() <= 2 {
-                        domain.to_owned()
-                    } else {
-                        labels[labels.len() - 2..].join(".")
-                    })
-                }
-            }
-        }
-    }
+    extract_registrable_domain(&result.url)
 }
 
 #[cfg(test)]

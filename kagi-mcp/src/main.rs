@@ -5,6 +5,7 @@ mod server;
 mod tools;
 
 use crate::cache::CacheStore;
+use crate::tools::extract::FallbackRules;
 use axum::Router;
 use clap::Parser;
 use config::{Config, TransportMode};
@@ -14,6 +15,7 @@ use rmcp::transport::streamable_http_server::tower::StreamableHttpService;
 use rmcp::transport::streamable_http_server::StreamableHttpServerConfig;
 use rmcp::ServiceExt;
 use server::KagiMcpServer;
+use std::collections::HashSet;
 use std::io::{self, stderr};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -29,6 +31,28 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::parse();
+
+    let mut rules = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    for rule in &config.fallback_always {
+        seen.insert(rule.domain.clone());
+        rules.push(rule.clone());
+    }
+
+    for rule in &config.fallback_messages {
+        if let Some(existing) = rules.iter_mut().find(|r| r.domain == rule.domain) {
+            existing.message = rule.message.clone();
+        } else {
+            seen.insert(rule.domain.clone());
+            rules.push(rule.clone());
+        }
+    }
+    let fallback_rules = if rules.is_empty() {
+        None
+    } else {
+        Some(FallbackRules { rules })
+    };
 
     let client = KagiClientBuilder::new()
         .with_api_key(&config.api_key)
@@ -54,7 +78,8 @@ async fn main() -> anyhow::Result<()> {
         .with_safe_search(config.safe_search)
         .with_region(config.region)
         .with_split_extract_requests(config.split_extract_requests)
-        .with_cache_store(Some(cache_store));
+        .with_cache_store(Some(cache_store))
+        .with_fallback_rules(fallback_rules);
 
     match config.transport {
         TransportMode::Stdio => {

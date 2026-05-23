@@ -23,6 +23,14 @@ impl TestHarness {
 }
 
 pub async fn spawn_server(base_url: &str, extra_args: &[&str]) -> TestHarness {
+    spawn_server_with_env(base_url, extra_args, &[]).await
+}
+
+pub async fn spawn_server_with_env(
+    base_url: &str,
+    extra_args: &[&str],
+    extra_env: &[(&str, &str)],
+) -> TestHarness {
     let bin = cargo_bin("kagi-mcp");
     let cache_dir = TempDir::new().expect("failed to create temp cache dir");
     let cache_dir_path = cache_dir.path().to_str().expect("non-utf8 path").to_owned();
@@ -35,6 +43,10 @@ pub async fn spawn_server(base_url: &str, extra_args: &[&str]) -> TestHarness {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    for (key, value) in extra_env {
+        cmd.env(key, value);
+    }
 
     let mut child = cmd
         .spawn()

@@ -1,15 +1,33 @@
 use crate::cache::{generate_cache_key, CacheStore};
 use crate::format::{format_extract_markdown, format_json};
 use crate::tools::extract::errors::kagi_error_to_extract_error;
+use crate::tools::extract::fallback::{is_empty_content, FallbackMatch, FallbackRules};
 use crate::tools::extract::ExtractParams;
 use crate::tools::progress::send_progress;
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::{ExtractPage, ExtractRequest, ExtractResponse, KagiApi};
+use kagi_api::{ExtractData, ExtractPage, ExtractRequest, ExtractResponse, KagiApi};
 use rmcp::model::{CallToolResult, Content, ErrorCode};
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer};
 use std::sync::Arc;
 use tokio::task::JoinSet;
+
+fn apply_post_extract_fallback(
+    response: &mut ExtractResponse,
+    fallback_rules: Option<&FallbackRules>,
+) {
+    if let Some(rules) = fallback_rules {
+        if let Some(data) = response.data.as_mut() {
+            for item in data.iter_mut() {
+                if is_empty_content(item) {
+                    if let FallbackMatch::EmptyContent { message } = rules.check(&item.url) {
+                        item.markdown = Some(message);
+                    }
+                }
+            }
+        }
+    }
+}
 
 pub async fn extract_split(
     client: Arc<dyn KagiApi>,
@@ -18,6 +36,7 @@ pub async fn extract_split(
     extract_timeout: f64,
     pages: Vec<ExtractPage>,
     cache_store: Option<&CacheStore>,
+    fallback_rules: Option<&FallbackRules>,
 ) -> Result<CallToolResult, ErrorData> {
     let total_pages = pages.len();
 
@@ -37,6 +56,31 @@ pub async fn extract_split(
     let mut pending: Vec<usize> = Vec::new();
 
     for (i, page) in pages.iter().enumerate() {
+        if let Some(rules) = fallback_rules {
+            if let FallbackMatch::AlwaysBlock { message } = rules.check(&page.url) {
+                let _ = send_progress(
+                    ctx,
+                    ((i + 1) as f64 / total_pages as f64) * 100.0,
+                    Some(100.0),
+                    format!("Page {}/{} (blocked)", i + 1, total_pages),
+                )
+                .await;
+                results[i] = Some(ExtractResponse {
+                    meta: kagi_api::Meta {
+                        trace: String::new(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: page.url.clone(),
+                        markdown: Some(message),
+                    }]),
+                    errors: None,
+                });
+                continue;
+            }
+        }
+
         let single_req = ExtractRequest::new(vec![page.clone()])
             .with_format("json".to_owned())
             .with_timeout_seconds(extract_timeout);
@@ -56,6 +100,8 @@ pub async fn extract_split(
                             format!("Page {}/{} (cached)", i + 1, total_pages),
                         )
                         .await;
+                        let mut cached_response = cached_response;
+                        apply_post_extract_fallback(&mut cached_response, fallback_rules);
                         results[i] = Some(cached_response);
                         cache_hit = true;
                     }
@@ -112,6 +158,8 @@ pub async fn extract_split(
                     format!("Page {}/{}", idx + 1, total_pages),
                 )
                 .await;
+                let mut api_response = api_response;
+                apply_post_extract_fallback(&mut api_response, fallback_rules);
                 results[idx] = Some(api_response);
             }
             Ok((idx, Err(kagi_err))) => {
