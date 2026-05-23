@@ -1,5 +1,5 @@
 use crate::cache::CacheStore;
-use crate::tools::extract::{extract_handler, ExtractParams};
+use crate::tools::extract::{extract_handler, ExtractParams, FallbackRules};
 use crate::tools::search::{search_handler, SearchConfig, SearchParams};
 use kagi_api::{KagiApi, KagiClient};
 use rmcp::handler::server::wrapper::Parameters;
@@ -25,6 +25,7 @@ pub struct KagiMcpServer {
     pub region: Option<String>,
     pub split_extract_requests: bool,
     pub cache_store: Option<Arc<CacheStore>>,
+    pub fallback_rules: Option<FallbackRules>,
 }
 
 impl KagiMcpServer {
@@ -39,6 +40,7 @@ impl KagiMcpServer {
             region: None,
             split_extract_requests: DEFAULT_SPLIT_EXTRACT_REQUESTS,
             cache_store: None,
+            fallback_rules: None,
         }
     }
 
@@ -84,6 +86,12 @@ impl KagiMcpServer {
         self
     }
 
+    /// Set the fallback rules.
+    pub fn with_fallback_rules(mut self, fallback_rules: Option<FallbackRules>) -> Self {
+        self.fallback_rules = fallback_rules;
+        self
+    }
+
     #[cfg(test)]
     pub fn with_client(client: Arc<dyn KagiApi>) -> Self {
         Self {
@@ -95,6 +103,7 @@ impl KagiMcpServer {
             region: None,
             split_extract_requests: DEFAULT_SPLIT_EXTRACT_REQUESTS,
             cache_store: None,
+            fallback_rules: None,
         }
     }
 }
@@ -138,6 +147,7 @@ impl KagiMcpServer {
             self.extract_timeout,
             self.split_extract_requests,
             self.cache_store.as_deref(),
+            self.fallback_rules.as_ref(),
         )
         .await
     }
@@ -149,6 +159,8 @@ impl ServerHandler for KagiMcpServer {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::FallbackRule;
+    use crate::tools::extract::FallbackRules;
     use kagi_api::KagiClientBuilder;
 
     #[test]
@@ -205,6 +217,37 @@ mod tests {
         assert!(
             server.cache_store.is_some(),
             "cache_store should be present"
+        );
+    }
+
+    #[test]
+    fn when_server_created_with_fallback_rules_then_tools_should_be_present() {
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "example.com".to_owned(),
+                message: "blocked".to_owned(),
+                always_block: false,
+            }],
+        };
+
+        let client = KagiClientBuilder::new()
+            .with_api_key("test-key")
+            .build()
+            .unwrap();
+
+        let server = KagiMcpServer::new(client)
+            .with_search_timeout(4.0)
+            .with_extract_timeout(30.0)
+            .with_fallback_rules(Some(rules));
+
+        let info = server.get_info();
+        assert!(
+            info.capabilities.tools.is_some(),
+            "server with fallback rules should have tools capability"
+        );
+        assert!(
+            server.fallback_rules.is_some(),
+            "fallback_rules should be present"
         );
     }
 }

@@ -1,6 +1,13 @@
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct FallbackRule {
+    pub domain: String,
+    pub message: String,
+    pub always_block: bool,
+}
+
 #[derive(Debug, Parser, Clone)]
 #[command(name = "kagi-mcp", about = "Kagi MCP server")]
 pub struct Config {
@@ -74,6 +81,22 @@ pub struct Config {
 
     #[arg(long, env = "KAGI_BIND", default_value = "127.0.0.1:3000")]
     pub bind: String,
+
+    #[arg(
+        long = "fallback-message",
+        env = "KAGI_FALLBACK_MESSAGE",
+        value_parser = parse_fallback_message,
+        value_delimiter = ',',
+    )]
+    pub fallback_messages: Vec<FallbackRule>,
+
+    #[arg(
+        long = "fallback-always",
+        env = "KAGI_FALLBACK_ALWAYS",
+        value_parser = parse_fallback_always,
+        value_delimiter = ',',
+    )]
+    pub fallback_always: Vec<FallbackRule>,
 }
 
 impl Config {
@@ -117,6 +140,41 @@ fn parse_cache_size_gb(s: &str) -> Result<f64, String> {
     } else {
         Ok(val)
     }
+}
+
+fn parse_fallback_message(s: &str) -> Result<FallbackRule, String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return Err("fallback message entry must not be empty".to_owned());
+    }
+    let eq_pos = trimmed.find('=').ok_or_else(|| {
+        format!("invalid fallback message format `{trimmed}`, expected `domain=message`")
+    })?;
+    let domain = trimmed[..eq_pos].trim().to_owned();
+    let message = trimmed[eq_pos + 1..].trim().to_owned();
+    if domain.is_empty() {
+        return Err("domain must not be empty in fallback message".to_owned());
+    }
+    if message.is_empty() {
+        return Err("message must not be empty in fallback message".to_owned());
+    }
+    Ok(FallbackRule {
+        domain,
+        message,
+        always_block: false,
+    })
+}
+
+fn parse_fallback_always(s: &str) -> Result<FallbackRule, String> {
+    let domain = s.trim().to_owned();
+    if domain.is_empty() {
+        return Err("domain must not be empty in fallback always".to_owned());
+    }
+    Ok(FallbackRule {
+        domain,
+        message: String::new(),
+        always_block: true,
+    })
 }
 
 fn parse_cache_ttl_days(s: &str) -> Result<u64, String> {
@@ -383,5 +441,99 @@ mod tests {
             !resolved_str.contains('~'),
             "resolved path should not contain literal tilde: {resolved_str}"
         );
+    }
+
+    #[test]
+    fn when_single_fallback_message_then_should_parse_correctly() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--fallback-message",
+            "github.com=Use github-mcp instead",
+        ])
+        .unwrap();
+
+        assert_eq!(config.fallback_messages.len(), 1);
+        assert_eq!(config.fallback_messages[0].domain, "github.com");
+        assert_eq!(
+            config.fallback_messages[0].message,
+            "Use github-mcp instead"
+        );
+        assert!(!config.fallback_messages[0].always_block);
+    }
+
+    #[test]
+    fn when_multiple_fallback_messages_then_should_parse_all() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--fallback-message",
+            "github.com=Use github-mcp instead",
+            "--fallback-message",
+            "gitlab.com=Use gitlab-mcp instead",
+        ])
+        .unwrap();
+
+        assert_eq!(config.fallback_messages.len(), 2);
+        assert_eq!(config.fallback_messages[0].domain, "github.com");
+        assert_eq!(
+            config.fallback_messages[0].message,
+            "Use github-mcp instead"
+        );
+        assert_eq!(config.fallback_messages[1].domain, "gitlab.com");
+        assert_eq!(
+            config.fallback_messages[1].message,
+            "Use gitlab-mcp instead"
+        );
+    }
+
+    #[test]
+    fn when_fallback_always_then_should_set_always_block_and_default_message() {
+        let config = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--fallback-always",
+            "github.com",
+            "--fallback-always",
+            "gitlab.com",
+        ])
+        .unwrap();
+
+        assert_eq!(config.fallback_always.len(), 2);
+        assert_eq!(config.fallback_always[0].domain, "github.com");
+        assert!(config.fallback_always[0].always_block);
+        assert!(config.fallback_always[0].message.is_empty());
+        assert_eq!(config.fallback_always[1].domain, "gitlab.com");
+        assert!(config.fallback_always[1].always_block);
+        assert!(config.fallback_always[1].message.is_empty());
+    }
+
+    #[test]
+    fn when_fallback_message_malformed_then_should_fail() {
+        let result = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--fallback-message",
+            "just-a-domain",
+        ]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn when_empty_domain_then_should_fail() {
+        let result = Config::try_parse_from([
+            "kagi-mcp",
+            "--api-key",
+            "test-key",
+            "--fallback-message",
+            "=some message",
+        ]);
+
+        assert!(result.is_err());
     }
 }

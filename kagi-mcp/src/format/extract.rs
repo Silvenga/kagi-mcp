@@ -212,4 +212,25 @@ mod tests {
         };
         assert_snapshot!(format_extract_markdown(&response));
     }
+
+    #[test]
+    fn when_extract_has_fallback_message_then_should_render_as_content() {
+        let response = ExtractResponse {
+            meta: Meta {
+                trace: "test".to_owned(),
+                node: None,
+                ms: None,
+            },
+            data: Some(vec![ExtractData {
+                url: "https://example.com/unavailable".to_owned(),
+                markdown: Some(
+                    "This URL could not be extracted. The content was not available.".to_owned(),
+                ),
+            }]),
+            errors: None,
+        };
+        let result = format_extract_markdown(&response);
+        assert_snapshot!(result);
+        assert!(result.contains("This URL could not be extracted"));
+    }
 }

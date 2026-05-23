@@ -1,5 +1,6 @@
 use crate::cache::CacheStore;
 use crate::tools::extract::batch::extract_batch;
+use crate::tools::extract::fallback::FallbackRules;
 use crate::tools::extract::split::extract_split;
 use crate::tools::extract::validation::{validate_extract_pages_count, validate_extract_urls};
 use crate::tools::extract::ExtractParams;
@@ -16,6 +17,7 @@ pub async fn extract_handler(
     extract_timeout: f64,
     split_extract_requests: bool,
     cache_store: Option<&CacheStore>,
+    fallback_rules: Option<&FallbackRules>,
 ) -> Result<CallToolResult, ErrorData> {
     if let Err(e) = validate_extract_pages_count(&params.pages) {
         return Err(ErrorData::invalid_params(
@@ -40,15 +42,36 @@ pub async fn extract_handler(
         .collect();
 
     if split_extract_requests {
-        extract_split(client, params, ctx, extract_timeout, pages, cache_store).await
+        extract_split(
+            client,
+            params,
+            ctx,
+            extract_timeout,
+            pages,
+            cache_store,
+            fallback_rules,
+        )
+        .await
     } else {
-        extract_batch(client, params, ctx, extract_timeout, pages, cache_store).await
+        extract_batch(
+            client,
+            params,
+            ctx,
+            extract_timeout,
+            pages,
+            cache_store,
+            fallback_rules,
+        )
+        .await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::generate_cache_key;
+    use crate::cache::CacheStore;
+    use crate::config::FallbackRule;
     use kagi_api::{ExtractData, ExtractError, Meta};
     use kagi_api::{ExtractResponse, MockKagiApi};
     use rmcp::model::ErrorCode;
@@ -81,7 +104,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -102,7 +125,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -135,7 +158,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -169,7 +192,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -188,7 +211,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -210,7 +233,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -242,7 +265,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -276,7 +299,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
         assert!(result.is_ok());
     }
 
@@ -309,7 +332,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -349,7 +372,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -388,7 +411,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -432,7 +455,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -483,7 +506,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -526,7 +549,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -564,11 +587,675 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Single content"));
+    }
+
+    #[tokio::test]
+    async fn when_single_always_blocked_url_then_should_return_fallback_without_api_call() {
+        let mock = MockKagiApi::new();
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "blocked.com".to_owned(),
+                message: "Blocked by policy".to_owned(),
+                always_block: true,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec!["https://blocked.com/page".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Blocked by policy"));
+    }
+
+    #[tokio::test]
+    async fn when_mixed_always_blocked_and_normal_urls_then_blocked_get_message_and_normal_get_content(
+    ) {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .withf(|req| req.pages().len() == 1)
+            .returning(|req| {
+                let url = &req.pages()[0].url;
+                Ok(ExtractResponse {
+                    meta: Meta {
+                        trace: "test".to_owned(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: Some(vec![ExtractData {
+                        url: url.clone(),
+                        markdown: Some(format!("Content from {url}")),
+                    }]),
+                    errors: None,
+                })
+            });
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "blocked.com".to_owned(),
+                message: "Blocked by policy".to_owned(),
+                always_block: true,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://blocked.com/page".to_owned(),
+                "https://normal.com/page".to_owned(),
+                "https://blocked.com/other".to_owned(),
+            ],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let first_blocked = text.find("Blocked by policy").unwrap();
+        let first_normal = text.find("Content from https://normal.com/page").unwrap();
+        let second_blocked = text.rfind("Blocked by policy").unwrap();
+        assert!(first_blocked < first_normal);
+        assert!(first_normal < second_blocked);
+    }
+
+    #[tokio::test]
+    async fn when_always_blocked_url_with_cache_enabled_then_should_not_cache_fallback_result() {
+        let store = CacheStore::open_in_memory().await.expect("cache");
+        let mock = MockKagiApi::new();
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "blocked.com".to_owned(),
+                message: "Blocked by policy".to_owned(),
+                always_block: true,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec!["https://blocked.com/page".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            true,
+            Some(&store),
+            Some(&rules),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Blocked by policy"));
+
+        let key = generate_cache_key(
+            &kagi_api::ExtractRequest::new(vec![kagi_api::ExtractPage {
+                url: "https://blocked.com/page".to_owned(),
+            }])
+            .with_format("json".to_owned())
+            .with_timeout_seconds(10.0),
+        );
+        let cached = store.get(&key).await.expect("cache get");
+        assert!(cached.is_none(), "fallback result should not be cached");
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_empty_content_with_fallback_rule_then_should_substitute_message() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://fallback.com/page".to_owned(),
+                    markdown: None,
+                }]),
+                errors: None,
+            })
+        });
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "fallback.com".to_owned(),
+                message: "Fallback message".to_owned(),
+                always_block: false,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec!["https://fallback.com/page".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Fallback message"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_empty_string_with_fallback_rule_then_should_substitute_message() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://fallback.com/page".to_owned(),
+                    markdown: Some("".to_owned()),
+                }]),
+                errors: None,
+            })
+        });
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "fallback.com".to_owned(),
+                message: "Fallback message".to_owned(),
+                always_block: false,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec!["https://fallback.com/page".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Fallback message"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_whitespace_with_fallback_rule_then_should_substitute_message() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://fallback.com/page".to_owned(),
+                    markdown: Some("  \n  ".to_owned()),
+                }]),
+                errors: None,
+            })
+        });
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "fallback.com".to_owned(),
+                message: "Fallback message".to_owned(),
+                always_block: false,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec!["https://fallback.com/page".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Fallback message"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_real_content_with_fallback_rule_then_should_show_real_content() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://fallback.com/page".to_owned(),
+                    markdown: Some("Real content".to_owned()),
+                }]),
+                errors: None,
+            })
+        });
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "fallback.com".to_owned(),
+                message: "Fallback message".to_owned(),
+                always_block: false,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec!["https://fallback.com/page".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Real content"));
+        assert!(!text.contains("Fallback message"));
+    }
+
+    #[tokio::test]
+    async fn when_split_extract_empty_content_without_fallback_rule_then_should_show_original_empty(
+    ) {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://example.com/page".to_owned(),
+                    markdown: None,
+                }]),
+                errors: None,
+            })
+        });
+
+        let params = ExtractParams {
+            pages: vec!["https://example.com/page".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(!text.contains("Fallback message"));
+    }
+
+    #[tokio::test]
+    async fn when_cached_empty_content_with_fallback_rule_then_should_substitute_message() {
+        let store = CacheStore::open_in_memory().await.expect("cache");
+
+        let cached_response = ExtractResponse {
+            meta: Meta {
+                trace: "test".to_owned(),
+                node: None,
+                ms: None,
+            },
+            data: Some(vec![ExtractData {
+                url: "https://fallback.com/page".to_owned(),
+                markdown: None,
+            }]),
+            errors: None,
+        };
+        let cached_bytes = serde_json::to_vec(&cached_response).unwrap();
+
+        let single_req = kagi_api::ExtractRequest::new(vec![kagi_api::ExtractPage {
+            url: "https://fallback.com/page".to_owned(),
+        }])
+        .with_format("json".to_owned())
+        .with_timeout_seconds(10.0);
+        let key = generate_cache_key(&single_req);
+        store.set(&key, "extract", &cached_bytes).await.unwrap();
+
+        let mock = MockKagiApi::new();
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "fallback.com".to_owned(),
+                message: "Fallback message".to_owned(),
+                always_block: false,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec!["https://fallback.com/page".to_owned()],
+            output_format: "markdown".to_owned(),
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            true,
+            Some(&store),
+            Some(&rules),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Fallback message"));
+    }
+
+    #[tokio::test]
+    async fn when_batch_all_urls_always_blocked_then_no_api_call_all_fallback_messages() {
+        let mock = MockKagiApi::new();
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "blocked.com".to_owned(),
+                message: "Blocked by policy".to_owned(),
+                always_block: true,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://blocked.com/page1".to_owned(),
+                "https://blocked.com/page2".to_owned(),
+            ],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            false,
+            None,
+            Some(&rules),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Blocked by policy"));
+    }
+
+    #[tokio::test]
+    async fn when_batch_mixed_blocked_and_normal_urls_then_correct_merge_and_ordering() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![
+                    ExtractData {
+                        url: "https://normal.com/page".to_owned(),
+                        markdown: Some("Normal content".to_owned()),
+                    },
+                    ExtractData {
+                        url: "https://other.com/page".to_owned(),
+                        markdown: Some("Other content".to_owned()),
+                    },
+                ]),
+                errors: None,
+            })
+        });
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "blocked.com".to_owned(),
+                message: "Blocked by policy".to_owned(),
+                always_block: true,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://blocked.com/page".to_owned(),
+                "https://normal.com/page".to_owned(),
+                "https://blocked.com/other".to_owned(),
+                "https://other.com/page".to_owned(),
+            ],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            false,
+            None,
+            Some(&rules),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let first_blocked = text.find("Blocked by policy").unwrap();
+        let normal = text.find("Normal content").unwrap();
+        let second_blocked = text.rfind("Blocked by policy").unwrap();
+        let other = text.find("Other content").unwrap();
+        assert!(first_blocked < normal);
+        assert!(normal < second_blocked);
+        assert!(second_blocked < other);
+    }
+
+    #[tokio::test]
+    async fn when_batch_one_url_returns_empty_then_fallback_message_for_empty() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![
+                    ExtractData {
+                        url: "https://normal.com/page".to_owned(),
+                        markdown: Some("Normal content".to_owned()),
+                    },
+                    ExtractData {
+                        url: "https://fallback.com/page".to_owned(),
+                        markdown: None,
+                    },
+                ]),
+                errors: None,
+            })
+        });
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "fallback.com".to_owned(),
+                message: "Fallback message".to_owned(),
+                always_block: false,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://normal.com/page".to_owned(),
+                "https://fallback.com/page".to_owned(),
+            ],
+            output_format: "markdown".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            false,
+            None,
+            Some(&rules),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Normal content"));
+        assert!(text.contains("Fallback message"));
+    }
+
+    #[tokio::test]
+    async fn when_batch_mode_then_preserves_original_url_ordering() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![
+                    ExtractData {
+                        url: "https://first.com/page".to_owned(),
+                        markdown: Some("First content".to_owned()),
+                    },
+                    ExtractData {
+                        url: "https://second.com/page".to_owned(),
+                        markdown: Some("Second content".to_owned()),
+                    },
+                    ExtractData {
+                        url: "https://fourth.com/page".to_owned(),
+                        markdown: Some("Fourth content".to_owned()),
+                    },
+                ]),
+                errors: None,
+            })
+        });
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "blocked.com".to_owned(),
+                message: "Blocked by policy".to_owned(),
+                always_block: true,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://first.com/page".to_owned(),
+                "https://second.com/page".to_owned(),
+                "https://blocked.com/page".to_owned(),
+                "https://fourth.com/page".to_owned(),
+            ],
+            output_format: "json".to_owned(),
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            false,
+            None,
+            Some(&rules),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        let first_pos = text.find("https://first.com/page").unwrap();
+        let second_pos = text.find("https://second.com/page").unwrap();
+        let blocked_pos = text.find("Blocked by policy").unwrap();
+        let fourth_pos = text.find("https://fourth.com/page").unwrap();
+        assert!(first_pos < second_pos);
+        assert!(second_pos < blocked_pos);
+        assert!(blocked_pos < fourth_pos);
+    }
+
+    #[tokio::test]
+    async fn when_batch_blocked_urls_then_should_not_cache_fallback_results() {
+        let store = CacheStore::open_in_memory().await.expect("cache");
+        let mock = MockKagiApi::new();
+
+        let rules = FallbackRules {
+            rules: vec![FallbackRule {
+                domain: "blocked.com".to_owned(),
+                message: "Blocked by policy".to_owned(),
+                always_block: true,
+            }],
+        };
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://blocked.com/page1".to_owned(),
+                "https://blocked.com/page2".to_owned(),
+            ],
+            output_format: "markdown".to_owned(),
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            false,
+            Some(&store),
+            Some(&rules),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("Blocked by policy"));
+
+        let key = generate_cache_key(
+            &kagi_api::ExtractRequest::new(vec![])
+                .with_format("json".to_owned())
+                .with_timeout_seconds(10.0),
+        );
+        let cached = store.get(&key).await.expect("cache get");
+        assert!(cached.is_none(), "fallback result should not be cached");
     }
 
     pub async fn fake_request_context() -> RequestContext<RoleServer> {
