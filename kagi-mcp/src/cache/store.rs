@@ -75,12 +75,19 @@ impl CacheStore {
     /// Retrieves a cached response by key, checking TTL expiry.
     pub async fn get(&self, cache_key: &str) -> Result<Option<Vec<u8>>, CacheError> {
         let mut conn = self.open_connection().await?;
-        let row: Option<(Vec<u8>, i64)> = sqlx::query_as(
+        let row: Option<(Vec<u8>, i64)> = match sqlx::query_as(
             "SELECT response_json, created_at FROM cache_entries WHERE cache_key = ?",
         )
         .bind(cache_key)
         .fetch_optional(&mut conn)
-        .await?;
+        .await
+        {
+            Ok(row) => row,
+            Err(e) => {
+                tracing::warn!(cache_key = %cache_key, error = %e, "cache read error");
+                return Err(e.into());
+            }
+        };
 
         if let Some((response_json, created_at)) = row {
             let now = SystemTime::now()
@@ -93,11 +100,14 @@ impl CacheStore {
                     .bind(cache_key)
                     .execute(&mut conn)
                     .await?;
+                tracing::debug!(cache_key = %cache_key, "cache entry expired, deleted");
                 Ok(None)
             } else {
+                tracing::debug!(cache_key = %cache_key, "cache hit");
                 Ok(Some(response_json))
             }
         } else {
+            tracing::debug!(cache_key = %cache_key, "cache miss");
             Ok(None)
         }
     }
@@ -118,7 +128,7 @@ impl CacheStore {
         let mut conn = self.open_connection().await?;
         let mut tx = conn.begin().await?;
 
-        sqlx::query(
+        if let Err(e) = sqlx::query(
             "INSERT OR REPLACE INTO cache_entries (cache_key, tool_type, created_at, size_bytes, response_json) VALUES (?, ?, ?, ?, ?)",
         )
         .bind(cache_key)
@@ -127,11 +137,16 @@ impl CacheStore {
         .bind(size_bytes)
         .bind(response_json)
         .execute(&mut *tx)
-        .await?;
+        .await
+        {
+            tracing::warn!(cache_key = %cache_key, error = %e, "cache write error");
+            return Err(e.into());
+        }
 
         evict_if_needed(&mut tx, self.max_size_bytes).await?;
 
         tx.commit().await?;
+        tracing::debug!(cache_key = %cache_key, tool_type = %tool_type, size_bytes = size_bytes, "cache set");
         Ok(())
     }
 }

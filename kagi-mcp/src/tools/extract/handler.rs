@@ -9,6 +9,7 @@ use rmcp::model::{CallToolResult, ErrorData};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use std::sync::Arc;
+use std::time::Instant;
 
 pub async fn extract_handler(
     client: Arc<dyn KagiApi>,
@@ -36,12 +37,21 @@ pub async fn extract_handler(
         }
     };
 
+    let url_count = validated_urls.len();
+    let start = Instant::now();
+    tracing::info!(
+        url_count,
+        split = split_extract_requests,
+        cache = params.cache,
+        "extract started"
+    );
+
     let pages: Vec<ExtractPage> = validated_urls
         .into_iter()
         .map(|u| ExtractPage { url: u.to_string() })
         .collect();
 
-    if split_extract_requests {
+    let result = if split_extract_requests {
         extract_split(
             client,
             params,
@@ -63,7 +73,14 @@ pub async fn extract_handler(
             fallback_rules,
         )
         .await
-    }
+    };
+
+    tracing::info!(
+        url_count,
+        elapsed_ms = start.elapsed().as_millis(),
+        "extract completed"
+    );
+    result
 }
 
 #[cfg(test)]

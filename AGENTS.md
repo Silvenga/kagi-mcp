@@ -72,6 +72,46 @@ cargo doc --workspace --no-deps
 - Domain errors in `kagi-api` use `thiserror` for typed error enums.
 - Application-level propagation in `kagi-mcp` uses `anyhow`.
 
+## Logging
+
+### Log levels
+- `INFO` — user-facing events (tool invocation, result count, elapsed time, cache hit).
+- `WARN` — recoverable issues (transient API failure before retry, rate-limit approaching).
+- `ERROR` — blocking failures (API unreachable after retries, invalid config, internal panic).
+- `DEBUG` — developer internals (cache store hit/miss, request construction, middleware steps).
+- `TRACE` — very low-level (raw HTTP headers, serialization details, loop iterations).
+
+### Log format
+- Compact single-line format with timestamp, level, target, and message.
+- No ANSI escape codes in file output.
+- Example: `2026-05-24T10:30:00.123Z INFO kagi_mcp::tools::search Handler::call - query="rust" elapsed=342ms cache=hit`
+
+### Log location
+- Written to the cache directory (see `--cache-dir` / `KAGI_CACHE_DIR`).
+- Daily rotation with filename pattern `kagi-mcp.log.YYYY-MM-DD`.
+- Old logs are not automatically pruned; the cache TTL/size limits do not apply to log files.
+
+### Transport behavior
+- **Stdio** (`--transport stdio`): logs are written to file only. Stdio is reserved for MCP protocol messages.
+- **StreamableHttp** (`--transport streamable-http`): logs are written to file **and** stdout. No stderr logging in any mode.
+
+### Filtering
+- Default filter level: `INFO` (shows INFO, WARN, ERROR; hides DEBUG and TRACE).
+- Override via `RUST_LOG` environment variable (e.g., `RUST_LOG=debug`, `RUST_LOG=kagi_mcp::cache=trace`).
+
+### What to log
+
+The purpose of logging is threefold:
+
+1. **Prove correct behavior** — Show users that hidden behavior is working as intended (e.g., cache hits, config loaded, fallback applied).
+2. **Aid debugging** — Provide enough context to reproduce an issue from logs alone (e.g., request parameters, error context, retry attempts).
+3. **Observe usage patterns** — Help understand how the LLM interacts with the tool (e.g., common queries, cache effectiveness).
+
+### What NOT to log
+
+- API keys or sensitive configuration values.
+- Full response bodies (use result metadata instead).
+
 ## Contribution Workflow
 
 All changes must be submitted via Pull Requests.

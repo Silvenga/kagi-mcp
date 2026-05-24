@@ -12,6 +12,7 @@ use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 pub async fn extract_batch(
     client: Arc<dyn KagiApi>,
@@ -39,6 +40,13 @@ pub async fn extract_batch(
     let mut synthetic_data: Vec<(usize, ExtractData)> = Vec::new();
     let mut api_pages: Vec<ExtractPage> = Vec::new();
     let original_pages = pages.clone();
+
+    let start = Instant::now();
+    tracing::info!(
+        total_pages = total_pages,
+        blocked = synthetic_data.len(),
+        "extract batch started"
+    );
 
     if let Some(rules) = fallback_rules {
         let (blocked, unblocked) = rules.filter_urls(&pages);
@@ -100,6 +108,7 @@ pub async fn extract_batch(
         return Ok(CallToolResult::success(vec![Content::text(truncated)]));
     }
 
+    let api_pages_count = api_pages.len();
     let request = ExtractRequest::new(api_pages)
         .with_format("json".to_owned())
         .with_timeout_seconds(extract_timeout);
@@ -160,9 +169,19 @@ pub async fn extract_batch(
                         format_extract_markdown(&response)
                     };
                     let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
+                    tracing::info!(
+                        cache_hit = true,
+                        url_count = original_pages.len(),
+                        "extract batch served from cache"
+                    );
                     return Ok(CallToolResult::success(vec![Content::text(truncated)]));
                 }
-                Ok(None) => {}
+                Ok(None) => {
+                    tracing::debug!(
+                        url_count = api_pages_count,
+                        "batch cache miss, calling Kagi API"
+                    );
+                }
                 Err(e) => return Err(map_cache_error(e)),
             }
         }
@@ -236,8 +255,23 @@ pub async fn extract_batch(
                 format_extract_markdown(&response)
             };
             let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
+            tracing::info!(
+                cache_hit = false,
+                elapsed_ms = start.elapsed().as_millis(),
+                "extract batch completed"
+            );
             Ok(CallToolResult::success(vec![Content::text(truncated)]))
         }
-        Err(e) => Err(map_kagi_error(e)),
+        Err(e) => {
+            match &e {
+                kagi_api::KagiError::Unauthorized | kagi_api::KagiError::InvalidRequest { .. } => {
+                    tracing::error!(error = %e, "extract batch failed");
+                }
+                _ => {
+                    tracing::warn!(error = %e, "extract batch failed");
+                }
+            }
+            Err(map_kagi_error(e))
+        }
     }
 }
