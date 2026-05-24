@@ -3,11 +3,14 @@ use xxhash_rust::xxh3;
 
 const CACHE_KEY_VERSION: u8 = 1;
 
+/// A 16-byte content ID used as a cache key.
+pub type Cid = [u8; 16];
+
 /// Generates a deterministic 16-byte content ID from a serializable request.
 ///
 /// Serializes the request to JSON bytes, prepends a version salt byte,
 /// and hashes with XXH3-128 to produce a 16-byte content ID.
-pub fn generate_cid(request: &impl Serialize) -> [u8; 16] {
+pub fn generate_cid(request: &impl Serialize) -> Cid {
     let bytes = serde_json::to_vec(request).expect("serialization should not fail");
     let mut salted = Vec::with_capacity(1 + bytes.len());
     salted.push(CACHE_KEY_VERSION);

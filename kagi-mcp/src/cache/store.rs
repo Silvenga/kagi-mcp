@@ -1,4 +1,5 @@
 use crate::cache::evict::evict_if_needed;
+use crate::cache::Cid;
 use crate::cache::CacheError;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{ConnectOptions, Connection, SqliteConnection};
@@ -73,10 +74,10 @@ impl CacheStore {
     }
 
     /// Retrieves a cached response by CID, checking TTL expiry.
-    pub async fn get(&self, cid: &[u8; 16]) -> Result<Option<Vec<u8>>, CacheError> {
+    pub async fn get(&self, cid: &Cid) -> Result<Option<Vec<u8>>, CacheError> {
         let mut conn = self.open_connection().await?;
         let row: Option<(Vec<u8>, i64)> =
-            match sqlx::query_as("SELECT value, created_at FROM cache_entries WHERE cid = ?")
+            match sqlx::query_as("SELECT value, created_at FROM cache WHERE cid = ?")
                 .bind(cid.as_slice())
                 .fetch_optional(&mut conn)
                 .await
@@ -95,7 +96,7 @@ impl CacheStore {
                 .as_secs() as i64;
 
             if created_at < now.saturating_sub(self.ttl_seconds as i64) {
-                sqlx::query("DELETE FROM cache_entries WHERE cid = ?")
+                sqlx::query("DELETE FROM cache WHERE cid = ?")
                     .bind(cid.as_slice())
                     .execute(&mut conn)
                     .await?;
@@ -112,7 +113,7 @@ impl CacheStore {
     }
 
     /// Stores a cached response.
-    pub async fn set(&self, cid: &[u8; 16], type_: &str, value: &[u8]) -> Result<(), CacheError> {
+    pub async fn set(&self, cid: &Cid, type_: &str, value: &[u8]) -> Result<(), CacheError> {
         let created_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -123,7 +124,7 @@ impl CacheStore {
         let mut tx = conn.begin().await?;
 
         if let Err(e) = sqlx::query(
-            "INSERT OR REPLACE INTO cache_entries (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO cache (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
         )
         .bind(cid.as_slice())
         .bind(type_)
@@ -212,7 +213,7 @@ mod tests {
         let cid = [1u8; 16];
 
         sqlx::query(
-            "INSERT INTO cache_entries (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO cache (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
         )
         .bind(cid.as_slice())
         .bind("search")
@@ -227,7 +228,7 @@ mod tests {
 
         assert_eq!(result, None);
 
-        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM cache_entries WHERE cid = ?")
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM cache WHERE cid = ?")
             .bind(cid.as_slice())
             .fetch_one(&mut conn)
             .await
@@ -267,7 +268,7 @@ mod tests {
         let cid = [1u8; 16];
 
         sqlx::query(
-            "INSERT INTO cache_entries (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO cache (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
         )
         .bind(cid.as_slice())
         .bind("search")
@@ -281,7 +282,7 @@ mod tests {
         store.set(&cid, "search", b"second").await.unwrap();
 
         let timestamp: (i64,) =
-            sqlx::query_as("SELECT created_at FROM cache_entries WHERE cid = ?")
+            sqlx::query_as("SELECT created_at FROM cache WHERE cid = ?")
                 .bind(cid.as_slice())
                 .fetch_one(&mut conn)
                 .await

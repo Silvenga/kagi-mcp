@@ -4,11 +4,11 @@ This directory contains the database migrations for the Kagi MCP server cache.
 
 ## Current Schema Version
 
-`20250102000001_recreate_cache_entries.sql`
+`20260524000001_rebuild_schema.sql`
 
 ## Schema Definition
 
-The `cache_entries` table stores cached responses from the Kagi API.
+The `cache` table stores cached responses from the Kagi API.
 
 ### Columns
 
@@ -20,8 +20,8 @@ The `cache_entries` table stores cached responses from the Kagi API.
 
 ### Indexes
 
-* `idx_created_at ON cache_entries(created_at)`
-* `idx_type ON cache_entries(type)`
+* `idx_created_at ON cache(created_at)`
+* `idx_type ON cache(type)`
 
 ## Rules
 

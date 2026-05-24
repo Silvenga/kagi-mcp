@@ -1,7 +1,7 @@
 use kagi_api::{
     KagiClientBuilder, Meta, MockKagiApi, SearchData, SearchRequest, SearchResponse, SearchResult,
 };
-use kagi_mcp::cache::{generate_cid, CacheStore};
+use kagi_mcp::cache::{generate_cid, Cid, CacheStore};
 use kagi_mcp::tools::search::{search_handler, SearchConfig, SearchParams};
 use kagi_mcp::KagiMcpServer;
 use rmcp::model::{ClientInfo, RequestId};
@@ -17,7 +17,7 @@ async fn when_cache_persists_across_instances_then_data_should_be_readable() {
     let cache_dir = tmp.path().join("cache");
 
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
-    let cid = [1u8; 16];
+    let cid: Cid = [1u8; 16];
     store
         .set(&cid, "search", b"persistent_payload")
         .await
@@ -36,7 +36,7 @@ async fn when_concurrent_readers_then_both_should_read_same_entry() {
     let cache_dir = tmp.path().join("cache");
 
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
-    let cid = [2u8; 16];
+    let cid: Cid = [2u8; 16];
     store.set(&cid, "search", b"shared_data").await.unwrap();
     drop(store);
 
