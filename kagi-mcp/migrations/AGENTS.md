@@ -25,4 +25,5 @@ The `cache` table stores cached responses from the Kagi API.
 
 ## Rules
 
-Update this file whenever a new migration is created.
+- Update this file whenever a new migration is created.
+- Always run `date` to get the current date. The format of the migration file is `YYYYMMDD00000N_migration_name.sql`.
