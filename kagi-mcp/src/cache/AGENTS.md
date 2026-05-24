@@ -56,11 +56,11 @@ When modifying this module, keep the following invariants:
 2. **Do not introduce shared state in memory.** No `Mutex<Vec<...>>`, no in-memory LRU, no connection pools. The design depends on every operation being self-contained and process-agnostic.
 3. **Do not add background tasks.** No timers, no async cleanup loops, no `tokio::spawn` for eviction or TTL expiry. All work must be synchronous within the `get`/`set` call.
 4. **Preserve the FIFO eviction contract.** If the eviction policy ever needs to change, it must still be deterministic, cheap to compute from existing columns, and require no new indexes or tables.
-5. **Store raw bytes only.** The `response_json BLOB` must remain opaque JSON bytes. Do not parse, normalize, or filter responses at the cache layer. Future features (scrolling, summarization) depend on having the full original response available.
+5. **Store raw bytes only.** The `value BLOB` must remain opaque JSON bytes. Do not parse, normalize, or filter responses at the cache layer. Future features (scrolling, summarization) depend on having the full original response available.
 
 ## What This Module Does NOT Do
 
-- It does not know about `SearchRequest` vs `ExtractRequest` semantics. The `tool_type` column is stored for debugging/diagnostics only; it is not queried.
+- It does not know about `SearchRequest` vs `ExtractRequest` semantics. The `type` column is stored for debugging/diagnostics only; it is not queried.
 - It does not handle serialization or deserialization. Callers pass raw bytes; the store treats them as opaque blobs.
 - It does not implement cache invalidation by external signals (e.g., "Kagi API updated"). Invalidation is purely TTL-based.
 - It does not implement cache warming or pre-population.
