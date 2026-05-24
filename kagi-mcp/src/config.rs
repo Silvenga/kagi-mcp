@@ -83,6 +83,15 @@ pub struct Config {
     pub bind: String,
 
     #[arg(
+        long,
+        env = "KAGI_STATELESS_JSON",
+        default_missing_value = "true",
+        num_args = 0..=1,
+        default_value_t = false,
+    )]
+    pub stateless_json: bool,
+
+    #[arg(
         long = "fallback-message",
         env = "KAGI_FALLBACK_MESSAGE",
         value_parser = parse_fallback_message,

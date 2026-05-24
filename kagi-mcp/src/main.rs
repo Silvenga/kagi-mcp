@@ -5,32 +5,35 @@ mod server;
 mod tools;
 
 use crate::cache::CacheStore;
+use crate::config::{Config, TransportMode};
 use crate::tools::extract::FallbackRules;
 use axum::Router;
 use clap::Parser;
-use config::{Config, TransportMode};
 use kagi_api::KagiClientBuilder;
+use kagi_mcp::subscriber::build_subscriber;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::tower::StreamableHttpService;
 use rmcp::transport::streamable_http_server::StreamableHttpServerConfig;
 use rmcp::ServiceExt;
 use server::KagiMcpServer;
 use std::collections::HashSet;
-use std::io::{self, stderr};
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{stdin, stdout};
 use tokio::net::TcpListener;
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(stderr)
-        .init();
-
     let config = Config::parse();
+
+    let cache_dir = config
+        .resolved_cache_dir()
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let _layers = build_subscriber(
+        matches!(config.transport, TransportMode::StreamableHttp),
+        &cache_dir,
+    )?;
 
     let mut rules = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
@@ -62,13 +65,13 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .map_err(|e| anyhow::anyhow!("failed to create Kagi client: {e}"))?;
 
-    let cache_dir = config
-        .resolved_cache_dir()
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
     let cache_store = Arc::new(
         CacheStore::new(&cache_dir, config.cache_size_gb, config.cache_ttl_days)
             .await
-            .map_err(|e| anyhow::anyhow!("failed to initialize cache: {e}"))?,
+            .map_err(|e| {
+                tracing::error!(error = %e, "failed to initialize cache store");
+                anyhow::anyhow!("failed to initialize cache: {e}")
+            })?,
     );
 
     let server = KagiMcpServer::new(client)
@@ -91,10 +94,17 @@ async fn main() -> anyhow::Result<()> {
             let addr: SocketAddr = config.bind.parse()?;
             let listener = TcpListener::bind(addr).await?;
             let session_manager = Arc::new(LocalSessionManager::default());
+            let mut http_config = StreamableHttpServerConfig::default().disable_allowed_hosts();
+            if config.stateless_json {
+                http_config = http_config
+                    .with_stateful_mode(false)
+                    .with_json_response(true)
+                    .with_sse_keep_alive(None);
+            }
             let service = StreamableHttpService::new(
                 move || -> Result<_, io::Error> { Ok(server.clone()) },
                 session_manager,
-                StreamableHttpServerConfig::default().disable_allowed_hosts(),
+                http_config,
             );
             let app = Router::new().route_service("/mcp", service);
             axum::serve(listener, app).await?;

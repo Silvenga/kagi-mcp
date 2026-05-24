@@ -10,6 +10,7 @@ use rmcp::model::{CallToolResult, Content, ErrorCode};
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::task::JoinSet;
 
 fn apply_post_extract_fallback(
@@ -39,6 +40,9 @@ pub async fn extract_split(
     fallback_rules: Option<&FallbackRules>,
 ) -> Result<CallToolResult, ErrorData> {
     let total_pages = pages.len();
+
+    let start = Instant::now();
+    tracing::info!(total_pages = total_pages, "extract split started");
 
     let _ = send_progress(
         ctx,
@@ -104,6 +108,7 @@ pub async fn extract_split(
                         apply_post_extract_fallback(&mut cached_response, fallback_rules);
                         results[i] = Some(cached_response);
                         cache_hit = true;
+                        tracing::info!(url = %page.url, cache_hit = true, "page served from cache");
                     }
                 }
             }
@@ -161,8 +166,18 @@ pub async fn extract_split(
                 let mut api_response = api_response;
                 apply_post_extract_fallback(&mut api_response, fallback_rules);
                 results[idx] = Some(api_response);
+                tracing::info!(url = %pages[idx].url, cache_hit = false, "page extracted");
             }
             Ok((idx, Err(kagi_err))) => {
+                match &kagi_err {
+                    kagi_api::KagiError::Unauthorized
+                    | kagi_api::KagiError::InvalidRequest { .. } => {
+                        tracing::error!(url = %pages[idx].url, error = %kagi_err, "page extraction failed");
+                    }
+                    _ => {
+                        tracing::warn!(url = %pages[idx].url, error = %kagi_err, "page extraction failed");
+                    }
+                }
                 collected += 1;
                 let _ = send_progress(
                     ctx,
@@ -202,6 +217,16 @@ pub async fn extract_split(
             errors.extend(e);
         }
     }
+
+    let data_len = data.len();
+    let errors_len = errors.len();
+
+    tracing::info!(
+        success_count = data_len,
+        error_count = errors_len,
+        elapsed_ms = start.elapsed().as_millis(),
+        "extract split completed"
+    );
 
     let response = ExtractResponse {
         meta: kagi_api::Meta {

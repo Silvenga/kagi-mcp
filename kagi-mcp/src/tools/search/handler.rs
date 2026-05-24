@@ -5,10 +5,11 @@ use crate::tools::progress::send_progress;
 use crate::tools::search::dedup::dedup_by_domain;
 use crate::tools::search::SearchParams;
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::{Filters, KagiApi, SearchRequest, SearchResponse};
+use kagi_api::{Filters, KagiApi, KagiError, SearchRequest, SearchResponse};
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
+use std::time::Instant;
 
 #[derive(Clone, Debug)]
 pub struct SearchConfig {
@@ -43,6 +44,9 @@ pub async fn search_handler(
         ));
     }
 
+    let start = Instant::now();
+    tracing::info!(query = %params.query, workflow = ?params.workflow, cache = params.cache, "search started");
+
     const UPSTREAM_LIMIT: u32 = 1024;
 
     let mut request = SearchRequest::new(params.query.clone())
@@ -68,6 +72,7 @@ pub async fn search_handler(
                 Ok(Some(cached_bytes)) => {
                     let mut cached_response: SearchResponse = serde_json::from_slice(&cached_bytes)
                         .map_err(|e| map_cache_error(e.into()))?;
+                    tracing::info!(query = %params.query, cache_hit = true, "search completed from cache");
                     let lpd = params.limit_per_domain.unwrap_or(u32::MAX);
                     dedup_by_domain(&mut cached_response.data, lpd, config.limit);
                     let content = if params.output_format == "json" {
@@ -78,7 +83,9 @@ pub async fn search_handler(
                     let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
                     return Ok(CallToolResult::success(vec![Content::text(truncated)]));
                 }
-                Ok(None) => {}
+                Ok(None) => {
+                    tracing::debug!(query = %params.query, "cache miss, calling Kagi API");
+                }
                 Err(e) => return Err(map_cache_error(e)),
             }
         }
@@ -119,6 +126,13 @@ pub async fn search_handler(
 
             let lpd = params.limit_per_domain.unwrap_or(u32::MAX);
             dedup_by_domain(&mut response.data, lpd, config.limit);
+            tracing::info!(
+                query = %params.query,
+                result_count = response.data.search.as_ref().map_or(0, |s| s.len()),
+                cache_hit = false,
+                elapsed_ms = ?start.elapsed().as_millis(),
+                "search completed"
+            );
             let content = if params.output_format == "json" {
                 format_json(&response)
             } else {
@@ -127,7 +141,17 @@ pub async fn search_handler(
             let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
             Ok(CallToolResult::success(vec![Content::text(truncated)]))
         }
-        Err(e) => Err(map_kagi_error(e)),
+        Err(e) => {
+            match &e {
+                KagiError::Unauthorized | KagiError::InvalidRequest { .. } => {
+                    tracing::error!(query = %params.query, error = %e, "search failed");
+                }
+                _ => {
+                    tracing::warn!(query = %params.query, error = %e, "search failed");
+                }
+            }
+            Err(map_kagi_error(e))
+        }
     }
 }
 

@@ -72,7 +72,49 @@ cargo doc --workspace --no-deps
 - Domain errors in `kagi-api` use `thiserror` for typed error enums.
 - Application-level propagation in `kagi-mcp` uses `anyhow`.
 
-## Contribution Workflow
+## Logging
+
+### Log levels
+- `INFO` — user-facing events (tool invocation, result count, elapsed time, cache hit).
+- `WARN` — recoverable issues (transient API failure before retry, rate-limit approaching).
+- `ERROR` — blocking failures (API unreachable after retries, invalid config, internal panic).
+- `DEBUG` — developer internals (cache store hit/miss, request construction, middleware steps).
+- `TRACE` — very low-level (raw HTTP headers, serialization details, loop iterations).
+
+### Log format
+- Compact single-line format with timestamp, level, target, and message.
+- No ANSI escape codes in file output.
+- Example: `2026-05-24T10:30:00.123Z INFO kagi_mcp::tools::search Handler::call - query="rust" elapsed=342ms cache=hit`
+
+### Log location
+- Written to the cache directory (see `--cache-dir` / `KAGI_CACHE_DIR`).
+- Daily rotation with filename pattern `kagi-mcp.log.YYYY-MM-DD`.
+- Old logs are not automatically pruned; the cache TTL/size limits do not apply to log files.
+
+### Transport behavior
+- **Stdio** (`--transport stdio`): logs are written to file only. Stdio is reserved for MCP protocol messages.
+- **StreamableHttp** (`--transport streamable-http`): logs are written to file **and** stdout. No stderr logging in any mode.
+
+### Filtering
+- Default filter level: `INFO` (shows INFO, WARN, ERROR; hides DEBUG and TRACE).
+- Override via `RUST_LOG` environment variable (e.g., `RUST_LOG=debug`, `RUST_LOG=kagi_mcp::cache=trace`).
+
+### Log ownership (no duplicates)
+- **Handlers** (`search`, `extract`) own INFO-level timing and cache-hit logging — one log per invocation.
+- **Cache store** owns DEBUG-level hit/miss logging — not duplicated at INFO.
+- **Client layer** does not log timing (handlers own that).
+- No log is emitted at multiple levels for the same event.
+
+### What to log
+- Tool inputs (query, URL, parameters) at INFO on entry.
+- Elapsed time and result metadata at INFO on completion.
+- Cache hit/miss at DEBUG in the cache store.
+- Error context (status code, retry attempt, truncated response) at the appropriate level.
+
+### What NOT to log
+- API keys or sensitive configuration values.
+- Full response bodies (use result metadata instead).
+- Timing that duplicates handler-level INFO logs.
 
 All changes must be submitted via Pull Requests.
 

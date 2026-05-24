@@ -5,6 +5,7 @@
 //! search and extract tools via the Model Context Protocol (MCP).
 
 pub mod cache;
+pub mod subscriber;
 pub mod tools;
 
 mod config;
