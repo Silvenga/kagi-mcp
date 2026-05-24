@@ -49,4 +49,3 @@ assert_cmd = "2.2.2"
 tempfile = "3.14.0"
 tokio-util = { version = "0.7.18", features = ["rt"] }
 insta = "1.42"
-reqwest = { workspace = true }

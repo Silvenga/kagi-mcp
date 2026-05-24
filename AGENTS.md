@@ -99,22 +99,20 @@ cargo doc --workspace --no-deps
 - Default filter level: `INFO` (shows INFO, WARN, ERROR; hides DEBUG and TRACE).
 - Override via `RUST_LOG` environment variable (e.g., `RUST_LOG=debug`, `RUST_LOG=kagi_mcp::cache=trace`).
 
-### Log ownership (no duplicates)
-- **Handlers** (`search`, `extract`) own INFO-level timing and cache-hit logging — one log per invocation.
-- **Cache store** owns DEBUG-level hit/miss logging — not duplicated at INFO.
-- **Client layer** does not log timing (handlers own that).
-- No log is emitted at multiple levels for the same event.
-
 ### What to log
-- Tool inputs (query, URL, parameters) at INFO on entry.
-- Elapsed time and result metadata at INFO on completion.
-- Cache hit/miss at DEBUG in the cache store.
-- Error context (status code, retry attempt, truncated response) at the appropriate level.
+
+The purpose of logging is threefold:
+
+1. **Prove correct behavior** — Show users that hidden behavior is working as intended (e.g., cache hits, config loaded, fallback applied).
+2. **Aid debugging** — Provide enough context to reproduce an issue from logs alone (e.g., request parameters, error context, retry attempts).
+3. **Observe usage patterns** — Help understand how the LLM interacts with the tool (e.g., common queries, cache effectiveness).
 
 ### What NOT to log
+
 - API keys or sensitive configuration values.
 - Full response bodies (use result metadata instead).
-- Timing that duplicates handler-level INFO logs.
+
+## Contribution Workflow
 
 All changes must be submitted via Pull Requests.
 

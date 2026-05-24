@@ -1281,7 +1281,6 @@ mod tests {
         use rmcp::model::{ClientInfo, RequestId};
         use rmcp::service::serve_directly_with_ct;
         use std::sync::Arc;
-        use std::time::Instant;
         use tokio::io::duplex;
         use tokio_util::sync::CancellationToken;
 

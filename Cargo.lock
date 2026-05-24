@@ -1340,7 +1340,6 @@ dependencies = [
  "kagi-api",
  "mockall",
  "publicsuffix",
- "reqwest",
  "rmcp",
  "schemars",
  "serde",

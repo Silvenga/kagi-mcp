@@ -10,7 +10,7 @@ use crate::tools::extract::FallbackRules;
 use axum::Router;
 use clap::Parser;
 use kagi_api::KagiClientBuilder;
-use kagi_mcp::subscriber::build_subscriber;
+use kagi_mcp::logging::build_subscriber;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::tower::StreamableHttpService;
 use rmcp::transport::streamable_http_server::StreamableHttpServerConfig;
@@ -94,13 +94,7 @@ async fn main() -> anyhow::Result<()> {
             let addr: SocketAddr = config.bind.parse()?;
             let listener = TcpListener::bind(addr).await?;
             let session_manager = Arc::new(LocalSessionManager::default());
-            let mut http_config = StreamableHttpServerConfig::default().disable_allowed_hosts();
-            if config.stateless_json {
-                http_config = http_config
-                    .with_stateful_mode(false)
-                    .with_json_response(true)
-                    .with_sse_keep_alive(None);
-            }
+            let http_config = StreamableHttpServerConfig::default().disable_allowed_hosts();
             let service = StreamableHttpService::new(
                 move || -> Result<_, io::Error> { Ok(server.clone()) },
                 session_manager,
