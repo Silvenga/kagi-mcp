@@ -1,7 +1,7 @@
 use kagi_api::{
     KagiClientBuilder, Meta, MockKagiApi, SearchData, SearchRequest, SearchResponse, SearchResult,
 };
-use kagi_mcp::cache::{generate_cid, Cid, CacheStore};
+use kagi_mcp::cache::{generate_cid, CacheStore, Cid};
 use kagi_mcp::tools::search::{search_handler, SearchConfig, SearchParams};
 use kagi_mcp::KagiMcpServer;
 use rmcp::model::{ClientInfo, RequestId};

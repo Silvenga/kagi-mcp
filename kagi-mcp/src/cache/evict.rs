@@ -1,5 +1,5 @@
-use crate::cache::Cid;
 use crate::cache::CacheError;
+use crate::cache::Cid;
 use sqlx::SqliteConnection;
 
 /// Evicts the oldest cache entries until the total size is at or below `max_size_bytes`.
@@ -77,11 +77,10 @@ mod tests {
     }
 
     async fn total_size(conn: &mut SqliteConnection) -> u64 {
-        let total: (i64,) =
-            sqlx::query_as("SELECT COALESCE(SUM(size_bytes), 0) FROM cache")
-                .fetch_one(&mut *conn)
-                .await
-                .unwrap();
+        let total: (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size_bytes), 0) FROM cache")
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap();
         total.0 as u64
     }
 
@@ -119,12 +118,11 @@ mod tests {
 
         assert_eq!(freed, 100);
         assert_eq!(count_entries(&mut conn).await, 2);
-        let exists: bool =
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM cache WHERE cid = ?1)")
-                .bind(&[0u8; 16][..])
-                .fetch_one(&mut conn)
-                .await
-                .unwrap();
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM cache WHERE cid = ?1)")
+            .bind(&[0u8; 16][..])
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
         assert!(!exists);
     }
 

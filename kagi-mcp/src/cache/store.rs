@@ -1,6 +1,6 @@
 use crate::cache::evict::evict_if_needed;
-use crate::cache::Cid;
 use crate::cache::CacheError;
+use crate::cache::Cid;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{ConnectOptions, Connection, SqliteConnection};
 use std::fs;
@@ -281,12 +281,11 @@ mod tests {
 
         store.set(&cid, "search", b"second").await.unwrap();
 
-        let timestamp: (i64,) =
-            sqlx::query_as("SELECT created_at FROM cache WHERE cid = ?")
-                .bind(cid.as_slice())
-                .fetch_one(&mut conn)
-                .await
-                .unwrap();
+        let timestamp: (i64,) = sqlx::query_as("SELECT created_at FROM cache WHERE cid = ?")
+            .bind(cid.as_slice())
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
         assert!(timestamp.0 > 0);
     }
 }
