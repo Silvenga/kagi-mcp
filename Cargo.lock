@@ -1364,7 +1364,6 @@ dependencies = [
  "anyhow",
  "askama",
  "assert_cmd",
- "async-trait",
  "axum",
  "clap",
  "dirs",

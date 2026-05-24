@@ -1,7 +1,7 @@
 use kagi_api::{
     KagiClientBuilder, Meta, MockKagiApi, SearchData, SearchRequest, SearchResponse, SearchResult,
 };
-use kagi_mcp::cache::{generate_cache_key, CacheStore};
+use kagi_mcp::cache::{generate_cid, CacheStore};
 use kagi_mcp::tools::search::{search_handler, SearchConfig, SearchParams};
 use kagi_mcp::KagiMcpServer;
 use rmcp::model::{ClientInfo, RequestId};
@@ -17,14 +17,15 @@ async fn when_cache_persists_across_instances_then_data_should_be_readable() {
     let cache_dir = tmp.path().join("cache");
 
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
+    let cid = [1u8; 16];
     store
-        .set("key-persist", "search", b"persistent_payload")
+        .set(&cid, "search", b"persistent_payload")
         .await
         .unwrap();
     drop(store);
 
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
-    let result = store.get("key-persist").await.unwrap();
+    let result = store.get(&cid).await.unwrap();
 
     assert_eq!(result, Some(b"persistent_payload".to_vec()));
 }
@@ -35,17 +36,15 @@ async fn when_concurrent_readers_then_both_should_read_same_entry() {
     let cache_dir = tmp.path().join("cache");
 
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
-    store
-        .set("key-shared", "search", b"shared_data")
-        .await
-        .unwrap();
+    let cid = [2u8; 16];
+    store.set(&cid, "search", b"shared_data").await.unwrap();
     drop(store);
 
     let store_a = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
     let store_b = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
 
-    let result_a = store_a.get("key-shared").await.unwrap();
-    let result_b = store_b.get("key-shared").await.unwrap();
+    let result_a = store_a.get(&cid).await.unwrap();
+    let result_b = store_b.get(&cid).await.unwrap();
 
     assert_eq!(result_a, Some(b"shared_data".to_vec()));
     assert_eq!(result_b, Some(b"shared_data".to_vec()));
@@ -64,10 +63,10 @@ async fn when_cache_hit_then_api_should_not_be_called() {
         .with_timeout_seconds(SearchConfig::default().search_timeout)
         .with_limit(1024)
         .with_safe_search(SearchConfig::default().safe_search);
-    let cache_key = generate_cache_key(&request);
+    let cid = generate_cid(&request);
     store
         .set(
-            &cache_key,
+            &cid,
             "search",
             &serde_json::to_vec(&cached_response).unwrap(),
         )

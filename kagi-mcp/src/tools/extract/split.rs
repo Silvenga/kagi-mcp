@@ -1,4 +1,4 @@
-use crate::cache::{generate_cache_key, CacheStore};
+use crate::cache::{generate_cid, CacheStore};
 use crate::format::{format_extract_markdown, format_json};
 use crate::tools::extract::errors::kagi_error_to_extract_error;
 use crate::tools::extract::fallback::{is_empty_content, FallbackMatch, FallbackRules};
@@ -92,7 +92,7 @@ pub async fn extract_split(
         let mut cache_hit = false;
         if params.cache {
             if let Some(store) = cache_store {
-                let key = generate_cache_key(&single_req);
+                let key = generate_cid(&single_req);
                 if let Ok(Some(cached_bytes)) = store.get(&key).await {
                     if let Ok(cached_response) =
                         serde_json::from_slice::<ExtractResponse>(&cached_bytes)
@@ -149,7 +149,7 @@ pub async fn extract_split(
                         let store_req = ExtractRequest::new(vec![pages[idx].clone()])
                             .with_format("json".to_owned())
                             .with_timeout_seconds(extract_timeout);
-                        let key = generate_cache_key(&store_req);
+                        let key = generate_cid(&store_req);
                         if let Ok(json_bytes) = serde_json::to_vec(&api_response) {
                             let _ = store.set(&key, "extract", &json_bytes).await;
                         }

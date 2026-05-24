@@ -23,4 +23,8 @@ pub enum CacheError {
     /// Invalid configuration.
     #[error("invalid config: {0}")]
     InvalidConfig(String),
+
+    /// Corrupt cache entry (e.g., CID is not 16 bytes).
+    #[error("corrupt cache entry: {0}")]
+    CorruptEntry(String),
 }
