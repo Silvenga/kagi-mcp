@@ -61,5 +61,5 @@ async-trait = "0.1.89"
 schemars = "1.2.1"
 clap = { version = "4.6.1", features = ["derive", "env"] }
 reqwest = { version = "0.13.3", default-features = false, features = ["json", "native-tls"] }
-reqwest-middleware = "0.5.1"
+reqwest-middleware = "0.5.2"
 reqwest-retry = "0.9.1"
