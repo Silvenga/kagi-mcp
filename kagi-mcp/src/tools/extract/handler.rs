@@ -86,7 +86,7 @@ pub async fn extract_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cache::generate_cache_key;
+    use crate::cache::generate_cid;
     use crate::cache::CacheStore;
     use crate::config::FallbackRule;
     use kagi_api::{ExtractData, ExtractError, Meta};
@@ -727,7 +727,7 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Blocked by policy"));
 
-        let key = generate_cache_key(
+        let key = generate_cid(
             &kagi_api::ExtractRequest::new(vec![kagi_api::ExtractPage {
                 url: "https://blocked.com/page".to_owned(),
             }])
@@ -959,7 +959,7 @@ mod tests {
         }])
         .with_format("json".to_owned())
         .with_timeout_seconds(10.0);
-        let key = generate_cache_key(&single_req);
+        let key = generate_cid(&single_req);
         store.set(&key, "extract", &cached_bytes).await.unwrap();
 
         let mock = MockKagiApi::new();
@@ -1266,7 +1266,7 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Blocked by policy"));
 
-        let key = generate_cache_key(
+        let key = generate_cid(
             &kagi_api::ExtractRequest::new(vec![])
                 .with_format("json".to_owned())
                 .with_timeout_seconds(10.0),

@@ -1,4 +1,4 @@
-use crate::cache::{generate_cache_key, CacheStore};
+use crate::cache::{generate_cid, CacheStore};
 use crate::format::{format_extract_markdown, format_json};
 use crate::tools::errors::map_kagi_error;
 use crate::tools::extract::errors::map_cache_error;
@@ -115,7 +115,7 @@ pub async fn extract_batch(
 
     if params.cache {
         if let Some(store) = cache_store {
-            let key = generate_cache_key(&request);
+            let key = generate_cid(&request);
             match store.get(&key).await {
                 Ok(Some(cached_bytes)) => {
                     let mut cached_response: ExtractResponse =
@@ -213,7 +213,7 @@ pub async fn extract_batch(
             }
 
             if let Some(store) = cache_store {
-                let key = generate_cache_key(&request);
+                let key = generate_cid(&request);
                 let json_bytes =
                     serde_json::to_vec(&response).map_err(|e| map_cache_error(e.into()))?;
                 store

@@ -1,5 +1,6 @@
 use crate::cache::evict::evict_if_needed;
 use crate::cache::CacheError;
+use crate::cache::Cid;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{ConnectOptions, Connection, SqliteConnection};
 use std::fs;
@@ -72,81 +73,75 @@ impl CacheStore {
         self.connect_options.connect().await.map_err(Into::into)
     }
 
-    /// Retrieves a cached response by key, checking TTL expiry.
-    pub async fn get(&self, cache_key: &str) -> Result<Option<Vec<u8>>, CacheError> {
+    /// Retrieves a cached response by CID, checking TTL expiry.
+    pub async fn get(&self, cid: &Cid) -> Result<Option<Vec<u8>>, CacheError> {
         let mut conn = self.open_connection().await?;
-        let row: Option<(Vec<u8>, i64)> = match sqlx::query_as(
-            "SELECT response_json, created_at FROM cache_entries WHERE cache_key = ?",
-        )
-        .bind(cache_key)
-        .fetch_optional(&mut conn)
-        .await
-        {
-            Ok(row) => row,
-            Err(e) => {
-                tracing::warn!(cache_key = %cache_key, error = %e, "cache read error");
-                return Err(e.into());
-            }
-        };
+        let row: Option<(Vec<u8>, i64)> =
+            match sqlx::query_as("SELECT value, created_at FROM cache WHERE cid = ?")
+                .bind(cid.as_slice())
+                .fetch_optional(&mut conn)
+                .await
+            {
+                Ok(row) => row,
+                Err(e) => {
+                    tracing::warn!(cid = ?cid, error = %e, "cache read error");
+                    return Err(e.into());
+                }
+            };
 
-        if let Some((response_json, created_at)) = row {
+        if let Some((value, created_at)) = row {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64;
 
             if created_at < now.saturating_sub(self.ttl_seconds as i64) {
-                sqlx::query("DELETE FROM cache_entries WHERE cache_key = ?")
-                    .bind(cache_key)
+                sqlx::query("DELETE FROM cache WHERE cid = ?")
+                    .bind(cid.as_slice())
                     .execute(&mut conn)
                     .await?;
-                tracing::debug!(cache_key = %cache_key, "cache entry expired, deleted");
+                tracing::debug!(cid = ?cid, "cache entry expired, deleted");
                 Ok(None)
             } else {
-                tracing::debug!(cache_key = %cache_key, "cache hit");
-                Ok(Some(response_json))
+                tracing::debug!(cid = ?cid, "cache hit");
+                Ok(Some(value))
             }
         } else {
-            tracing::debug!(cache_key = %cache_key, "cache miss");
+            tracing::debug!(cid = ?cid, "cache miss");
             Ok(None)
         }
     }
 
     /// Stores a cached response.
-    pub async fn set(
-        &self,
-        cache_key: &str,
-        tool_type: &str,
-        response_json: &[u8],
-    ) -> Result<(), CacheError> {
+    pub async fn set(&self, cid: &Cid, type_: &str, value: &[u8]) -> Result<(), CacheError> {
         let created_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let size_bytes = response_json.len() as i64;
+        let size_bytes = value.len() as i64;
 
         let mut conn = self.open_connection().await?;
         let mut tx = conn.begin().await?;
 
         if let Err(e) = sqlx::query(
-            "INSERT OR REPLACE INTO cache_entries (cache_key, tool_type, created_at, size_bytes, response_json) VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO cache (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
         )
-        .bind(cache_key)
-        .bind(tool_type)
+        .bind(cid.as_slice())
+        .bind(type_)
         .bind(created_at)
         .bind(size_bytes)
-        .bind(response_json)
+        .bind(value)
         .execute(&mut *tx)
         .await
         {
-            tracing::warn!(cache_key = %cache_key, error = %e, "cache write error");
+            tracing::warn!(cid = ?cid, error = %e, "cache write error");
             return Err(e.into());
         }
 
         evict_if_needed(&mut tx, self.max_size_bytes).await?;
 
         tx.commit().await?;
-        tracing::debug!(cache_key = %cache_key, tool_type = %tool_type, size_bytes = size_bytes, "cache set");
+        tracing::debug!(cid = ?cid, type_ = %type_, size_bytes = size_bytes, "cache set");
         Ok(())
     }
 }
@@ -164,7 +159,7 @@ mod tests {
         assert!(cache_dir.exists());
         assert!(cache_dir.join("cache.db").exists());
 
-        let result = store.get("any").await.unwrap();
+        let result = store.get(&[0u8; 16]).await.unwrap();
         assert_eq!(result, None);
     }
 
@@ -187,16 +182,17 @@ mod tests {
     async fn when_open_in_memory_then_works() {
         let store = CacheStore::open_in_memory().await.unwrap();
 
-        let result = store.get("any").await.unwrap();
+        let result = store.get(&[0u8; 16]).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn when_entry_exists_then_get_should_return_data() {
         let store = CacheStore::open_in_memory().await.unwrap();
+        let cid = [1u8; 16];
 
-        store.set("key1", "search", b"cached_data").await.unwrap();
-        let result = store.get("key1").await.unwrap();
+        store.set(&cid, "search", b"cached_data").await.unwrap();
+        let result = store.get(&cid).await.unwrap();
 
         assert_eq!(result, Some(b"cached_data".to_vec()));
     }
@@ -205,7 +201,7 @@ mod tests {
     async fn when_entry_missing_then_get_should_return_none() {
         let store = CacheStore::open_in_memory().await.unwrap();
 
-        let result = store.get("missing_key").await.unwrap();
+        let result = store.get(&[0u8; 16]).await.unwrap();
 
         assert_eq!(result, None);
     }
@@ -214,11 +210,12 @@ mod tests {
     async fn when_entry_expired_then_get_should_return_none_and_delete() {
         let store = CacheStore::open_in_memory().await.unwrap();
         let mut conn = store.open_connection().await.unwrap();
+        let cid = [1u8; 16];
 
         sqlx::query(
-            "INSERT INTO cache_entries (cache_key, tool_type, created_at, size_bytes, response_json) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO cache (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
         )
-        .bind("key1")
+        .bind(cid.as_slice())
         .bind("search")
         .bind(0i64)
         .bind(4i64)
@@ -227,27 +224,27 @@ mod tests {
         .await
         .unwrap();
 
-        let result = store.get("key1").await.unwrap();
+        let result = store.get(&cid).await.unwrap();
 
         assert_eq!(result, None);
 
-        let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM cache_entries WHERE cache_key = ?")
-                .bind("key1")
-                .fetch_one(&mut conn)
-                .await
-                .unwrap();
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM cache WHERE cid = ?")
+            .bind(cid.as_slice())
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
         assert_eq!(count.0, 0);
     }
 
     #[tokio::test]
     async fn when_set_twice_then_get_should_return_latest() {
         let store = CacheStore::open_in_memory().await.unwrap();
+        let cid = [1u8; 16];
 
-        store.set("key1", "search", b"first").await.unwrap();
-        store.set("key1", "search", b"second").await.unwrap();
+        store.set(&cid, "search", b"first").await.unwrap();
+        store.set(&cid, "search", b"second").await.unwrap();
 
-        let result = store.get("key1").await.unwrap();
+        let result = store.get(&cid).await.unwrap();
 
         assert_eq!(result, Some(b"second".to_vec()));
     }
@@ -256,9 +253,10 @@ mod tests {
     async fn when_set_and_get_then_should_roundtrip() {
         let store = CacheStore::open_in_memory().await.unwrap();
         let data = b"roundtrip_payload";
+        let cid = [2u8; 16];
 
-        store.set("round_key", "extract", data).await.unwrap();
-        let result = store.get("round_key").await.unwrap();
+        store.set(&cid, "extract", data).await.unwrap();
+        let result = store.get(&cid).await.unwrap();
 
         assert_eq!(result, Some(data.to_vec()));
     }
@@ -267,11 +265,12 @@ mod tests {
     async fn when_overwrite_then_timestamp_should_update() {
         let store = CacheStore::open_in_memory().await.unwrap();
         let mut conn = store.open_connection().await.unwrap();
+        let cid = [1u8; 16];
 
         sqlx::query(
-            "INSERT INTO cache_entries (cache_key, tool_type, created_at, size_bytes, response_json) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO cache (cid, type, created_at, size_bytes, value) VALUES (?, ?, ?, ?, ?)",
         )
-        .bind("key1")
+        .bind(cid.as_slice())
         .bind("search")
         .bind(0i64)
         .bind(5i64)
@@ -280,14 +279,13 @@ mod tests {
         .await
         .unwrap();
 
-        store.set("key1", "search", b"second").await.unwrap();
+        store.set(&cid, "search", b"second").await.unwrap();
 
-        let timestamp: (i64,) =
-            sqlx::query_as("SELECT created_at FROM cache_entries WHERE cache_key = ?")
-                .bind("key1")
-                .fetch_one(&mut conn)
-                .await
-                .unwrap();
+        let timestamp: (i64,) = sqlx::query_as("SELECT created_at FROM cache WHERE cid = ?")
+            .bind(cid.as_slice())
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
         assert!(timestamp.0 > 0);
     }
 }

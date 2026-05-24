@@ -1,4 +1,4 @@
-use crate::cache::{generate_cache_key, CacheError, CacheStore};
+use crate::cache::{generate_cid, CacheError, CacheStore};
 use crate::format::{format_json, format_search_markdown};
 use crate::tools::errors::map_kagi_error;
 use crate::tools::progress::send_progress;
@@ -67,7 +67,7 @@ pub async fn search_handler(
 
     if params.cache {
         if let Some(store) = cache_store {
-            let key = generate_cache_key(&request);
+            let key = generate_cid(&request);
             match store.get(&key).await {
                 Ok(Some(cached_bytes)) => {
                     let mut cached_response: SearchResponse = serde_json::from_slice(&cached_bytes)
@@ -115,7 +115,7 @@ pub async fn search_handler(
     match result {
         Ok(mut response) => {
             if let Some(store) = cache_store {
-                let key = generate_cache_key(&request);
+                let key = generate_cid(&request);
                 let json_bytes =
                     serde_json::to_vec(&response).map_err(|e| map_cache_error(e.into()))?;
                 store

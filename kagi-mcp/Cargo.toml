@@ -34,7 +34,6 @@ url = { workspace = true }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 html-escape = "0.2.13"
 askama = { version = "0.16.0", features = ["serde_json"] }
 publicsuffix = { version = "2.3.0", default-features = false }

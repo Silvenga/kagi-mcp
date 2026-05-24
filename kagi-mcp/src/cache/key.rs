@@ -1,14 +1,22 @@
 use serde::Serialize;
 use xxhash_rust::xxh3;
 
-/// Generates a deterministic cache key from a serializable request.
+const CACHE_KEY_VERSION: u8 = 1;
+
+/// A 16-byte content ID used as a cache key.
+pub type Cid = [u8; 16];
+
+/// Generates a deterministic 16-byte content ID from a serializable request.
 ///
-/// Serializes the request to JSON bytes and hashes them with XXH3-64,
-/// producing a 16-character lowercase hex string.
-pub fn generate_cache_key(request: &impl Serialize) -> String {
+/// Serializes the request to JSON bytes, prepends a version salt byte,
+/// and hashes with XXH3-128 to produce a 16-byte content ID.
+pub fn generate_cid(request: &impl Serialize) -> Cid {
     let bytes = serde_json::to_vec(request).expect("serialization should not fail");
-    let hash = xxh3::xxh3_64(&bytes);
-    format!("{:016x}", hash)
+    let mut salted = Vec::with_capacity(1 + bytes.len());
+    salted.push(CACHE_KEY_VERSION);
+    salted.extend_from_slice(&bytes);
+    let hash = xxh3::xxh3_128(&salted);
+    hash.to_le_bytes()
 }
 
 #[cfg(test)]
@@ -17,57 +25,66 @@ mod tests {
     use kagi_api::{ExtractPage, ExtractRequest, SearchRequest};
 
     #[test]
-    fn when_same_request_then_same_key_should_be_equal() {
+    fn when_same_request_then_same_cid_should_be_equal() {
         let req = SearchRequest::new("rust programming");
 
-        let key1 = generate_cache_key(&req);
-        let key2 = generate_cache_key(&req);
+        let cid1 = generate_cid(&req);
+        let cid2 = generate_cid(&req);
 
-        assert_eq!(key1, key2);
+        assert_eq!(cid1, cid2);
     }
 
     #[test]
-    fn when_different_requests_then_different_keys_should_not_be_equal() {
+    fn when_different_requests_then_different_cids_should_not_be_equal() {
         let req1 = SearchRequest::new("rust programming");
         let req2 = SearchRequest::new("python programming");
 
-        let key1 = generate_cache_key(&req1);
-        let key2 = generate_cache_key(&req2);
+        let cid1 = generate_cid(&req1);
+        let cid2 = generate_cid(&req2);
 
-        assert_ne!(key1, key2);
+        assert_ne!(cid1, cid2);
     }
 
     #[test]
-    fn when_generated_then_key_format_should_be_hex() {
-        let req = SearchRequest::new("format test");
+    fn when_generated_then_cid_length_should_be_16_bytes() {
+        let req = SearchRequest::new("length test");
 
-        let key = generate_cache_key(&req);
+        let cid = generate_cid(&req);
 
-        assert_eq!(16, key.len());
-        assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_eq!(key, key.to_ascii_lowercase());
+        assert_eq!(16, cid.len());
+    }
+
+    #[test]
+    fn when_salted_then_cid_should_differ_from_unsalted_hash() {
+        let req = SearchRequest::new("salt test");
+        let bytes = serde_json::to_vec(&req).expect("serialization should not fail");
+
+        let cid = generate_cid(&req);
+        let unsalted_hash = xxh3::xxh3_128(&bytes).to_le_bytes();
+
+        assert_ne!(cid, unsalted_hash);
     }
 
     #[test]
     fn when_called_multiple_then_deterministic_should_be_consistent() {
         let req = SearchRequest::new("deterministic test");
 
-        let key = generate_cache_key(&req);
+        let cid = generate_cid(&req);
         for _ in 0..100 {
-            assert_eq!(key, generate_cache_key(&req));
+            assert_eq!(cid, generate_cid(&req));
         }
     }
 
     #[test]
-    fn when_extract_request_then_key_should_be_stable() {
+    fn when_extract_request_then_cid_should_be_stable() {
         let req = ExtractRequest::new(vec![ExtractPage {
             url: "https://example.com".into(),
         }]);
 
-        let key1 = generate_cache_key(&req);
-        let key2 = generate_cache_key(&req);
+        let cid1 = generate_cid(&req);
+        let cid2 = generate_cid(&req);
 
-        assert_eq!(key1, key2);
+        assert_eq!(cid1, cid2);
     }
 
     #[test]
@@ -75,6 +92,6 @@ mod tests {
         let implicit = SearchRequest::new("test");
         let explicit = SearchRequest::new("test");
 
-        assert_eq!(generate_cache_key(&implicit), generate_cache_key(&explicit));
+        assert_eq!(generate_cid(&implicit), generate_cid(&explicit));
     }
 }
