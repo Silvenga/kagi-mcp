@@ -42,6 +42,8 @@ pub async fn extract_batch(
     let mut results: Vec<Option<ExtractData>> = vec![None; total_pages];
     let mut uncached: Vec<(usize, ExtractPage)> = Vec::new();
 
+    let mut cache_hits_count = 0usize;
+
     for (i, page) in pages.iter().enumerate() {
         // Phase 0: always_block URLs get synthetic data, skip cache + API
         if let Some(rules) = fallback_rules {
@@ -62,6 +64,7 @@ pub async fn extract_batch(
                 };
                 if let Some(cached) = store.get_extract_result(&key).await {
                     results[i] = Some(cached.data);
+                    cache_hits_count += 1;
                     tracing::info!(url = %page.url, cache_hit = true, "page served from cache");
                     continue;
                 }
@@ -101,8 +104,9 @@ pub async fn extract_batch(
             format_extract_markdown(&response)
         };
         let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
+        let cache_hit_label = if cache_hits_count > 0 { "true" } else { "fallback" };
         tracing::info!(
-            cache_hit = true,
+            cache_hit = cache_hit_label,
             url_count = total_pages,
             "extract batch served from cache"
         );

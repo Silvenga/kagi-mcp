@@ -150,7 +150,10 @@ pub async fn extract_split(
                     if let Some(store) = cache_store {
                         if let Some(data_vec) = &api_response.data {
                             if let Some(extracted_data) =
-                                data_vec.iter().find(|d| d.url == pages[idx].url)
+                                data_vec.iter().find(|d| {
+                                    d.url.trim_end_matches('/')
+                                        == pages[idx].url.trim_end_matches('/')
+                                })
                             {
                                 let cache_key = ExtractCacheKey {
                                     url: pages[idx].url.clone(),
