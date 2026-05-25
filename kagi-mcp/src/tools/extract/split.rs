@@ -1,4 +1,4 @@
-use crate::cache::{generate_cid, CacheStore};
+use crate::cache::{CacheStore, ExtractCacheKey, ExtractCachedResult};
 use crate::format::{format_extract_markdown, format_json};
 use crate::tools::extract::errors::kagi_error_to_extract_error;
 use crate::tools::extract::fallback::{is_empty_content, FallbackMatch, FallbackRules};
@@ -85,31 +85,33 @@ pub async fn extract_split(
             }
         }
 
-        let single_req = ExtractRequest::new(vec![page.clone()])
-            .with_format("json".to_owned())
-            .with_timeout_seconds(extract_timeout);
-
         let mut cache_hit = false;
         if params.cache {
             if let Some(store) = cache_store {
-                let key = generate_cid(&single_req);
-                if let Ok(Some(cached_bytes)) = store.get(&key).await {
-                    if let Ok(cached_response) =
-                        serde_json::from_slice::<ExtractResponse>(&cached_bytes)
-                    {
-                        let _ = send_progress(
-                            ctx,
-                            ((i + 1) as f64 / total_pages as f64) * 100.0,
-                            Some(100.0),
-                            format!("Page {}/{} (cached)", i + 1, total_pages),
-                        )
-                        .await;
-                        let mut cached_response = cached_response;
-                        apply_post_extract_fallback(&mut cached_response, fallback_rules);
-                        results[i] = Some(cached_response);
-                        cache_hit = true;
-                        tracing::info!(url = %page.url, cache_hit = true, "page served from cache");
-                    }
+                let cache_key = ExtractCacheKey {
+                    url: page.url.clone(),
+                };
+                if let Some(cached_result) = store.get_extract_result(&cache_key).await {
+                    let _ = send_progress(
+                        ctx,
+                        ((i + 1) as f64 / total_pages as f64) * 100.0,
+                        Some(100.0),
+                        format!("Page {}/{} (cached)", i + 1, total_pages),
+                    )
+                    .await;
+                    let mut cached_response = ExtractResponse {
+                        meta: kagi_api::Meta {
+                            trace: String::new(),
+                            node: None,
+                            ms: None,
+                        },
+                        data: Some(vec![cached_result.data]),
+                        errors: None,
+                    };
+                    apply_post_extract_fallback(&mut cached_response, fallback_rules);
+                    results[i] = Some(cached_response);
+                    cache_hit = true;
+                    tracing::info!(url = %page.url, cache_hit = true, "page served from cache");
                 }
             }
         }
@@ -146,12 +148,18 @@ pub async fn extract_split(
             Ok((idx, Ok(api_response))) => {
                 if params.cache {
                     if let Some(store) = cache_store {
-                        let store_req = ExtractRequest::new(vec![pages[idx].clone()])
-                            .with_format("json".to_owned())
-                            .with_timeout_seconds(extract_timeout);
-                        let key = generate_cid(&store_req);
-                        if let Ok(json_bytes) = serde_json::to_vec(&api_response) {
-                            let _ = store.set(&key, "extract", &json_bytes).await;
+                        if let Some(data_vec) = &api_response.data {
+                            if let Some(extracted_data) = data_vec.iter().find(|d| {
+                                d.url.trim_end_matches('/') == pages[idx].url.trim_end_matches('/')
+                            }) {
+                                let cache_key = ExtractCacheKey {
+                                    url: pages[idx].url.clone(),
+                                };
+                                let cached_result = ExtractCachedResult {
+                                    data: extracted_data.clone(),
+                                };
+                                let _ = store.set_extract_result(&cache_key, &cached_result).await;
+                            }
                         }
                     }
                 }

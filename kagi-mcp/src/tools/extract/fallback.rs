@@ -5,7 +5,7 @@
 
 use crate::config::FallbackRule;
 use crate::tools::domain::extract_registrable_domain;
-use kagi_api::{ExtractData, ExtractPage};
+use kagi_api::ExtractData;
 
 /// The result of checking a URL against fallback rules.
 #[derive(Debug, Clone, PartialEq)]
@@ -23,9 +23,6 @@ pub enum FallbackMatch {
         message: String,
     },
 }
-
-/// Result of filtering pages: (blocked, unblocked) with original indices preserved.
-pub type FilterResult = (Vec<(usize, FallbackMatch)>, Vec<(usize, ExtractPage)>);
 
 /// A set of fallback rules for URL extraction.
 #[derive(Debug, Clone)]
@@ -61,31 +58,6 @@ impl FallbackRules {
         }
 
         FallbackMatch::NoMatch
-    }
-
-    /// Filter a list of pages into blocked and unblocked groups.
-    ///
-    /// Returns a tuple of:
-    /// - Blocked pages with their original index and match reason
-    /// - Unblocked pages with their original index and page data
-    ///
-    /// Both output vectors preserve the original order of pages.
-    pub fn filter_urls(&self, pages: &[ExtractPage]) -> FilterResult {
-        let mut blocked = Vec::new();
-        let mut unblocked = Vec::new();
-
-        for (index, page) in pages.iter().enumerate() {
-            match self.check(&page.url) {
-                FallbackMatch::NoMatch => {
-                    unblocked.push((index, page.clone()));
-                }
-                matched => {
-                    blocked.push((index, matched));
-                }
-            }
-        }
-
-        (blocked, unblocked)
     }
 }
 
@@ -175,76 +147,6 @@ mod tests {
         let result = rules.check("https://example.com");
 
         assert_eq!(result, FallbackMatch::NoMatch);
-    }
-
-    // --- filter_urls() tests ---
-
-    #[test]
-    fn filter_urls_splits_blocked_from_unblocked_preserving_indices() {
-        let rules = make_rules(vec![
-            make_rule("blocked.com", false, "blocked"),
-            make_rule("always.com", true, "always blocked"),
-        ]);
-
-        let pages = vec![
-            ExtractPage {
-                url: "https://good.com/page".to_owned(),
-            },
-            ExtractPage {
-                url: "https://blocked.com/page".to_owned(),
-            },
-            ExtractPage {
-                url: "https://always.com/page".to_owned(),
-            },
-            ExtractPage {
-                url: "https://another-good.com/page".to_owned(),
-            },
-        ];
-
-        let (blocked, unblocked) = rules.filter_urls(&pages);
-
-        assert_eq!(blocked.len(), 2);
-        assert_eq!(blocked[0].0, 1);
-        assert!(matches!(blocked[0].1, FallbackMatch::EmptyContent { .. }));
-        assert_eq!(blocked[1].0, 2);
-        assert!(matches!(blocked[1].1, FallbackMatch::AlwaysBlock { .. }));
-
-        assert_eq!(unblocked.len(), 2);
-        assert_eq!(unblocked[0].0, 0);
-        assert_eq!(unblocked[0].1.url, "https://good.com/page");
-        assert_eq!(unblocked[1].0, 3);
-        assert_eq!(unblocked[1].1.url, "https://another-good.com/page");
-    }
-
-    #[test]
-    fn filter_urls_when_no_rules_then_all_unblocked() {
-        let rules = make_rules(vec![]);
-        let pages = vec![
-            ExtractPage {
-                url: "https://example.com/page".to_owned(),
-            },
-            ExtractPage {
-                url: "https://other.com/page".to_owned(),
-            },
-        ];
-
-        let (blocked, unblocked) = rules.filter_urls(&pages);
-
-        assert!(blocked.is_empty());
-        assert_eq!(unblocked.len(), 2);
-    }
-
-    #[test]
-    fn filter_urls_when_all_blocked_then_none_unblocked() {
-        let rules = make_rules(vec![make_rule("example.com", true, "blocked")]);
-        let pages = vec![ExtractPage {
-            url: "https://example.com/page".to_owned(),
-        }];
-
-        let (blocked, unblocked) = rules.filter_urls(&pages);
-
-        assert_eq!(blocked.len(), 1);
-        assert!(unblocked.is_empty());
     }
 
     // --- is_empty_content() tests ---

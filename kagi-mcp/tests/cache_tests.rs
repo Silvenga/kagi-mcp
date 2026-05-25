@@ -1,7 +1,7 @@
 use kagi_api::{
     KagiClientBuilder, Meta, MockKagiApi, SearchData, SearchRequest, SearchResponse, SearchResult,
 };
-use kagi_mcp::cache::{generate_cid, CacheStore, Cid};
+use kagi_mcp::cache::{CacheStore, SearchCacheKey, SearchCachedResult};
 use kagi_mcp::tools::search::{search_handler, SearchConfig, SearchParams};
 use kagi_mcp::KagiMcpServer;
 use rmcp::model::{ClientInfo, RequestId};
@@ -17,17 +17,36 @@ async fn when_cache_persists_across_instances_then_data_should_be_readable() {
     let cache_dir = tmp.path().join("cache");
 
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
-    let cid: Cid = [1u8; 16];
-    store
-        .set(&cid, "search", b"persistent_payload")
-        .await
-        .unwrap();
+    let key = SearchCacheKey {
+        query: "persistent query".to_owned(),
+        workflow: None,
+        page: None,
+        limit: None,
+        safe_search: None,
+        region: None,
+        filters: None,
+        lens_id: None,
+        lens: None,
+        personalizations: None,
+    };
+    let result = SearchCachedResult {
+        response: SearchResponse {
+            meta: Meta {
+                trace: "persistent".to_owned(),
+                node: None,
+                ms: None,
+            },
+            data: empty_search_data(),
+        },
+    };
+    store.set_search_result(&key, &result).await.unwrap();
     drop(store);
 
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
-    let result = store.get(&cid).await.unwrap();
+    let retrieved = store.get_search_result(&key).await;
 
-    assert_eq!(result, Some(b"persistent_payload".to_vec()));
+    assert!(retrieved.is_some());
+    assert_eq!(retrieved.unwrap().response.meta.trace, "persistent");
 }
 
 #[tokio::test]
@@ -36,18 +55,41 @@ async fn when_concurrent_readers_then_both_should_read_same_entry() {
     let cache_dir = tmp.path().join("cache");
 
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
-    let cid: Cid = [2u8; 16];
-    store.set(&cid, "search", b"shared_data").await.unwrap();
+    let key = SearchCacheKey {
+        query: "shared query".to_owned(),
+        workflow: None,
+        page: None,
+        limit: None,
+        safe_search: None,
+        region: None,
+        filters: None,
+        lens_id: None,
+        lens: None,
+        personalizations: None,
+    };
+    let result = SearchCachedResult {
+        response: SearchResponse {
+            meta: Meta {
+                trace: "shared".to_owned(),
+                node: None,
+                ms: None,
+            },
+            data: empty_search_data(),
+        },
+    };
+    store.set_search_result(&key, &result).await.unwrap();
     drop(store);
 
     let store_a = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
     let store_b = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
 
-    let result_a = store_a.get(&cid).await.unwrap();
-    let result_b = store_b.get(&cid).await.unwrap();
+    let result_a = store_a.get_search_result(&key).await;
+    let result_b = store_b.get_search_result(&key).await;
 
-    assert_eq!(result_a, Some(b"shared_data".to_vec()));
-    assert_eq!(result_b, Some(b"shared_data".to_vec()));
+    assert!(result_a.is_some());
+    assert!(result_b.is_some());
+    assert_eq!(result_a.unwrap().response.meta.trace, "shared");
+    assert_eq!(result_b.unwrap().response.meta.trace, "shared");
 }
 
 #[tokio::test]
@@ -57,21 +99,16 @@ async fn when_cache_hit_then_api_should_not_be_called() {
     let store = CacheStore::new(&cache_dir, 1.0, 7).await.unwrap();
 
     let cached_response = fake_search_response("Cached Title", "Cached snippet");
-
     let request = SearchRequest::new("test query")
         .with_format("json".to_owned())
         .with_timeout_seconds(SearchConfig::default().search_timeout)
         .with_limit(1024)
         .with_safe_search(SearchConfig::default().safe_search);
-    let cid = generate_cid(&request);
-    store
-        .set(
-            &cid,
-            "search",
-            &serde_json::to_vec(&cached_response).unwrap(),
-        )
-        .await
-        .unwrap();
+    let key = SearchCacheKey::from_request(&request);
+    let cached_result = SearchCachedResult {
+        response: cached_response,
+    };
+    store.set_search_result(&key, &cached_result).await.unwrap();
 
     let mock = MockKagiApi::new();
 

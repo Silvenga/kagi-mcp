@@ -1,11 +1,11 @@
-use crate::cache::{generate_cid, CacheError, CacheStore};
+use crate::cache::{CacheError, CacheStore, SearchCacheKey, SearchCachedResult};
 use crate::format::{format_json, format_search_markdown};
 use crate::tools::errors::map_kagi_error;
 use crate::tools::progress::send_progress;
 use crate::tools::search::dedup::dedup_by_domain;
 use crate::tools::search::SearchParams;
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::{Filters, KagiApi, KagiError, SearchRequest, SearchResponse};
+use kagi_api::{Filters, KagiApi, KagiError, SearchRequest};
 use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
@@ -67,27 +67,20 @@ pub async fn search_handler(
 
     if params.cache {
         if let Some(store) = cache_store {
-            let key = generate_cid(&request);
-            match store.get(&key).await {
-                Ok(Some(cached_bytes)) => {
-                    let mut cached_response: SearchResponse = serde_json::from_slice(&cached_bytes)
-                        .map_err(|e| map_cache_error(e.into()))?;
-                    tracing::info!(query = %params.query, cache_hit = true, "search completed from cache");
-                    let lpd = params.limit_per_domain.unwrap_or(u32::MAX);
-                    dedup_by_domain(&mut cached_response.data, lpd, config.limit);
-                    let content = if params.output_format == "json" {
-                        format_json(&cached_response)
-                    } else {
-                        format_search_markdown(&cached_response)
-                    };
-                    let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-                    return Ok(CallToolResult::success(vec![Content::text(truncated)]));
-                }
-                Ok(None) => {
-                    tracing::debug!(query = %params.query, "cache miss, calling Kagi API");
-                }
-                Err(e) => return Err(map_cache_error(e)),
+            let key = SearchCacheKey::from_request(&request);
+            if let Some(mut cached_response) = store.get_search_result(&key).await {
+                tracing::info!(query = %params.query, cache_hit = true, "search completed from cache");
+                let lpd = params.limit_per_domain.unwrap_or(u32::MAX);
+                dedup_by_domain(&mut cached_response.response.data, lpd, config.limit);
+                let content = if params.output_format == "json" {
+                    format_json(&cached_response.response)
+                } else {
+                    format_search_markdown(&cached_response.response)
+                };
+                let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
+                return Ok(CallToolResult::success(vec![Content::text(truncated)]));
             }
+            tracing::debug!(query = %params.query, "cache miss, calling Kagi API");
         }
     }
 
@@ -115,11 +108,12 @@ pub async fn search_handler(
     match result {
         Ok(mut response) => {
             if let Some(store) = cache_store {
-                let key = generate_cid(&request);
-                let json_bytes =
-                    serde_json::to_vec(&response).map_err(|e| map_cache_error(e.into()))?;
+                let key = SearchCacheKey::from_request(&request);
+                let cached_result = SearchCachedResult {
+                    response: response.clone(),
+                };
                 store
-                    .set(&key, "search", &json_bytes)
+                    .set_search_result(&key, &cached_result)
                     .await
                     .map_err(map_cache_error)?;
             }

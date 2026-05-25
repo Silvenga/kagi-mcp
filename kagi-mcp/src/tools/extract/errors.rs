@@ -1,10 +1,3 @@
-use crate::cache::CacheError;
-use rmcp::ErrorData;
-
-pub fn map_cache_error(error: CacheError) -> ErrorData {
-    ErrorData::internal_error(format!("Cache error: {error}"), None)
-}
-
 pub fn kagi_error_to_extract_error(
     url: &str,
     error: kagi_api::KagiError,

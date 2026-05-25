@@ -86,8 +86,8 @@ pub async fn extract_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cache::generate_cid;
     use crate::cache::CacheStore;
+    use crate::cache::{ExtractCacheKey, ExtractCachedResult};
     use crate::config::FallbackRule;
     use kagi_api::{ExtractData, ExtractError, Meta};
     use kagi_api::{ExtractResponse, MockKagiApi};
@@ -727,14 +727,11 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Blocked by policy"));
 
-        let key = generate_cid(
-            &kagi_api::ExtractRequest::new(vec![kagi_api::ExtractPage {
+        let cached = store
+            .get_extract_result(&ExtractCacheKey {
                 url: "https://blocked.com/page".to_owned(),
-            }])
-            .with_format("json".to_owned())
-            .with_timeout_seconds(10.0),
-        );
-        let cached = store.get(&key).await.expect("cache get");
+            })
+            .await;
         assert!(cached.is_none(), "fallback result should not be cached");
     }
 
@@ -940,27 +937,19 @@ mod tests {
     async fn when_cached_empty_content_with_fallback_rule_then_should_substitute_message() {
         let store = CacheStore::open_in_memory().await.expect("cache");
 
-        let cached_response = ExtractResponse {
-            meta: Meta {
-                trace: "test".to_owned(),
-                node: None,
-                ms: None,
-            },
-            data: Some(vec![ExtractData {
+        let cached_result = ExtractCachedResult {
+            data: ExtractData {
                 url: "https://fallback.com/page".to_owned(),
                 markdown: None,
-            }]),
-            errors: None,
+            },
         };
-        let cached_bytes = serde_json::to_vec(&cached_response).unwrap();
-
-        let single_req = kagi_api::ExtractRequest::new(vec![kagi_api::ExtractPage {
+        let cache_key = ExtractCacheKey {
             url: "https://fallback.com/page".to_owned(),
-        }])
-        .with_format("json".to_owned())
-        .with_timeout_seconds(10.0);
-        let key = generate_cid(&single_req);
-        store.set(&key, "extract", &cached_bytes).await.unwrap();
+        };
+        store
+            .set_extract_result(&cache_key, &cached_result)
+            .await
+            .unwrap();
 
         let mock = MockKagiApi::new();
 
@@ -1266,13 +1255,18 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Blocked by policy"));
 
-        let key = generate_cid(
-            &kagi_api::ExtractRequest::new(vec![])
-                .with_format("json".to_owned())
-                .with_timeout_seconds(10.0),
-        );
-        let cached = store.get(&key).await.expect("cache get");
-        assert!(cached.is_none(), "fallback result should not be cached");
+        let cached1 = store
+            .get_extract_result(&ExtractCacheKey {
+                url: "https://blocked.com/page1".to_owned(),
+            })
+            .await;
+        let cached2 = store
+            .get_extract_result(&ExtractCacheKey {
+                url: "https://blocked.com/page2".to_owned(),
+            })
+            .await;
+        assert!(cached1.is_none(), "fallback result should not be cached");
+        assert!(cached2.is_none(), "fallback result should not be cached");
     }
 
     pub async fn fake_request_context() -> RequestContext<RoleServer> {

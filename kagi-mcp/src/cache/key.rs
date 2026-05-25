@@ -1,7 +1,7 @@
 use serde::Serialize;
 use xxhash_rust::xxh3;
 
-const CACHE_KEY_VERSION: u8 = 1;
+const CACHE_KEY_VERSION: u8 = 2;
 
 /// A 16-byte content ID used as a cache key.
 pub type Cid = [u8; 16];
