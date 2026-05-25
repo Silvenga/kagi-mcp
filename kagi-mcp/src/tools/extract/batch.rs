@@ -104,7 +104,11 @@ pub async fn extract_batch(
             format_extract_markdown(&response)
         };
         let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-        let cache_hit_label = if cache_hits_count > 0 { "true" } else { "fallback" };
+        let cache_hit_label = if cache_hits_count > 0 {
+            "true"
+        } else {
+            "fallback"
+        };
         tracing::info!(
             cache_hit = cache_hit_label,
             url_count = total_pages,
