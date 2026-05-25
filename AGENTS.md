@@ -1,137 +1,83 @@
-# Kagi MCP Server - Project Workspace
+# PROJECT KNOWLEDGE BASE
 
-## Workspace Structure
+**Generated:** 2026-05-25T21:34:57Z
+**Commit:** ef08977
+**Branch:** agents-mds
 
+## OVERVIEW
+Rust workspace for a Kagi Search API MCP server. `kagi-api` (library) wraps the HTTP API. `kagi-mcp` (binary) exposes search and extract tools via the Model Context Protocol.
+
+## STRUCTURE
 ```
 kagi-mcp/
-├── Cargo.toml              # Workspace root
-├── AGENTS.md               # This file
-├── kagi-api/               # Library crate | Kagi API client
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs          # Module declarations + re-exports
-│       ├── api_trait.rs    # Async trait for testability (mockall)
-│       ├── builder.rs      # KagiClientBuilder with defaults
-│       ├── client.rs       # HTTP client (reqwest + middleware)
-│       ├── error.rs        # Domain error types (thiserror)
-│       └── types/
-│           ├── search_request.rs
-│           ├── search_response.rs
-│           ├── extract_request.rs
-│           ├── extract_response.rs
-│           └── error_response.rs
-└── kagi-mcp/               # Binary crate | MCP server
-    ├── Cargo.toml
-    └── src/
-        └── main.rs         # Entrypoint (rmcp server)
+├── Cargo.toml              # Workspace root — shared deps + clippy lints
+├── kagi-api/               # Library crate — Kagi API client
+│   └── src/                # Flat public API (all re-exported from root)
+└── kagi-mcp/               # Binary crate — MCP server
+    └── src/                # server, config, logging, cache, format, tools
 ```
 
-## Build & Test Commands
+## WHERE TO LOOK
+| Task | Location | Notes |
+|------|----------|-------|
+| Add request/response type | `kagi-api/src/types/` | Derive Serialize/Deserialize + builder |
+| Add a tool | `kagi-mcp/src/tools/` | Follow existing handler + params pattern |
+| Change output formatting | `kagi-mcp/src/format/` | Markdown via askama templates, JSON via serde |
+| Change cache behavior | `kagi-mcp/src/cache/` | See `cache/AGENTS.md` for subsystem rules |
+| Change CLI options | `kagi-mcp/src/config.rs` | Env vars auto-wired via clap `env = ...` |
+| Mock API for tests | `kagi-api/src/api_trait.rs` | Enable `mock` feature for `MockKagiApi` |
 
+## CONVENTIONS
+
+### Workspace dependencies
+- Declare all shared deps in root `Cargo.toml` `[workspace.dependencies]`
+- Crates use `dep.workspace = true`; no local version pins
+
+### Error handling
+- Library: `thiserror` typed errors with `#[from]` conversions
+- Binary: `anyhow` for application-level propagation
+
+### Public API (kagi-api)
+- All types/traits re-exported from crate root via `pub use`
+- Never import from submodules (e.g., `kagi_api::types::Foo` is private)
+
+### Builder-style config
+- `with_*` methods returning `Self` for optional fields
+- `build()` validates and returns `Result`
+
+## ANTI-PATTERNS
+- Importing from `kagi_api::client` or `kagi_api::types` — use root re-exports only
+- Adding application concerns to cache schema — storage-layer only
+- `print_stdout` / `print_stderr` (clippy-warn) — use logging instead
+- Background tasks in cache — all work must be synchronous
+
+## UNIQUE STYLES
+
+### MCP wiring
+- Tools via `rmcp` macros: `#[tool_router(vis = "pub")]` + `#[tool]` + `#[tool_handler]`
+- Params derive `schemars::JsonSchema` for automatic JSON Schema
+
+### Cache design
+- SQLite on disk with WAL mode, no connection pooling
+- FIFO eviction by `created_at`, TTL checked lazily on read
+- See `kagi-mcp/src/cache/AGENTS.md` for full invariants
+
+### Fallback rules
+- Per-domain fallback messages after extract failures
+- `--fallback-always` skips Kagi API entirely for matched domains
+- Domain matching uses eTLD+1 (registrable domain, case-insensitive)
+
+## COMMANDS
 ```bash
-# Check
 cargo check --workspace
-
-# Format
-cargo fmt
-
-# Build
-cargo build --workspace
-
-# Test
 cargo test --workspace
-
-# Lint
 cargo clippy --workspace --all-targets --all-features
-
-# Docs
 cargo doc --workspace --no-deps
 ```
 
-## Key Architecture Decisions
-
-### Two-crate split (`kagi-api` + `kagi-mcp`)
-- `kagi-api` is a pure library that wraps the Kagi Search and Extract HTTP APIs.
-- `kagi-mcp` is the binary that embeds `kagi-api` and exposes it via the Model Context Protocol.
-- Separation allows `kagi-api` to be reused or published independently if desired.
-
-### MCP framework: `rmcp` (v1.6)
-- `rmcp` is the canonical Rust MCP implementation, maintained by the MCP team.
-- Features enabled: `server`, `transport-io`, `schemars`.
-- Uses `schemars` for JSON Schema generation from Rust types (used for tool argument schemas).
-
-### HTTP client: `reqwest` with middleware
-- `reqwest` core client with `reqwest-middleware` for composable middleware.
-- `reqwest-retry` provides automatic retry with exponential backoff for transient failures.
-
-### Testing strategy
-- `mockall` for trait-based mocking of the API client in unit tests.
-- `wiremock` for HTTP-level integration tests (stubbing Kagi API endpoints).
-
-### Error handling
-- Domain errors in `kagi-api` use `thiserror` for typed error enums.
-- Application-level propagation in `kagi-mcp` uses `anyhow`.
-
-## Logging
-
-### Log levels
-- `INFO` — user-facing events (tool invocation, result count, elapsed time, cache hit).
-- `WARN` — recoverable issues (transient API failure before retry, rate-limit approaching).
-- `ERROR` — blocking failures (API unreachable after retries, invalid config, internal panic).
-- `DEBUG` — developer internals (cache store hit/miss, request construction, middleware steps).
-- `TRACE` — very low-level (raw HTTP headers, serialization details, loop iterations).
-
-### Log format
-- Compact single-line format with timestamp, level, target, and message.
-- No ANSI escape codes in file output.
-- Example: `2026-05-24T10:30:00.123Z INFO kagi_mcp::tools::search Handler::call - query="rust" elapsed=342ms cache=hit`
-
-### Log location
-- Written to the cache directory (see `--cache-dir` / `KAGI_CACHE_DIR`).
-- Daily rotation with filename pattern `kagi-mcp.log.YYYY-MM-DD`.
-- Old logs are not automatically pruned; the cache TTL/size limits do not apply to log files.
-
-### Transport behavior
-- **Stdio** (`--transport stdio`): logs are written to file only. Stdio is reserved for MCP protocol messages.
-- **StreamableHttp** (`--transport streamable-http`): logs are written to file **and** stdout. No stderr logging in any mode.
-
-### Filtering
-- Default filter level: `INFO` (shows INFO, WARN, ERROR; hides DEBUG and TRACE).
-- Override via `RUST_LOG` environment variable (e.g., `RUST_LOG=debug`, `RUST_LOG=kagi_mcp::cache=trace`).
-
-### What to log
-
-The purpose of logging is threefold:
-
-1. **Prove correct behavior** — Show users that hidden behavior is working as intended (e.g., cache hits, config loaded, fallback applied).
-2. **Aid debugging** — Provide enough context to reproduce an issue from logs alone (e.g., request parameters, error context, retry attempts).
-3. **Observe usage patterns** — Help understand how the LLM interacts with the tool (e.g., common queries, cache effectiveness).
-
-### What NOT to log
-
-- API keys or sensitive configuration values.
-- Full response bodies (use result metadata instead).
-
-## Contribution Workflow
-
-All changes must be submitted via Pull Requests.
-
-### Branching
-- Create a feature branch from `origin/master` for every change set.
-- Before starting work, fetch the latest changes and rebase your branch onto `origin/master`.
-
-### PR Lifecycle
-- Open a single PR when work is ready for review.
-- Address review feedback by committing and pushing additional changes to the same branch; they will automatically appear in the PR.
-- PRs are merged with **squash merge**.
-- The PR title must follow **Conventional Commits** style (e.g., `feat:`, `fix:`, `docs:`), because the squashed commit message is derived from the PR title.
-
-## CI/CD Maintenance
-
-After making changes to GitHub Actions workflows, run the following command to ensure all actions are pinned to their latest versions:
-
-```bash
-npx actions-up --mode patch --recursive --yes
-```
-
-This updates action references to the latest compatible versions and pins them to immutable SHAs.
+## NOTES
+- Rust 1.84+ required (workspace `rust-version`)
+- Extensive clippy lint config in root `Cargo.toml`
+- MCP transport: `stdio` (default) or `streamable-http` (`--transport streamable-http`)
+- Default HTTP bind: `127.0.0.1:3000`
+- After editing GitHub Actions, run `npx actions-up --mode patch --recursive --yes` to pin action versions
