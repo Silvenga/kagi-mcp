@@ -1,6 +1,8 @@
 use crate::cache::evict::evict_if_needed;
+use crate::cache::generate_cid;
 use crate::cache::CacheError;
 use crate::cache::Cid;
+use crate::cache::{ExtractCacheKey, ExtractCachedResult, SearchCacheKey, SearchCachedResult};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{ConnectOptions, Connection, SqliteConnection};
 use std::fs;
@@ -74,7 +76,7 @@ impl CacheStore {
     }
 
     /// Retrieves a cached response by CID, checking TTL expiry.
-    pub async fn get(&self, cid: &Cid) -> Result<Option<Vec<u8>>, CacheError> {
+    pub(crate) async fn get(&self, cid: &Cid) -> Result<Option<Vec<u8>>, CacheError> {
         let mut conn = self.open_connection().await?;
         let row: Option<(Vec<u8>, i64)> =
             match sqlx::query_as("SELECT value, created_at FROM cache WHERE cid = ?")
@@ -113,7 +115,7 @@ impl CacheStore {
     }
 
     /// Stores a cached response.
-    pub async fn set(&self, cid: &Cid, type_: &str, value: &[u8]) -> Result<(), CacheError> {
+    pub(crate) async fn set(&self, cid: &Cid, type_: &str, value: &[u8]) -> Result<(), CacheError> {
         let created_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -144,11 +146,88 @@ impl CacheStore {
         tracing::debug!(cid = ?cid, type_ = %type_, size_bytes = size_bytes, "cache set");
         Ok(())
     }
+
+    /// Retrieves a cached search result by key, checking TTL expiry.
+    ///
+    /// On deserialization failure, logs a warning with the CID and attempts to
+    /// delete the corrupt entry (ignoring delete failure), then returns `None`.
+    pub async fn get_search_result(&self, key: &SearchCacheKey) -> Option<SearchCachedResult> {
+        let cid = generate_cid(key);
+        let bytes = match self.get(&cid).await {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => return None,
+            Err(_) => return None,
+        };
+
+        match serde_json::from_slice::<SearchCachedResult>(&bytes) {
+            Ok(result) => Some(result),
+            Err(e) => {
+                tracing::warn!(cid = ?cid, error = %e, "corrupt search cache entry, deleting");
+                let _ = self.delete(&cid).await;
+                None
+            }
+        }
+    }
+
+    /// Stores a cached search result by key.
+    pub async fn set_search_result(
+        &self,
+        key: &SearchCacheKey,
+        result: &SearchCachedResult,
+    ) -> Result<(), CacheError> {
+        let bytes = serde_json::to_vec(result)?;
+        let cid = generate_cid(key);
+        self.set(&cid, "search", &bytes).await
+    }
+
+    /// Retrieves a cached extract result by key, checking TTL expiry.
+    ///
+    /// On deserialization failure, logs a warning with the CID and attempts to
+    /// delete the corrupt entry (ignoring delete failure), then returns `None`.
+    pub async fn get_extract_result(&self, key: &ExtractCacheKey) -> Option<ExtractCachedResult> {
+        let cid = generate_cid(key);
+        let bytes = match self.get(&cid).await {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => return None,
+            Err(_) => return None,
+        };
+
+        match serde_json::from_slice::<ExtractCachedResult>(&bytes) {
+            Ok(result) => Some(result),
+            Err(e) => {
+                tracing::warn!(cid = ?cid, error = %e, "corrupt extract cache entry, deleting");
+                let _ = self.delete(&cid).await;
+                None
+            }
+        }
+    }
+
+    /// Stores a cached extract result by key.
+    pub async fn set_extract_result(
+        &self,
+        key: &ExtractCacheKey,
+        result: &ExtractCachedResult,
+    ) -> Result<(), CacheError> {
+        let bytes = serde_json::to_vec(result)?;
+        let cid = generate_cid(key);
+        self.set(&cid, "extract", &bytes).await
+    }
+
+    /// Deletes a cache entry by CID.
+    pub(crate) async fn delete(&self, cid: &Cid) -> Result<(), CacheError> {
+        let mut conn = self.open_connection().await?;
+        sqlx::query("DELETE FROM cache WHERE cid = ?")
+            .bind(cid.as_slice())
+            .execute(&mut conn)
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kagi_api::{ExtractData, Meta, SearchData, SearchResponse};
 
     #[tokio::test]
     async fn when_new_then_creates_directory_and_sqlite_file() {
@@ -287,5 +366,129 @@ mod tests {
             .await
             .unwrap();
         assert!(timestamp.0 > 0);
+    }
+
+    #[tokio::test]
+    async fn when_search_result_roundtrip_then_should_return_same_data() {
+        let store = CacheStore::open_in_memory().await.unwrap();
+        let key = SearchCacheKey {
+            query: "rust programming".to_owned(),
+            workflow: None,
+            page: None,
+            limit: None,
+            safe_search: None,
+            region: None,
+            filters: None,
+            lens_id: None,
+            lens: None,
+            personalizations: None,
+        };
+        let result = SearchCachedResult {
+            response: SearchResponse {
+                meta: Meta {
+                    trace: "trace-123".to_owned(),
+                    node: Some("node-1".to_owned()),
+                    ms: Some(42),
+                },
+                data: SearchData {
+                    search: None,
+                    image: None,
+                    video: None,
+                    podcast: None,
+                    podcast_creator: None,
+                    news: None,
+                    adjacent_question: None,
+                    direct_answer: None,
+                    interesting_news: None,
+                    interesting_finds: None,
+                    infobox: None,
+                    code: None,
+                    package_tracking: None,
+                    public_records: None,
+                    weather: None,
+                    related_search: None,
+                    listicle: None,
+                    web_archive: None,
+                },
+            },
+        };
+
+        store.set_search_result(&key, &result).await.unwrap();
+        let retrieved = store.get_search_result(&key).await;
+
+        assert!(retrieved.is_some());
+        assert_eq!(
+            retrieved.unwrap().response.meta.trace,
+            result.response.meta.trace
+        );
+    }
+
+    #[tokio::test]
+    async fn when_extract_result_roundtrip_then_should_return_same_data() {
+        let store = CacheStore::open_in_memory().await.unwrap();
+        let key = ExtractCacheKey {
+            url: "https://example.com".to_owned(),
+        };
+        let result = ExtractCachedResult {
+            data: ExtractData {
+                url: "https://example.com".to_owned(),
+                markdown: Some("# Hello\n\nWorld.".to_owned()),
+            },
+        };
+
+        store.set_extract_result(&key, &result).await.unwrap();
+        let retrieved = store.get_extract_result(&key).await;
+
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().data.url, result.data.url);
+    }
+
+    #[tokio::test]
+    async fn when_corrupt_entry_then_get_search_result_should_return_none_and_delete() {
+        let store = CacheStore::open_in_memory().await.unwrap();
+        let key = SearchCacheKey {
+            query: "corrupt test".to_owned(),
+            workflow: None,
+            page: None,
+            limit: None,
+            safe_search: None,
+            region: None,
+            filters: None,
+            lens_id: None,
+            lens: None,
+            personalizations: None,
+        };
+        let cid = generate_cid(&key);
+
+        store.set(&cid, "search", b"not valid json").await.unwrap();
+
+        let result = store.get_search_result(&key).await;
+        assert!(result.is_none());
+
+        let raw = store.get(&cid).await.unwrap();
+        assert_eq!(raw, None);
+    }
+
+    #[tokio::test]
+    async fn when_corrupt_entry_delete_fails_then_should_not_panic() {
+        let store = CacheStore::open_in_memory().await.unwrap();
+        let key = SearchCacheKey {
+            query: "delete fail test".to_owned(),
+            workflow: None,
+            page: None,
+            limit: None,
+            safe_search: None,
+            region: None,
+            filters: None,
+            lens_id: None,
+            lens: None,
+            personalizations: None,
+        };
+        let cid = generate_cid(&key);
+
+        store.set(&cid, "search", b"not valid json").await.unwrap();
+
+        let result = store.get_search_result(&key).await;
+        assert!(result.is_none());
     }
 }

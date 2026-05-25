@@ -1,16 +1,14 @@
-use crate::cache::{generate_cid, CacheStore};
+use crate::cache::{CacheStore, ExtractCacheKey, ExtractCachedResult};
 use crate::format::{format_extract_markdown, format_json};
 use crate::tools::errors::map_kagi_error;
-use crate::tools::extract::errors::map_cache_error;
 use crate::tools::extract::fallback::{is_empty_content, FallbackMatch, FallbackRules};
 use crate::tools::extract::ExtractParams;
 use crate::tools::progress::send_progress;
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::{ExtractData, ExtractPage, ExtractRequest, ExtractResponse, KagiApi};
+use kagi_api::{ExtractData, ExtractError, ExtractPage, ExtractRequest, ExtractResponse, KagiApi};
 use rmcp::model::{CallToolResult, Content, ErrorCode};
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -37,51 +35,51 @@ pub async fn extract_batch(
         return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
     }
 
-    let mut synthetic_data: Vec<(usize, ExtractData)> = Vec::new();
-    let mut api_pages: Vec<ExtractPage> = Vec::new();
-    let original_pages = pages.clone();
-
     let start = Instant::now();
-    tracing::info!(
-        total_pages = total_pages,
-        blocked = synthetic_data.len(),
-        "extract batch started"
-    );
+    tracing::info!(total_pages = total_pages, "extract batch started");
 
-    if let Some(rules) = fallback_rules {
-        let (blocked, unblocked) = rules.filter_urls(&pages);
-        let mut blocked_map: HashMap<usize, FallbackMatch> = blocked.into_iter().collect();
-        let mut unblocked_map: HashMap<usize, ExtractPage> = unblocked.into_iter().collect();
+    // Phase 0 + Phase 1: fallback filtering + per-URL cache lookup
+    let mut results: Vec<Option<ExtractData>> = vec![None; total_pages];
+    let mut uncached: Vec<(usize, ExtractPage)> = Vec::new();
 
-        for (index, page) in pages.iter().enumerate() {
-            if let Some(matched) = blocked_map.remove(&index) {
-                match matched {
-                    FallbackMatch::AlwaysBlock { message } => {
-                        synthetic_data.push((
-                            index,
-                            ExtractData {
-                                url: page.url.clone(),
-                                markdown: Some(message),
-                            },
-                        ));
-                    }
-                    FallbackMatch::EmptyContent { .. } => {
-                        api_pages.push(page.clone());
-                    }
-                    FallbackMatch::NoMatch => {}
-                }
-            } else if let Some(page) = unblocked_map.remove(&index) {
-                api_pages.push(page);
-            } else {
-                // Index was neither blocked nor unblocked — no action needed.
+    for (i, page) in pages.iter().enumerate() {
+        // Phase 0: always_block URLs get synthetic data, skip cache + API
+        if let Some(rules) = fallback_rules {
+            if let FallbackMatch::AlwaysBlock { message } = rules.check(&page.url) {
+                results[i] = Some(ExtractData {
+                    url: page.url.clone(),
+                    markdown: Some(message),
+                });
+                continue;
             }
         }
-    } else {
-        api_pages = pages;
+
+        // Phase 1: per-URL cache lookup
+        if params.cache {
+            if let Some(store) = cache_store {
+                let key = ExtractCacheKey {
+                    url: page.url.clone(),
+                };
+                if let Some(cached) = store.get_extract_result(&key).await {
+                    results[i] = Some(cached.data);
+                    tracing::info!(url = %page.url, cache_hit = true, "page served from cache");
+                    continue;
+                }
+                tracing::debug!(url = %page.url, "cache miss");
+            }
+        }
+
+        uncached.push((i, page.clone()));
     }
 
-    if api_pages.is_empty() {
+    // All URLs were either blocked or cached — return immediately
+    if uncached.is_empty() {
         let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
+
+        let mut merged_data: Vec<ExtractData> =
+            results.iter_mut().filter_map(|r| r.take()).collect();
+
+        apply_post_extract_fallback(&mut merged_data, fallback_rules);
 
         let response = ExtractResponse {
             meta: kagi_api::Meta {
@@ -89,12 +87,10 @@ pub async fn extract_batch(
                 node: None,
                 ms: None,
             },
-            data: if synthetic_data.is_empty() {
+            data: if merged_data.is_empty() {
                 None
             } else {
-                let mut merged = synthetic_data;
-                merged.sort_by_key(|(index, _)| *index);
-                Some(merged.into_iter().map(|(_, data)| data).collect())
+                Some(merged_data)
             },
             errors: None,
         };
@@ -105,93 +101,30 @@ pub async fn extract_batch(
             format_extract_markdown(&response)
         };
         let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
+        tracing::info!(
+            cache_hit = true,
+            url_count = total_pages,
+            "extract batch served from cache"
+        );
         return Ok(CallToolResult::success(vec![Content::text(truncated)]));
     }
 
-    let api_pages_count = api_pages.len();
+    // Phase 2: single batch API call for uncached URLs only
+    let api_pages: Vec<ExtractPage> = uncached.iter().map(|(_, page)| page.clone()).collect();
     let request = ExtractRequest::new(api_pages)
         .with_format("json".to_owned())
         .with_timeout_seconds(extract_timeout);
 
-    if params.cache {
-        if let Some(store) = cache_store {
-            let key = generate_cid(&request);
-            match store.get(&key).await {
-                Ok(Some(cached_bytes)) => {
-                    let mut cached_response: ExtractResponse =
-                        serde_json::from_slice(&cached_bytes)
-                            .map_err(|e| map_cache_error(e.into()))?;
-
-                    if let Some(rules) = fallback_rules {
-                        if let Some(data) = cached_response.data.as_mut() {
-                            for item in data.iter_mut() {
-                                if is_empty_content(item) {
-                                    if let FallbackMatch::EmptyContent { message } =
-                                        rules.check(&item.url)
-                                    {
-                                        item.markdown = Some(message);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    let mut merged_data: Vec<ExtractData> =
-                        synthetic_data.into_iter().map(|(_, data)| data).collect();
-                    if let Some(data) = cached_response.data {
-                        merged_data.extend(data);
-                    }
-                    merged_data.sort_by(|a, b| {
-                        let a_idx = original_pages
-                            .iter()
-                            .position(|p| p.url == a.url)
-                            .unwrap_or(0);
-                        let b_idx = original_pages
-                            .iter()
-                            .position(|p| p.url == b.url)
-                            .unwrap_or(0);
-                        a_idx.cmp(&b_idx)
-                    });
-
-                    let response = ExtractResponse {
-                        meta: cached_response.meta,
-                        data: if merged_data.is_empty() {
-                            None
-                        } else {
-                            Some(merged_data)
-                        },
-                        errors: cached_response.errors,
-                    };
-
-                    let content = if params.output_format == "json" {
-                        format_json(&response)
-                    } else {
-                        format_extract_markdown(&response)
-                    };
-                    let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-                    tracing::info!(
-                        cache_hit = true,
-                        url_count = original_pages.len(),
-                        "extract batch served from cache"
-                    );
-                    return Ok(CallToolResult::success(vec![Content::text(truncated)]));
-                }
-                Ok(None) => {
-                    tracing::debug!(
-                        url_count = api_pages_count,
-                        "batch cache miss, calling Kagi API"
-                    );
-                }
-                Err(e) => return Err(map_cache_error(e)),
-            }
-        }
-    }
+    tracing::debug!(
+        url_count = uncached.len(),
+        "batch cache miss, calling Kagi API"
+    );
 
     let result = tokio::select! {
         _ = ctx.ct.cancelled() => {
             return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
         }
-        result = client.extract(request.clone()) => result,
+        result = client.extract(request) => result,
     };
 
     match result {
@@ -199,45 +132,34 @@ pub async fn extract_batch(
             let _ =
                 send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
 
-            if let Some(rules) = fallback_rules {
-                if let Some(data) = response.data.as_mut() {
-                    for item in data.iter_mut() {
-                        if is_empty_content(item) {
-                            if let FallbackMatch::EmptyContent { message } = rules.check(&item.url)
-                            {
-                                item.markdown = Some(message);
-                            }
-                        }
+            // Phase 3: cache each successful ExtractData individually
+            if let Some(store) = cache_store {
+                if let Some(data) = &response.data {
+                    for item in data {
+                        let key = ExtractCacheKey {
+                            url: item.url.clone(),
+                        };
+                        let cached = ExtractCachedResult { data: item.clone() };
+                        let _ = store.set_extract_result(&key, &cached).await;
                     }
                 }
             }
 
-            if let Some(store) = cache_store {
-                let key = generate_cid(&request);
-                let json_bytes =
-                    serde_json::to_vec(&response).map_err(|e| map_cache_error(e.into()))?;
-                store
-                    .set(&key, "extract", &json_bytes)
-                    .await
-                    .map_err(map_cache_error)?;
+            if let Some(data) = response.data.take() {
+                for item in data {
+                    if let Some((idx, _)) = uncached.iter().find(|(_, p)| {
+                        p.url.trim_end_matches('/') == item.url.trim_end_matches('/')
+                    }) {
+                        results[*idx] = Some(item);
+                    }
+                }
             }
 
+            // Build final merged data preserving input order
             let mut merged_data: Vec<ExtractData> =
-                synthetic_data.into_iter().map(|(_, data)| data).collect();
-            if let Some(data) = response.data {
-                merged_data.extend(data);
-            }
-            merged_data.sort_by(|a, b| {
-                let a_idx = original_pages
-                    .iter()
-                    .position(|p| p.url == a.url)
-                    .unwrap_or(0);
-                let b_idx = original_pages
-                    .iter()
-                    .position(|p| p.url == b.url)
-                    .unwrap_or(0);
-                a_idx.cmp(&b_idx)
-            });
+                results.iter_mut().filter_map(|r| r.take()).collect();
+
+            apply_post_extract_fallback(&mut merged_data, fallback_rules);
 
             let response = ExtractResponse {
                 meta: response.meta,
@@ -271,7 +193,67 @@ pub async fn extract_batch(
                     tracing::warn!(error = %e, "extract batch failed");
                 }
             }
+
+            // If we have cached results, return them with error entries for uncached URLs
+            let has_cached = results.iter().any(|r| r.is_some());
+            if has_cached {
+                let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned())
+                    .await;
+
+                let mut errors: Vec<ExtractError> = Vec::new();
+                for (_, page) in &uncached {
+                    errors.push(ExtractError {
+                        url: page.url.clone(),
+                        code: "extract_failed".to_owned(),
+                        message: Some(e.to_string()),
+                    });
+                }
+
+                let mut merged_data: Vec<ExtractData> =
+                    results.iter_mut().filter_map(|r| r.take()).collect();
+
+                apply_post_extract_fallback(&mut merged_data, fallback_rules);
+
+                let response = ExtractResponse {
+                    meta: kagi_api::Meta {
+                        trace: String::new(),
+                        node: None,
+                        ms: None,
+                    },
+                    data: if merged_data.is_empty() {
+                        None
+                    } else {
+                        Some(merged_data)
+                    },
+                    errors: if errors.is_empty() {
+                        None
+                    } else {
+                        Some(errors)
+                    },
+                };
+
+                let content = if params.output_format == "json" {
+                    format_json(&response)
+                } else {
+                    format_extract_markdown(&response)
+                };
+                let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
+                return Ok(CallToolResult::success(vec![Content::text(truncated)]));
+            }
+
             Err(map_kagi_error(e))
+        }
+    }
+}
+
+fn apply_post_extract_fallback(data: &mut [ExtractData], fallback_rules: Option<&FallbackRules>) {
+    if let Some(rules) = fallback_rules {
+        for item in data.iter_mut() {
+            if is_empty_content(item) {
+                if let FallbackMatch::EmptyContent { message } = rules.check(&item.url) {
+                    item.markdown = Some(message);
+                }
+            }
         }
     }
 }
