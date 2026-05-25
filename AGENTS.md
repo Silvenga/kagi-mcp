@@ -1,9 +1,5 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-05-25T21:34:57Z
-**Commit:** ef08977
-**Branch:** agents-mds
-
 ## OVERVIEW
 Rust workspace for a Kagi Search API MCP server. `kagi-api` (library) wraps the HTTP API. `kagi-mcp` (binary) exposes search and extract tools via the Model Context Protocol.
 
