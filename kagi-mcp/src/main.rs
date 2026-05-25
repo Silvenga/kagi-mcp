@@ -35,6 +35,8 @@ async fn main() -> anyhow::Result<()> {
         &cache_dir,
     )?;
 
+    log_panics::init();
+
     let mut rules = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
 
