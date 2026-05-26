@@ -5,8 +5,6 @@
 
 use crate::config::FallbackRule;
 use crate::tools::domain::extract_registrable_domain;
-use kagi_api::ExtractData;
-
 /// The result of checking a URL against fallback rules.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FallbackMatch {
@@ -59,13 +57,6 @@ impl FallbackRules {
 
         FallbackMatch::NoMatch
     }
-}
-
-/// Check whether extracted content is effectively empty.
-///
-/// Returns `true` when the markdown field is `None`, empty, or whitespace-only.
-pub fn is_empty_content(data: &ExtractData) -> bool {
-    data.markdown.as_deref().is_none_or(|s| s.trim().is_empty())
 }
 
 #[cfg(test)]
@@ -147,47 +138,5 @@ mod tests {
         let result = rules.check("https://example.com");
 
         assert_eq!(result, FallbackMatch::NoMatch);
-    }
-
-    // --- is_empty_content() tests ---
-
-    #[test]
-    fn is_empty_content_returns_true_for_none_markdown() {
-        let data = ExtractData {
-            url: "https://example.com".to_owned(),
-            markdown: None,
-        };
-
-        assert!(is_empty_content(&data));
-    }
-
-    #[test]
-    fn is_empty_content_returns_true_for_empty_string_markdown() {
-        let data = ExtractData {
-            url: "https://example.com".to_owned(),
-            markdown: Some(String::new()),
-        };
-
-        assert!(is_empty_content(&data));
-    }
-
-    #[test]
-    fn is_empty_content_returns_true_for_whitespace_only_markdown() {
-        let data = ExtractData {
-            url: "https://example.com".to_owned(),
-            markdown: Some("   \n  \t  ".to_owned()),
-        };
-
-        assert!(is_empty_content(&data));
-    }
-
-    #[test]
-    fn is_empty_content_returns_false_for_real_content() {
-        let data = ExtractData {
-            url: "https://example.com".to_owned(),
-            markdown: Some("# Hello\n\nThis is content.".to_owned()),
-        };
-
-        assert!(!is_empty_content(&data));
     }
 }

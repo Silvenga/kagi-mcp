@@ -1,15 +1,28 @@
 use crate::cache::CacheStore;
+use crate::tools::errors::map_kagi_error;
 use crate::tools::extract::batch::extract_batch;
+use crate::tools::extract::errors::kagi_error_to_extract_error;
 use crate::tools::extract::fallback::FallbackRules;
+use crate::tools::extract::pipeline::{
+    cache_results, classify_urls, render_results, ClassifiedUrl, ExtractFatalError,
+    ExtractUrlResult,
+};
 use crate::tools::extract::split::extract_split;
 use crate::tools::extract::validation::{validate_extract_pages_count, validate_extract_urls};
 use crate::tools::extract::ExtractParams;
 use kagi_api::{ExtractPage, KagiApi};
-use rmcp::model::{CallToolResult, ErrorData};
+use rmcp::model::{CallToolResult, ErrorCode, ErrorData};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use std::sync::Arc;
 use std::time::Instant;
+
+fn extract_result_url(result: &ExtractUrlResult) -> &str {
+    match result {
+        ExtractUrlResult::Ok { url, .. } => url,
+        ExtractUrlResult::Err { url, .. } => url,
+    }
+}
 
 pub async fn extract_handler(
     client: Arc<dyn KagiApi>,
@@ -20,6 +33,7 @@ pub async fn extract_handler(
     cache_store: Option<&CacheStore>,
     fallback_rules: Option<&FallbackRules>,
 ) -> Result<CallToolResult, ErrorData> {
+    // Step 1: Pre-validation
     if let Err(e) = validate_extract_pages_count(&params.pages) {
         return Err(ErrorData::invalid_params(
             format!("Pages validation failed: {e}"),
@@ -51,36 +65,116 @@ pub async fn extract_handler(
         .map(|u| ExtractPage { url: u.to_string() })
         .collect();
 
-    let result = if split_extract_requests {
-        extract_split(
-            client,
-            params,
-            ctx,
-            extract_timeout,
-            pages,
-            cache_store,
-            fallback_rules,
-        )
-        .await
+    // Step 2: Classify
+    let classified = classify_urls(&pages, params.cache, cache_store, fallback_rules).await;
+
+    // Step 3: Extract
+    let extract_pages: Vec<ExtractPage> = classified
+        .iter()
+        .filter_map(|c| match c {
+            ClassifiedUrl::Extract { page, .. } => Some(page.clone()),
+            _ => None,
+        })
+        .collect();
+
+    let mut extracted_results: Vec<ExtractUrlResult> = if extract_pages.is_empty() {
+        Vec::new()
+    } else if split_extract_requests {
+        match extract_split(client, ctx, extract_timeout, extract_pages).await {
+            Ok(results) => results,
+            Err(ExtractFatalError::Cancelled) => {
+                return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
+            }
+            Err(ExtractFatalError::Api(kagi_err)) => {
+                return Err(map_kagi_error(kagi_err));
+            }
+        }
     } else {
-        extract_batch(
-            client,
-            params,
-            ctx,
-            extract_timeout,
-            pages,
-            cache_store,
-            fallback_rules,
-        )
-        .await
+        match extract_batch(client, ctx, extract_timeout, extract_pages).await {
+            Ok(results) => results,
+            Err(ExtractFatalError::Cancelled) => {
+                return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
+            }
+            Err(ExtractFatalError::Api(kagi_err)) => {
+                // Batch graceful degradation: cached → Ok, uncached → Err
+                let mut degraded = Vec::new();
+                for c in &classified {
+                    match c {
+                        ClassifiedUrl::Cached { url, data } => {
+                            degraded.push(ExtractUrlResult::Ok {
+                                url: url.clone(),
+                                markdown: data.markdown.clone(),
+                            });
+                        }
+                        ClassifiedUrl::Extract { url, .. } => {
+                            degraded.push(ExtractUrlResult::Err {
+                                url: url.clone(),
+                                error: kagi_error_to_extract_error(url, &kagi_err),
+                            });
+                        }
+                        ClassifiedUrl::AlwaysBlock { .. } => {
+                            // AlwaysBlock is not part of extraction; handled in merge
+                        }
+                    }
+                }
+                degraded
+            }
+        }
     };
+
+    // Step 4: Cache + Merge
+    // Cache only the newly extracted Ok results (skip cached and always-block)
+    cache_results(&extracted_results, cache_store).await;
+
+    let mut merged_results: Vec<ExtractUrlResult> = Vec::with_capacity(classified.len());
+    for c in &classified {
+        match c {
+            ClassifiedUrl::AlwaysBlock { url, message } => {
+                merged_results.push(ExtractUrlResult::Ok {
+                    url: url.clone(),
+                    markdown: Some(message.clone()),
+                });
+            }
+            ClassifiedUrl::Cached { url, data } => {
+                merged_results.push(ExtractUrlResult::Ok {
+                    url: url.clone(),
+                    markdown: data.markdown.clone(),
+                });
+            }
+            ClassifiedUrl::Extract { url, .. } => {
+                // Pull the corresponding result from extracted_results.
+                // Since classify_urls preserves order and extract_split/extract_batch
+                // return results in the same order as the input pages, we can drain
+                // sequentially.
+                if let Some(result) = extracted_results.first() {
+                    if extract_result_url(result).trim_end_matches('/') == url.trim_end_matches('/')
+                    {
+                        merged_results.push(extracted_results.remove(0));
+                        continue;
+                    }
+                }
+                // Fallback: search by URL match
+                if let Some(pos) = extracted_results.iter().position(|r| {
+                    extract_result_url(r).trim_end_matches('/') == url.trim_end_matches('/')
+                }) {
+                    merged_results.push(extracted_results.remove(pos));
+                }
+            }
+        }
+    }
 
     tracing::info!(
         url_count,
         elapsed_ms = start.elapsed().as_millis(),
         "extract completed"
     );
-    result
+
+    // Step 5: Render
+    Ok(render_results(
+        merged_results,
+        fallback_rules,
+        &params.output_format,
+    ))
 }
 
 #[cfg(test)]
@@ -252,10 +346,9 @@ mod tests {
 
         let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None, None).await;
 
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("Kagi API error"));
-        assert_eq!(err.code, ErrorCode::INTERNAL_ERROR);
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("server error"));
     }
 
     #[tokio::test]
@@ -288,7 +381,7 @@ mod tests {
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Good content"));
         assert!(text.contains("https://fail.com"));
-        assert!(text.contains("Server Error"));
+        assert!(text.contains("server error"));
     }
 
     #[tokio::test]
