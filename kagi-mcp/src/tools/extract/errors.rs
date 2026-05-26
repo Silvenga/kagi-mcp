@@ -1,9 +1,9 @@
 pub fn kagi_error_to_extract_error(
     url: &str,
-    error: kagi_api::KagiError,
+    error: &kagi_api::KagiError,
 ) -> kagi_api::ExtractError {
     use kagi_api::KagiError;
-    let (code, message) = match &error {
+    let (code, message) = match error {
         KagiError::InvalidRequest { message: msg } => ("invalid_request", Some(msg.clone())),
         KagiError::Unauthorized => ("unauthorized", Some(error.to_string())),
         KagiError::Forbidden => ("forbidden", Some(error.to_string())),

@@ -1,267 +1,214 @@
-use crate::cache::{CacheStore, ExtractCacheKey, ExtractCachedResult};
-use crate::format::{format_extract_markdown, format_json};
-use crate::tools::errors::map_kagi_error;
-use crate::tools::extract::fallback::{is_empty_content, FallbackMatch, FallbackRules};
-use crate::tools::extract::ExtractParams;
-use crate::tools::progress::send_progress;
-use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
-use kagi_api::{ExtractData, ExtractError, ExtractPage, ExtractRequest, ExtractResponse, KagiApi};
-use rmcp::model::{CallToolResult, Content, ErrorCode};
+use crate::tools::extract::errors::kagi_error_to_extract_error;
+use crate::tools::extract::pipeline::{ExtractFatalError, ExtractUrlResult};
+use kagi_api::{ExtractPage, ExtractRequest, KagiApi, KagiError};
 use rmcp::service::RequestContext;
-use rmcp::{ErrorData, RoleServer};
+use rmcp::RoleServer;
 use std::sync::Arc;
-use std::time::Instant;
 
 pub async fn extract_batch(
     client: Arc<dyn KagiApi>,
-    params: ExtractParams,
     ctx: &RequestContext<RoleServer>,
     extract_timeout: f64,
     pages: Vec<ExtractPage>,
-    cache_store: Option<&CacheStore>,
-    fallback_rules: Option<&FallbackRules>,
-) -> Result<CallToolResult, ErrorData> {
-    let total_pages = pages.len();
-
-    let _ = send_progress(
-        ctx,
-        0.0,
-        Some(100.0),
-        format!("Extracting {total_pages} pages..."),
-    )
-    .await;
-
-    if ctx.ct.is_cancelled() {
-        return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
-    }
-
-    let start = Instant::now();
-    tracing::info!(total_pages = total_pages, "extract batch started");
-
-    // Phase 0 + Phase 1: fallback filtering + per-URL cache lookup
-    let mut results: Vec<Option<ExtractData>> = vec![None; total_pages];
-    let mut uncached: Vec<(usize, ExtractPage)> = Vec::new();
-
-    let mut cache_hits_count = 0usize;
-
-    for (i, page) in pages.iter().enumerate() {
-        // Phase 0: always_block URLs get synthetic data, skip cache + API
-        if let Some(rules) = fallback_rules {
-            if let FallbackMatch::AlwaysBlock { message } = rules.check(&page.url) {
-                results[i] = Some(ExtractData {
-                    url: page.url.clone(),
-                    markdown: Some(message),
-                });
-                continue;
-            }
-        }
-
-        // Phase 1: per-URL cache lookup
-        if params.cache {
-            if let Some(store) = cache_store {
-                let key = ExtractCacheKey {
-                    url: page.url.clone(),
-                };
-                if let Some(cached) = store.get_extract_result(&key).await {
-                    results[i] = Some(cached.data);
-                    cache_hits_count += 1;
-                    tracing::info!(url = %page.url, cache_hit = true, "page served from cache");
-                    continue;
-                }
-                tracing::debug!(url = %page.url, "cache miss");
-            }
-        }
-
-        uncached.push((i, page.clone()));
-    }
-
-    // All URLs were either blocked or cached — return immediately
-    if uncached.is_empty() {
-        let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
-
-        let mut merged_data: Vec<ExtractData> =
-            results.iter_mut().filter_map(|r| r.take()).collect();
-
-        apply_post_extract_fallback(&mut merged_data, fallback_rules);
-
-        let response = ExtractResponse {
-            meta: kagi_api::Meta {
-                trace: String::new(),
-                node: None,
-                ms: None,
-            },
-            data: if merged_data.is_empty() {
-                None
-            } else {
-                Some(merged_data)
-            },
-            errors: None,
-        };
-
-        let content = if params.output_format == "json" {
-            format_json(&response)
-        } else {
-            format_extract_markdown(&response)
-        };
-        let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-        let cache_hit_label = if cache_hits_count > 0 {
-            "true"
-        } else {
-            "fallback"
-        };
-        tracing::info!(
-            cache_hit = cache_hit_label,
-            url_count = total_pages,
-            "extract batch served from cache"
-        );
-        return Ok(CallToolResult::success(vec![Content::text(truncated)]));
-    }
-
-    // Phase 2: single batch API call for uncached URLs only
-    let api_pages: Vec<ExtractPage> = uncached.iter().map(|(_, page)| page.clone()).collect();
-    let request = ExtractRequest::new(api_pages)
+) -> Result<Vec<ExtractUrlResult>, ExtractFatalError> {
+    let request = ExtractRequest::new(pages.clone())
         .with_format("json".to_owned())
         .with_timeout_seconds(extract_timeout);
 
-    tracing::debug!(
-        url_count = uncached.len(),
-        "batch cache miss, calling Kagi API"
-    );
-
     let result = tokio::select! {
         _ = ctx.ct.cancelled() => {
-            return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
+            return Err(ExtractFatalError::Cancelled);
         }
         result = client.extract(request) => result,
     };
 
     match result {
-        Ok(mut response) => {
-            let _ =
-                send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned()).await;
-
-            // Phase 3: cache each successful ExtractData individually
-            if let Some(store) = cache_store {
-                if let Some(data) = &response.data {
-                    for item in data {
-                        let key = ExtractCacheKey {
-                            url: item.url.clone(),
-                        };
-                        let cached = ExtractCachedResult { data: item.clone() };
-                        let _ = store.set_extract_result(&key, &cached).await;
-                    }
-                }
-            }
-
-            if let Some(data) = response.data.take() {
-                for item in data {
-                    if let Some((idx, _)) = uncached.iter().find(|(_, p)| {
-                        p.url.trim_end_matches('/') == item.url.trim_end_matches('/')
-                    }) {
-                        results[*idx] = Some(item);
-                    }
-                }
-            }
-
-            // Build final merged data preserving input order
-            let mut merged_data: Vec<ExtractData> =
-                results.iter_mut().filter_map(|r| r.take()).collect();
-
-            apply_post_extract_fallback(&mut merged_data, fallback_rules);
-
-            let response = ExtractResponse {
-                meta: response.meta,
-                data: if merged_data.is_empty() {
-                    None
-                } else {
-                    Some(merged_data)
-                },
-                errors: response.errors,
-            };
-
-            let content = if params.output_format == "json" {
-                format_json(&response)
-            } else {
-                format_extract_markdown(&response)
-            };
-            let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-            tracing::info!(
-                cache_hit = false,
-                elapsed_ms = start.elapsed().as_millis(),
-                "extract batch completed"
-            );
-            Ok(CallToolResult::success(vec![Content::text(truncated)]))
-        }
-        Err(e) => {
-            match &e {
-                kagi_api::KagiError::Unauthorized | kagi_api::KagiError::InvalidRequest { .. } => {
-                    tracing::error!(error = %e, "extract batch failed");
-                }
-                _ => {
-                    tracing::warn!(error = %e, "extract batch failed");
-                }
-            }
-
-            // If we have cached results, return them with error entries for uncached URLs
-            let has_cached = results.iter().any(|r| r.is_some());
-            if has_cached {
-                let _ = send_progress(ctx, 100.0, Some(100.0), "Extraction completed.".to_owned())
-                    .await;
-
-                let mut errors: Vec<ExtractError> = Vec::new();
-                for (_, page) in &uncached {
-                    errors.push(ExtractError {
+        Ok(response) => {
+            let mut results = Vec::new();
+            for page in &pages {
+                let matched = response.data.as_ref().and_then(|data| {
+                    data.iter()
+                        .find(|d| d.url.trim_end_matches('/') == page.url.trim_end_matches('/'))
+                });
+                if let Some(data) = matched {
+                    results.push(ExtractUrlResult::Ok {
                         url: page.url.clone(),
-                        code: "extract_failed".to_owned(),
-                        message: Some(e.to_string()),
+                        markdown: data.markdown.clone(),
+                    });
+                } else {
+                    results.push(ExtractUrlResult::Err {
+                        url: page.url.clone(),
+                        error: kagi_error_to_extract_error(&page.url, &KagiError::ServerError),
                     });
                 }
-
-                let mut merged_data: Vec<ExtractData> =
-                    results.iter_mut().filter_map(|r| r.take()).collect();
-
-                apply_post_extract_fallback(&mut merged_data, fallback_rules);
-
-                let response = ExtractResponse {
-                    meta: kagi_api::Meta {
-                        trace: String::new(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: if merged_data.is_empty() {
-                        None
-                    } else {
-                        Some(merged_data)
-                    },
-                    errors: if errors.is_empty() {
-                        None
-                    } else {
-                        Some(errors)
-                    },
-                };
-
-                let content = if params.output_format == "json" {
-                    format_json(&response)
-                } else {
-                    format_extract_markdown(&response)
-                };
-                let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-                return Ok(CallToolResult::success(vec![Content::text(truncated)]));
             }
-
-            Err(map_kagi_error(e))
+            Ok(results)
         }
+        Err(kagi_error) => Err(ExtractFatalError::Api(kagi_error)),
     }
 }
 
-fn apply_post_extract_fallback(data: &mut [ExtractData], fallback_rules: Option<&FallbackRules>) {
-    if let Some(rules) = fallback_rules {
-        for item in data.iter_mut() {
-            if is_empty_content(item) {
-                if let FallbackMatch::EmptyContent { message } = rules.check(&item.url) {
-                    item.markdown = Some(message);
-                }
-            }
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::KagiMcpServer;
+    use kagi_api::{ExtractData, ExtractResponse, Meta, MockKagiApi};
+    use rmcp::model::{ClientInfo, RequestId};
+    use rmcp::service::serve_directly_with_ct;
+    use std::sync::Arc;
+    use tokio::io::duplex;
+    use tokio_util::sync::CancellationToken;
+
+    async fn fake_request_context() -> RequestContext<RoleServer> {
+        let (server_transport, client_transport) = duplex(4096);
+        drop(client_transport);
+
+        let server = KagiMcpServer::with_client(Arc::new(MockKagiApi::new()));
+        let server_svc = serve_directly_with_ct(
+            server,
+            server_transport,
+            None::<ClientInfo>,
+            CancellationToken::new(),
+        );
+
+        let peer = server_svc.peer().clone();
+        drop(server_svc);
+
+        RequestContext::new(RequestId::Number(1), peer)
+    }
+
+    #[tokio::test]
+    async fn when_multi_url_succeeds_then_extract_batch_returns_all_ok() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![
+                    ExtractData {
+                        url: "https://a.com".to_owned(),
+                        markdown: Some("content a".to_owned()),
+                    },
+                    ExtractData {
+                        url: "https://b.com".to_owned(),
+                        markdown: Some("content b".to_owned()),
+                    },
+                ]),
+                errors: None,
+            })
+        });
+
+        let ctx = fake_request_context().await;
+        let pages = vec![
+            ExtractPage {
+                url: "https://a.com".to_owned(),
+            },
+            ExtractPage {
+                url: "https://b.com".to_owned(),
+            },
+        ];
+
+        let result = extract_batch(Arc::new(mock), &ctx, 10.0, pages).await;
+
+        assert!(result.is_ok());
+        let results = result.unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(matches!(&results[0], ExtractUrlResult::Ok { url, .. } if url == "https://a.com"));
+        assert!(matches!(&results[1], ExtractUrlResult::Ok { url, .. } if url == "https://b.com"));
+    }
+
+    #[tokio::test]
+    async fn when_api_fails_then_extract_batch_returns_fatal_api_error() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract()
+            .times(1)
+            .returning(|_| Err(kagi_api::KagiError::ServerError));
+
+        let ctx = fake_request_context().await;
+        let pages = vec![ExtractPage {
+            url: "https://example.com".to_owned(),
+        }];
+
+        let result = extract_batch(Arc::new(mock), &ctx, 10.0, pages).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ExtractFatalError::Api(_)));
+    }
+
+    #[tokio::test]
+    async fn when_trailing_slash_differs_then_correlation_works() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://example.com".to_owned(),
+                    markdown: Some("content".to_owned()),
+                }]),
+                errors: None,
+            })
+        });
+
+        let ctx = fake_request_context().await;
+        let pages = vec![ExtractPage {
+            url: "https://example.com/".to_owned(),
+        }];
+
+        let result = extract_batch(Arc::new(mock), &ctx, 10.0, pages).await;
+
+        assert!(result.is_ok());
+        let results = result.unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(
+            matches!(&results[0], ExtractUrlResult::Ok { url, .. } if url == "https://example.com/")
+        );
+    }
+
+    #[tokio::test]
+    async fn when_url_missing_from_response_then_extract_batch_returns_err() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://present.com".to_owned(),
+                    markdown: Some("content".to_owned()),
+                }]),
+                errors: None,
+            })
+        });
+
+        let ctx = fake_request_context().await;
+        let pages = vec![
+            ExtractPage {
+                url: "https://present.com".to_owned(),
+            },
+            ExtractPage {
+                url: "https://missing.com".to_owned(),
+            },
+        ];
+
+        let result = extract_batch(Arc::new(mock), &ctx, 10.0, pages).await;
+
+        assert!(result.is_ok());
+        let results = result.unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(
+            matches!(&results[0], ExtractUrlResult::Ok { url, .. } if url == "https://present.com")
+        );
+        assert!(
+            matches!(&results[1], ExtractUrlResult::Err { url, .. } if url == "https://missing.com")
+        );
     }
 }

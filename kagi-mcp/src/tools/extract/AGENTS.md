@@ -8,7 +8,7 @@ MCP `extract` tool: validates URLs, optionally splits per-URL, calls Kagi Extrac
 extract/
 ├── batch.rs      # Batch extraction (single API call)
 ├── errors.rs     # Extract-specific error formatting
-├── fallback.rs   # FallbackRules + is_empty_content + eTLD+1 matching
+├── fallback.rs   # FallbackRules + eTLD+1 matching
 ├── handler.rs    # Main extract handler (1297 lines)
 ├── params.rs     # ExtractParams JSON Schema
 ├── split.rs      # Per-URL split extraction

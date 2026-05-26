@@ -3,6 +3,7 @@ mod errors;
 mod fallback;
 mod handler;
 mod params;
+mod pipeline;
 mod split;
 mod validation;
 
