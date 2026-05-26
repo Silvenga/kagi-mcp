@@ -4,9 +4,6 @@ use crate::tools::extract::fallback::{FallbackMatch, FallbackRules};
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use kagi_api::{ExtractData, ExtractError, ExtractPage, ExtractResponse, KagiError};
 use rmcp::model::{CallToolResult, Content};
-
-#[cfg(test)]
-use rmcp::model::RawContent;
 use std::collections::HashSet;
 
 /// The result of extracting a single URL.
@@ -204,6 +201,7 @@ mod tests {
     use super::*;
     use crate::cache::CacheStore;
     use crate::config::FallbackRule;
+    use rmcp::model::RawContent;
 
     fn make_rule(domain: &str, always_block: bool, message: &str) -> FallbackRule {
         FallbackRule {
