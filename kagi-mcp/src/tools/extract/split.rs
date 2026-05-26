@@ -27,28 +27,25 @@ pub async fn extract_split(
         }
         let client = Arc::clone(&client);
         let page = page.clone();
-        let single_req = ExtractRequest::new(vec![page])
+        let single_req = ExtractRequest::new(vec![page.clone()])
             .with_format("json")
             .with_timeout_seconds(extract_timeout);
 
         set.spawn(async move {
             let result = client.extract(single_req).await;
-            result
+            (page.url, result)
         });
     }
 
     let mut results = Vec::with_capacity(total_pages);
-    let mut idx = 0usize;
     while let Some(join_result) = set.join_next().await {
         if ctx.ct.is_cancelled() {
             set.abort_all();
             return Err(ExtractFatalError::Cancelled);
         }
 
-        let page_url = &pages[idx].url;
-
         match join_result {
-            Ok(Ok(api_response)) => {
+            Ok((page_url, Ok(api_response))) => {
                 let mut found = false;
                 if let Some(data_vec) = &api_response.data {
                     if let Some(extracted_data) = data_vec
@@ -63,7 +60,6 @@ pub async fn extract_split(
                     }
                 }
                 if !found {
-                    // If we can't correlate, treat as error
                     results.push(ExtractUrlResult::Err {
                         url: page_url.clone(),
                         error: kagi_api::ExtractError {
@@ -75,8 +71,8 @@ pub async fn extract_split(
                 }
                 tracing::info!(url = %page_url, "page extracted");
             }
-            Ok(Err(kagi_err)) => {
-                let extract_err = kagi_error_to_extract_error(page_url, &kagi_err);
+            Ok((page_url, Err(kagi_err))) => {
+                let extract_err = kagi_error_to_extract_error(&page_url, &kagi_err);
                 results.push(ExtractUrlResult::Err {
                     url: page_url.clone(),
                     error: extract_err,
@@ -95,7 +91,6 @@ pub async fn extract_split(
                 return Err(ExtractFatalError::Cancelled);
             }
         }
-        idx += 1;
     }
 
     tracing::info!(

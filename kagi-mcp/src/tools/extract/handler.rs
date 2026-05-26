@@ -158,6 +158,16 @@ pub async fn extract_handler(
                     extract_result_url(r).trim_end_matches('/') == url.trim_end_matches('/')
                 }) {
                     merged_results.push(extracted_results.remove(pos));
+                } else {
+                    tracing::warn!(url = %url, "missing extraction result during merge");
+                    merged_results.push(ExtractUrlResult::Err {
+                        url: url.clone(),
+                        error: kagi_api::ExtractError {
+                            url: url.clone(),
+                            code: "missing_result".to_owned(),
+                            message: Some("Extraction result missing during merge".to_owned()),
+                        },
+                    });
                 }
             }
         }
