@@ -180,11 +180,7 @@ pub async fn extract_handler(
     );
 
     // Step 5: Render
-    Ok(render_results(
-        merged_results,
-        fallback_rules,
-        &params.output_format,
-    ))
+    render_results(merged_results, fallback_rules, &params.output_format)
 }
 
 #[cfg(test)]

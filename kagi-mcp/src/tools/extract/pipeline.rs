@@ -3,7 +3,7 @@ use crate::format::{format_extract_markdown, format_json};
 use crate::tools::extract::fallback::{FallbackMatch, FallbackRules};
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use kagi_api::{ExtractData, ExtractError, ExtractPage, ExtractResponse, KagiError};
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, Content, ErrorData};
 use std::collections::HashSet;
 
 /// The result of extracting a single URL.
@@ -28,7 +28,7 @@ pub enum ExtractUrlResult {
 /// A fatal error that prevents the entire extraction operation.
 #[derive(Debug)]
 pub enum ExtractFatalError {
-    /// The operation was cancelled.
+    /// The operation was canceled.
     Cancelled,
     /// An API error occurred.
     Api(KagiError),
@@ -146,7 +146,7 @@ pub fn render_results(
     results: Vec<ExtractUrlResult>,
     fallback_rules: Option<&FallbackRules>,
     output_format: &str,
-) -> CallToolResult {
+) -> Result<CallToolResult, ErrorData> {
     let mut data: Vec<ExtractData> = Vec::new();
     let mut errors: Vec<ExtractError> = Vec::new();
 
@@ -190,10 +190,15 @@ pub fn render_results(
     let content = if output_format == "json" {
         format_json(&response)
     } else {
-        format_extract_markdown(&response)
+        format_extract_markdown(&response).map_err(|e| {
+            ErrorData::internal_error(
+                format!("failed to render extract markdown template: {e}"),
+                None,
+            )
+        })?
     };
     let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-    CallToolResult::success(vec![Content::text(truncated)])
+    Ok(CallToolResult::success(vec![Content::text(truncated)]))
 }
 
 #[cfg(test)]
@@ -296,7 +301,7 @@ mod tests {
         }];
         let rules = make_rules(vec![make_rule("github.com", false, "use github-mcp")]);
 
-        let call_result = render_results(results, Some(&rules), "markdown");
+        let call_result = render_results(results, Some(&rules), "markdown").unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -480,7 +485,7 @@ mod tests {
             markdown: Some("# Hello".to_owned()),
         }];
 
-        let call_result = render_results(results, None, "markdown");
+        let call_result = render_results(results, None, "markdown").unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -497,7 +502,7 @@ mod tests {
             markdown: Some("data".to_owned()),
         }];
 
-        let call_result = render_results(results, None, "json");
+        let call_result = render_results(results, None, "json").unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -514,7 +519,7 @@ mod tests {
         }];
         let rules = make_rules(vec![make_rule("github.com", false, "use github-mcp")]);
 
-        let call_result = render_results(results, Some(&rules), "markdown");
+        let call_result = render_results(results, Some(&rules), "markdown").unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -541,7 +546,7 @@ mod tests {
             },
         ];
 
-        let call_result = render_results(results, None, "markdown");
+        let call_result = render_results(results, None, "markdown").unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -555,7 +560,7 @@ mod tests {
     fn when_empty_results_then_render_results_returns_empty_response() {
         let results: Vec<ExtractUrlResult> = vec![];
 
-        let call_result = render_results(results, None, "markdown");
+        let call_result = render_results(results, None, "markdown").unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),

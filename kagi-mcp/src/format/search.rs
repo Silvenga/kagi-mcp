@@ -1,5 +1,6 @@
 use super::ellipsis::collapse_snippet_ellipses;
 use super::text_helpers::{decode_entities, normalize_title_whitespace, trim_iso_date};
+use crate::format::FormatError;
 use askama::Template;
 use kagi_api::{SearchResponse, SearchResult};
 
@@ -88,7 +89,7 @@ fn extract_string_prop(props: &Option<serde_json::Value>, key: &str) -> Option<S
         .map(|s| s.to_owned())
 }
 
-pub fn format_search_markdown(response: &SearchResponse) -> String {
+pub fn format_search_markdown(response: &SearchResponse) -> Result<String, FormatError> {
     let data = &response.data;
     let mut has_results = false;
 
@@ -324,7 +325,10 @@ pub fn format_search_markdown(response: &SearchResponse) -> String {
         has_results,
     };
 
-    template.render().unwrap().trim_end().to_owned()
+    template
+        .render()
+        .map_err(FormatError::TemplateError)
+        .map(|s| s.trim_end().to_owned())
 }
 
 #[cfg(test)]
@@ -375,7 +379,7 @@ mod tests {
     #[test]
     fn when_search_data_is_empty_then_should_return_no_results() {
         let response = make_response(empty_search_data());
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -391,7 +395,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -407,7 +411,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -427,7 +431,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -447,7 +451,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -471,7 +475,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -487,7 +491,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -503,7 +507,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -519,7 +523,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -535,7 +539,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -560,7 +564,7 @@ mod tests {
             web_archive: Some(vec![mk("Web Archive")]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -582,7 +586,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -603,7 +607,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -619,7 +623,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -635,7 +639,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -651,7 +655,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -667,7 +671,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -693,7 +697,7 @@ mod tests {
             ]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -709,7 +713,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -735,7 +739,7 @@ mod tests {
             ]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -751,7 +755,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -767,7 +771,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -783,7 +787,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -799,7 +803,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -882,7 +886,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -898,7 +902,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -914,7 +918,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -930,7 +934,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -946,7 +950,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -962,7 +966,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -978,7 +982,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -994,7 +998,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -1010,7 +1014,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -1026,7 +1030,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -1042,7 +1046,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -1062,7 +1066,7 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 
     #[test]
@@ -1081,6 +1085,6 @@ mod tests {
             }]),
             ..empty_search_data()
         });
-        assert_snapshot!(format_search_markdown(&response));
+        assert_snapshot!(format_search_markdown(&response).unwrap());
     }
 }
