@@ -20,7 +20,7 @@ pub fn truncate_response(content: &str, max_bytes: usize) -> String {
     }
 
     let truncated = &content[..truncate_at];
-    format!("{truncated}\n\n_(Output truncated at {max_bytes} bytes; total was {content_bytes} bytes. To see full results, narrow the query, reduce `limit`, or use `output_format=\"json\"`.)_")
+    format!("{truncated}\n\n_(Output truncated at {max_bytes} bytes; total was {content_bytes} bytes. To see full results, increase the max response size limit to see the full output.)_")
 }
 
 #[cfg(test)]
@@ -46,7 +46,7 @@ mod tests {
         let content = "a".repeat(300 * 1024); // 300KB
         let result = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
         assert!(result.len() < content.len());
-        assert!(result.ends_with("_(Output truncated at 262144 bytes; total was 307200 bytes. To see full results, narrow the query, reduce `limit`, or use `output_format=\"json\"`.)_"));
+        assert!(result.ends_with("_(Output truncated at 262144 bytes; total was 307200 bytes. To see full results, increase the max response size limit to see the full output.)_"));
     }
 
     #[test]
@@ -81,7 +81,7 @@ mod tests {
 
         // Verify the truncated content portion is valid UTF-8 (no mid-char cut)
         let truncated_part = result
-            .strip_suffix("\n\n_(Output truncated at 262144 bytes; total was 264000 bytes. To see full results, narrow the query, reduce `limit`, or use `output_format=\"json\"`.)_")
+            .strip_suffix("\n\n_(Output truncated at 262144 bytes; total was 264000 bytes. To see full results, increase the max response size limit to see the full output.)_")
             .unwrap();
         assert_eq!(
             truncated_part.len() % 4,
