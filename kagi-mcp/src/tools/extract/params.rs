@@ -1,3 +1,4 @@
+use crate::tools::output_format::OutputFormat;
 use serde::Deserialize;
 
 /// Parameters for the extract tool.
@@ -8,9 +9,8 @@ pub struct ExtractParams {
     pub pages: Vec<String>,
     /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
     /// Use 'json' only when the caller explicitly requests raw structured data.
-    #[serde(default = "default_markdown")]
-    #[schemars(default = "default_markdown")]
-    pub output_format: String,
+    #[serde(default)]
+    pub output_format: OutputFormat,
     /// Whether to use cached results. Set to false only if freshness is critical.
     #[serde(default = "default_true")]
     #[schemars(default = "default_true")]
@@ -19,10 +19,6 @@ pub struct ExtractParams {
 
 pub fn default_true() -> bool {
     true
-}
-
-pub fn default_markdown() -> String {
-    "markdown".to_owned()
 }
 
 #[cfg(test)]
@@ -34,7 +30,7 @@ mod tests {
         let json = r#"{"pages": ["https://example.com"]}"#;
         let params: ExtractParams = serde_json::from_str(json).unwrap();
 
-        assert_eq!(params.output_format, "markdown");
+        assert_eq!(params.output_format, OutputFormat::Markdown);
     }
 
     #[test]

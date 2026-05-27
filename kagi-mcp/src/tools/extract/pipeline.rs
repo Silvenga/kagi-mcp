@@ -1,6 +1,7 @@
 use crate::cache::{CacheStore, ExtractCacheKey, ExtractCachedResult};
 use crate::format::{format_extract_markdown, format_json};
 use crate::tools::extract::fallback::{FallbackMatch, FallbackRules};
+use crate::tools::output_format::OutputFormat;
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use kagi_api::{ExtractData, ExtractError, ExtractPage, ExtractResponse, KagiError};
 use rmcp::model::{CallToolResult, Content, ErrorData};
@@ -145,7 +146,7 @@ pub async fn cache_results(results: &[ExtractUrlResult], cache_store: Option<&Ca
 pub fn render_results(
     results: Vec<ExtractUrlResult>,
     fallback_rules: Option<&FallbackRules>,
-    output_format: &str,
+    output_format: &OutputFormat,
 ) -> Result<CallToolResult, ErrorData> {
     let mut data: Vec<ExtractData> = Vec::new();
     let mut errors: Vec<ExtractError> = Vec::new();
@@ -187,7 +188,7 @@ pub fn render_results(
         },
     };
 
-    let content = if output_format == "json" {
+    let content = if *output_format == OutputFormat::Json {
         format_json(&response)
     } else {
         format_extract_markdown(&response).map_err(|e| {
@@ -301,7 +302,7 @@ mod tests {
         }];
         let rules = make_rules(vec![make_rule("github.com", false, "use github-mcp")]);
 
-        let call_result = render_results(results, Some(&rules), "markdown").unwrap();
+        let call_result = render_results(results, Some(&rules), &OutputFormat::Markdown).unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -485,7 +486,7 @@ mod tests {
             markdown: Some("# Hello".to_owned()),
         }];
 
-        let call_result = render_results(results, None, "markdown").unwrap();
+        let call_result = render_results(results, None, &OutputFormat::Markdown).unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -502,7 +503,7 @@ mod tests {
             markdown: Some("data".to_owned()),
         }];
 
-        let call_result = render_results(results, None, "json").unwrap();
+        let call_result = render_results(results, None, &OutputFormat::Json).unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -519,7 +520,7 @@ mod tests {
         }];
         let rules = make_rules(vec![make_rule("github.com", false, "use github-mcp")]);
 
-        let call_result = render_results(results, Some(&rules), "markdown").unwrap();
+        let call_result = render_results(results, Some(&rules), &OutputFormat::Markdown).unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -546,7 +547,7 @@ mod tests {
             },
         ];
 
-        let call_result = render_results(results, None, "markdown").unwrap();
+        let call_result = render_results(results, None, &OutputFormat::Markdown).unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
@@ -560,7 +561,7 @@ mod tests {
     fn when_empty_results_then_render_results_returns_empty_response() {
         let results: Vec<ExtractUrlResult> = vec![];
 
-        let call_result = render_results(results, None, "markdown").unwrap();
+        let call_result = render_results(results, None, &OutputFormat::Markdown).unwrap();
 
         let content = match &call_result.content[0].raw {
             RawContent::Text(t) => t.text.clone(),
