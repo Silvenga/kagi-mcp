@@ -1,3 +1,4 @@
+use crate::format::errors::FormatError;
 use askama::Template;
 use kagi_api::ExtractResponse;
 
@@ -20,7 +21,7 @@ struct ExtractErrorItem {
     message: String,
 }
 
-pub fn format_extract_markdown(response: &ExtractResponse) -> String {
+pub fn format_extract_markdown(response: &ExtractResponse) -> Result<String, FormatError> {
     let mut data_items = Vec::new();
     let mut error_items = Vec::new();
     let mut has_content = false;
@@ -57,7 +58,10 @@ pub fn format_extract_markdown(response: &ExtractResponse) -> String {
         error_items,
     };
 
-    template.render().unwrap().trim_end().to_owned()
+    template
+        .render()
+        .map_err(FormatError::TemplateError)
+        .map(|s| s.trim_end().to_owned())
 }
 
 #[cfg(test)]
@@ -82,7 +86,7 @@ mod tests {
             data: None,
             errors: None,
         };
-        assert_snapshot!(format_extract_markdown(&response));
+        assert_snapshot!(format_extract_markdown(&response).unwrap());
     }
 
     #[test]
@@ -96,7 +100,7 @@ mod tests {
             data: Some(vec![]),
             errors: Some(vec![]),
         };
-        assert_snapshot!(format_extract_markdown(&response));
+        assert_snapshot!(format_extract_markdown(&response).unwrap());
     }
 
     #[test]
@@ -113,7 +117,7 @@ mod tests {
             }]),
             errors: None,
         };
-        assert_snapshot!(format_extract_markdown(&response));
+        assert_snapshot!(format_extract_markdown(&response).unwrap());
     }
 
     #[test]
@@ -131,7 +135,7 @@ mod tests {
                 message: Some("Not Found".to_owned()),
             }]),
         };
-        assert_snapshot!(format_extract_markdown(&response));
+        assert_snapshot!(format_extract_markdown(&response).unwrap());
     }
 
     #[test]
@@ -149,7 +153,7 @@ mod tests {
                 message: None,
             }]),
         };
-        assert_snapshot!(format_extract_markdown(&response));
+        assert_snapshot!(format_extract_markdown(&response).unwrap());
     }
 
     #[test]
@@ -170,7 +174,7 @@ mod tests {
                 message: Some("Server Error".to_owned()),
             }]),
         };
-        assert_snapshot!(format_extract_markdown(&response));
+        assert_snapshot!(format_extract_markdown(&response).unwrap());
     }
 
     #[test]
@@ -193,7 +197,7 @@ mod tests {
             ]),
             errors: None,
         };
-        assert_snapshot!(format_extract_markdown(&response));
+        assert_snapshot!(format_extract_markdown(&response).unwrap());
     }
 
     #[test]
@@ -210,7 +214,7 @@ mod tests {
             }]),
             errors: None,
         };
-        assert_snapshot!(format_extract_markdown(&response));
+        assert_snapshot!(format_extract_markdown(&response).unwrap());
     }
 
     #[test]
@@ -229,7 +233,7 @@ mod tests {
             }]),
             errors: None,
         };
-        let result = format_extract_markdown(&response);
+        let result = format_extract_markdown(&response).unwrap();
         assert_snapshot!(result);
         assert!(result.contains("This URL could not be extracted"));
     }

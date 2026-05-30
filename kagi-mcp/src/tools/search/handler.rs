@@ -75,7 +75,12 @@ pub async fn search_handler(
                 let content = if params.output_format == "json" {
                     format_json(&cached_response.response)
                 } else {
-                    format_search_markdown(&cached_response.response)
+                    format_search_markdown(&cached_response.response).map_err(|e| {
+                        ErrorData::internal_error(
+                            format!("failed to render extract markdown template: {e}"),
+                            None,
+                        )
+                    })?
                 };
                 let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
                 return Ok(CallToolResult::success(vec![Content::text(truncated)]));
@@ -130,7 +135,12 @@ pub async fn search_handler(
             let content = if params.output_format == "json" {
                 format_json(&response)
             } else {
-                format_search_markdown(&response)
+                format_search_markdown(&response).map_err(|e| {
+                    ErrorData::internal_error(
+                        format!("failed to render extract markdown template: {e}"),
+                        None,
+                    )
+                })?
             };
             let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
             Ok(CallToolResult::success(vec![Content::text(truncated)]))
@@ -533,8 +543,8 @@ mod tests {
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert!(parsed["data"]["search"].as_array().unwrap().len() == 1);
-        assert!(parsed["data"]["news"].as_array().unwrap().len() == 1);
+        assert_eq!(parsed["data"]["search"].as_array().unwrap().len(), 1);
+        assert_eq!(parsed["data"]["news"].as_array().unwrap().len(), 1);
     }
 
     #[tokio::test]
