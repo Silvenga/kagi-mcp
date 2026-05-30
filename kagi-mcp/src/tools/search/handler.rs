@@ -4,6 +4,7 @@ use crate::tools::errors::map_kagi_error;
 use crate::tools::output_format::OutputFormat;
 use crate::tools::progress::send_progress;
 use crate::tools::search::dedup::dedup_by_domain;
+use crate::tools::search::validate_date::validate_date;
 use crate::tools::search::SearchParams;
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use kagi_api::{Filters, KagiApi, KagiError, SearchRequest};
@@ -38,6 +39,9 @@ pub async fn search_handler(
     config: &SearchConfig,
     cache_store: Option<&CacheStore>,
 ) -> Result<CallToolResult, ErrorData> {
+    validate_date(&params.after, "after")?;
+    validate_date(&params.before, "before")?;
+
     if params.limit_per_domain == Some(0) {
         return Err(ErrorData::invalid_request(
             "limit_per_domain must be >= 1",
@@ -754,6 +758,164 @@ mod tests {
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert_eq!(text, "No results found.");
+    }
+
+    #[tokio::test]
+    async fn when_after_is_valid_date_then_should_be_passed_to_api_request() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .withf(|request: &SearchRequest| {
+                request.filters().unwrap().after == Some("2024-01-01".to_owned())
+            })
+            .returning(|_| Ok(fake_search_response(vec![])));
+
+        let params = SearchParams {
+            query: "test".to_owned(),
+            workflow: None,
+            after: Some("2024-01-01".to_owned()),
+            before: None,
+            output_format: OutputFormat::Json,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn when_before_is_valid_date_then_should_be_passed_to_api_request() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search()
+            .times(1)
+            .withf(|request: &SearchRequest| {
+                request.filters().unwrap().before == Some("2024-12-31".to_owned())
+            })
+            .returning(|_| Ok(fake_search_response(vec![])));
+
+        let params = SearchParams {
+            query: "test".to_owned(),
+            workflow: None,
+            after: None,
+            before: Some("2024-12-31".to_owned()),
+            output_format: OutputFormat::Json,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn when_after_is_invalid_format_then_should_return_invalid_params_error() {
+        let mock = MockKagiApi::new();
+
+        let params = SearchParams {
+            query: "test".to_owned(),
+            workflow: None,
+            after: Some("not-a-date".to_owned()),
+            before: None,
+            output_format: OutputFormat::Json,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+        assert!(err
+            .to_string()
+            .contains("after must match YYYY-MM-DD format"));
+    }
+
+    #[tokio::test]
+    async fn when_after_is_empty_string_then_should_return_invalid_params_error() {
+        let mock = MockKagiApi::new();
+
+        let params = SearchParams {
+            query: "test".to_owned(),
+            workflow: None,
+            after: Some("".to_owned()),
+            before: None,
+            output_format: OutputFormat::Json,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn when_after_has_month_greater_than_12_then_should_return_invalid_params_error() {
+        let mock = MockKagiApi::new();
+
+        let params = SearchParams {
+            query: "test".to_owned(),
+            workflow: None,
+            after: Some("2024-13-01".to_owned()),
+            before: None,
+            output_format: OutputFormat::Json,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn when_after_has_day_greater_than_31_then_should_return_invalid_params_error() {
+        let mock = MockKagiApi::new();
+
+        let params = SearchParams {
+            query: "test".to_owned(),
+            workflow: None,
+            after: Some("2024-01-32".to_owned()),
+            before: None,
+            output_format: OutputFormat::Json,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn when_before_is_invalid_format_then_should_return_invalid_params_error() {
+        let mock = MockKagiApi::new();
+
+        let params = SearchParams {
+            query: "test".to_owned(),
+            workflow: None,
+            after: None,
+            before: Some("20240131".to_owned()),
+            output_format: OutputFormat::Json,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
     }
 
     async fn fake_request_context() -> RequestContext<RoleServer> {
