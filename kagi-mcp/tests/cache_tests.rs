@@ -2,6 +2,7 @@ use kagi_api::{
     KagiClientBuilder, Meta, MockKagiApi, SearchData, SearchRequest, SearchResponse, SearchResult,
 };
 use kagi_mcp::cache::{CacheStore, SearchCacheKey, SearchCachedResult};
+use kagi_mcp::tools::output_format::OutputFormat;
 use kagi_mcp::tools::search::{search_handler, SearchConfig, SearchParams};
 use kagi_mcp::KagiMcpServer;
 use rmcp::model::{ClientInfo, RequestId};
@@ -118,7 +119,7 @@ async fn when_cache_hit_then_api_should_not_be_called() {
         workflow: None,
         after: None,
         before: None,
-        output_format: "markdown".to_owned(),
+        output_format: OutputFormat::Markdown,
         limit_per_domain: None,
         cache: true,
     };

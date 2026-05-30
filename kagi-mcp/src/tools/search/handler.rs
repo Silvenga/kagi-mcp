@@ -1,6 +1,7 @@
 use crate::cache::{CacheError, CacheStore, SearchCacheKey, SearchCachedResult};
 use crate::format::{format_json, format_search_markdown};
 use crate::tools::errors::map_kagi_error;
+use crate::tools::output_format::OutputFormat;
 use crate::tools::progress::send_progress;
 use crate::tools::search::dedup::dedup_by_domain;
 use crate::tools::search::SearchParams;
@@ -72,7 +73,7 @@ pub async fn search_handler(
                 tracing::info!(query = %params.query, cache_hit = true, "search completed from cache");
                 let lpd = params.limit_per_domain.unwrap_or(u32::MAX);
                 dedup_by_domain(&mut cached_response.response.data, lpd, config.limit);
-                let content = if params.output_format == "json" {
+                let content = if params.output_format == OutputFormat::Json {
                     format_json(&cached_response.response)
                 } else {
                     format_search_markdown(&cached_response.response).map_err(|e| {
@@ -132,7 +133,7 @@ pub async fn search_handler(
                 elapsed_ms = ?start.elapsed().as_millis(),
                 "search completed"
             );
-            let content = if params.output_format == "json" {
+            let content = if params.output_format == OutputFormat::Json {
                 format_json(&response)
             } else {
                 format_search_markdown(&response).map_err(|e| {
@@ -224,7 +225,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             limit_per_domain: None,
             cache: true,
         };
@@ -270,7 +271,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             limit_per_domain: None,
             cache: true,
         };
@@ -305,7 +306,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             limit_per_domain: None,
             cache: true,
         };
@@ -338,7 +339,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             limit_per_domain: None,
             cache: true,
         };
@@ -363,7 +364,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             limit_per_domain: None,
             cache: true,
         };
@@ -389,7 +390,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             limit_per_domain: None,
             cache: true,
         };
@@ -416,7 +417,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             limit_per_domain: None,
             cache: true,
         };
@@ -443,7 +444,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             limit_per_domain: None,
             cache: true,
         };
@@ -482,7 +483,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -533,7 +534,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -588,7 +589,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -645,7 +646,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -704,7 +705,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             limit_per_domain: Some(1),
             cache: true,
         };
@@ -743,7 +744,7 @@ mod tests {
             workflow: None,
             after: None,
             before: None,
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             limit_per_domain: Some(1),
             cache: true,
         };

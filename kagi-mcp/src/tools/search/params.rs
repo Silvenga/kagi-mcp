@@ -1,3 +1,4 @@
+use crate::tools::output_format::OutputFormat;
 use serde::Deserialize;
 
 fn option_string_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
@@ -35,9 +36,8 @@ pub struct SearchParams {
     pub before: Option<String>,
     /// Prefer 'markdown' for human-readable results optimized for LLM consumption.
     /// Use 'json' only when the caller explicitly requests raw structured data.
-    #[serde(default = "default_markdown")]
-    #[schemars(default = "default_markdown")]
-    pub output_format: String,
+    #[serde(default)]
+    pub output_format: OutputFormat,
     /// Max results per domain group. Use when results feel repetitive from the same site.
     /// Must be >= 1 if set.
     #[serde(default)]
@@ -51,10 +51,6 @@ pub struct SearchParams {
 
 pub fn default_true() -> bool {
     true
-}
-
-pub fn default_markdown() -> String {
-    "markdown".to_owned()
 }
 
 #[cfg(test)]
@@ -90,6 +86,6 @@ mod tests {
         let json = r#"{"query": "test"}"#;
         let params: SearchParams = serde_json::from_str(json).unwrap();
 
-        assert_eq!(params.output_format, "markdown");
+        assert_eq!(params.output_format, OutputFormat::Markdown);
     }
 }

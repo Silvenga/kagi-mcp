@@ -189,6 +189,7 @@ mod tests {
     use crate::cache::CacheStore;
     use crate::cache::{ExtractCacheKey, ExtractCachedResult};
     use crate::config::FallbackRule;
+    use crate::tools::output_format::OutputFormat;
     use kagi_api::{ExtractData, ExtractError, Meta};
     use kagi_api::{ExtractResponse, MockKagiApi};
     use rmcp::model::ErrorCode;
@@ -216,7 +217,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec![],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -237,7 +238,7 @@ mod tests {
             pages: (1..=11)
                 .map(|i| format!("https://example{i}.com"))
                 .collect(),
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -270,7 +271,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -304,7 +305,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -323,7 +324,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://192.168.1.1/".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -345,7 +346,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -376,7 +377,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://ok.com".to_owned(), "https://fail.com".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -410,7 +411,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -443,7 +444,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -483,7 +484,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://ok.com".to_owned(), "https://fail.com".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -522,7 +523,7 @@ mod tests {
                 "https://second.com".to_owned(),
                 "https://third.com".to_owned(),
             ],
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -566,7 +567,7 @@ mod tests {
                 "https://b.com".to_owned(),
                 "https://c.com".to_owned(),
             ],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -617,7 +618,7 @@ mod tests {
                 "https://b.com".to_owned(),
                 "https://c.com".to_owned(),
             ],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -660,7 +661,7 @@ mod tests {
                 "https://fail.com".to_owned(),
                 "https://ok2.com".to_owned(),
             ],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -698,7 +699,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://only.com".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -724,7 +725,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://blocked.com/page".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -774,7 +775,7 @@ mod tests {
                 "https://normal.com/page".to_owned(),
                 "https://blocked.com/other".to_owned(),
             ],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -806,7 +807,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://blocked.com/page".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -862,7 +863,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://fallback.com/page".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -903,7 +904,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://fallback.com/page".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -944,7 +945,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://fallback.com/page".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -985,7 +986,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://fallback.com/page".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -1020,7 +1021,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://example.com/page".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -1062,7 +1063,7 @@ mod tests {
 
         let params = ExtractParams {
             pages: vec!["https://fallback.com/page".to_owned()],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
@@ -1100,7 +1101,7 @@ mod tests {
                 "https://blocked.com/page1".to_owned(),
                 "https://blocked.com/page2".to_owned(),
             ],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -1160,7 +1161,7 @@ mod tests {
                 "https://blocked.com/other".to_owned(),
                 "https://other.com/page".to_owned(),
             ],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -1224,7 +1225,7 @@ mod tests {
                 "https://normal.com/page".to_owned(),
                 "https://fallback.com/page".to_owned(),
             ],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -1289,7 +1290,7 @@ mod tests {
                 "https://blocked.com/page".to_owned(),
                 "https://fourth.com/page".to_owned(),
             ],
-            output_format: "json".to_owned(),
+            output_format: OutputFormat::Json,
             cache: false,
         };
         let ctx = fake_request_context().await;
@@ -1334,7 +1335,7 @@ mod tests {
                 "https://blocked.com/page1".to_owned(),
                 "https://blocked.com/page2".to_owned(),
             ],
-            output_format: "markdown".to_owned(),
+            output_format: OutputFormat::Markdown,
             cache: true,
         };
         let ctx = fake_request_context().await;
