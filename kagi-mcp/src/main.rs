@@ -16,7 +16,6 @@ use rmcp::transport::streamable_http_server::tower::StreamableHttpService;
 use rmcp::transport::streamable_http_server::StreamableHttpServerConfig;
 use rmcp::ServiceExt;
 use server::KagiMcpServer;
-use std::collections::HashSet;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -38,10 +37,8 @@ async fn main() -> anyhow::Result<()> {
     log_panics::init();
 
     let mut rules = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
 
     for rule in &config.fallback_always {
-        seen.insert(rule.domain.clone());
         rules.push(rule.clone());
     }
 
@@ -49,7 +46,6 @@ async fn main() -> anyhow::Result<()> {
         if let Some(existing) = rules.iter_mut().find(|r| r.domain == rule.domain) {
             existing.message = rule.message.clone();
         } else {
-            seen.insert(rule.domain.clone());
             rules.push(rule.clone());
         }
     }
