@@ -25,7 +25,7 @@ Invoke-WebRequest `
     -Uri https://github.com/Silvenga/kagi-mcp/releases/latest/download/kagi-mcp.exe `
     -UseBasicParsing `
     -OutFile kagi-mcp.exe
-# Add add to your PATH.
+# And add to your PATH.
 ```
 
 Linux container images are also available (defaults to running in HTTP SSE mode):
@@ -77,24 +77,24 @@ But you likely want to configure it in your MCP client:
 
 ## Options
 
-| Flag / Env Var                                             | Description                                       | Default                |
-|------------------------------------------------------------|---------------------------------------------------|------------------------|
-| `--api-key` / `KAGI_API_KEY`                               | Kagi API key                                      | *required*             |
-| `--base-url` / `KAGI_BASE_URL`                             | Kagi API base URL                                 | `https://kagi.com/api` |
-| `--search-timeout` / `KAGI_SEARCH_TIMEOUT`                 | Search API request timeout (seconds)              | `4`                    |
-| `--extract-timeout` / `KAGI_EXTRACT_TIMEOUT`               | Extract API request timeout (seconds)             | `10`                   |
-| `--client-timeout` / `KAGI_CLIENT_TIMEOUT`                 | Client-side HTTP timeout (seconds)                | `12`                   |
-| `--retries` / `KAGI_RETRIES`                               | Number of retries for transient failures          | `3`                    |
-| `--limit` / `KAGI_LIMIT`                                   | Default result limit for search                   | `10`                   |
-| `--safe-search` / `KAGI_SAFE_SEARCH`                       | Enable safe search                                | `true`                 |
-| `--region` / `KAGI_REGION`                                 | Default region filter (ISO 3166-1 alpha-2)        | *none*                 |
-| `--cache-dir` / `KAGI_CACHE_DIR`                           | Directory for the local response cache            | *See below*            |
-| `--cache-size-gb` / `KAGI_CACHE_SIZE_GB`                   | Maximum cache size in gigabytes                   | `5.0`                  |
-| `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`                 | Cache entry TTL in days                           | `7`                    |
-| `--transport` / `KAGI_TRANSPORT`                           | Transport mode: `stdio` or `streamable-http`      | `stdio`                |
-| `--bind` / `KAGI_BIND`                                     | Bind address for HTTP transport                   | `127.0.0.1:3000`       |
-| `--fallback-message` / `KAGI_FALLBACK_MESSAGE`             | Per-domain fallback message (format: `domain=message`) | *none*             |
-| `--fallback-always` / `KAGI_FALLBACK_ALWAYS`               | Always-block domains (skip extraction)            | *none*                 |
+| Flag / Env Var                                 | Description                                            | Default                |
+|------------------------------------------------|--------------------------------------------------------|------------------------|
+| `--api-key` / `KAGI_API_KEY`                   | Kagi API key                                           | *required*             |
+| `--base-url` / `KAGI_BASE_URL`                 | Kagi API base URL                                      | `https://kagi.com/api` |
+| `--search-timeout` / `KAGI_SEARCH_TIMEOUT`     | Search API request timeout (seconds)                   | `4`                    |
+| `--extract-timeout` / `KAGI_EXTRACT_TIMEOUT`   | Extract API request timeout (seconds)                  | `10`                   |
+| `--client-timeout` / `KAGI_CLIENT_TIMEOUT`     | Client-side HTTP timeout (seconds)                     | `12`                   |
+| `--retries` / `KAGI_RETRIES`                   | Number of retries for transient failures               | `3`                    |
+| `--limit` / `KAGI_LIMIT`                       | Default result limit for search                        | `10`                   |
+| `--safe-search` / `KAGI_SAFE_SEARCH`           | Enable safe search                                     | `true`                 |
+| `--region` / `KAGI_REGION`                     | Default region filter (ISO 3166-1 alpha-2)             | *none*                 |
+| `--cache-dir` / `KAGI_CACHE_DIR`               | Directory for the local response cache                 | *See below*            |
+| `--cache-size-gb` / `KAGI_CACHE_SIZE_GB`       | Maximum cache size in gigabytes                        | `5.0`                  |
+| `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`     | Cache entry TTL in days                                | `7`                    |
+| `--transport` / `KAGI_TRANSPORT`               | Transport mode: `stdio` or `streamable-http`           | `stdio`                |
+| `--bind` / `KAGI_BIND`                         | Bind address for HTTP transport                        | `127.0.0.1:3000`       |
+| `--fallback-message` / `KAGI_FALLBACK_MESSAGE` | Per-domain fallback message (format: `domain=message`) | *none*                 |
+| `--fallback-always` / `KAGI_FALLBACK_ALWAYS`   | Always-block domains (skip extraction)                 | *none*                 |
 
 The default cache directory depends on the platform:
 
@@ -149,11 +149,13 @@ Extract results include per-page Markdown content with explicit error messages f
 
 ## Fallback Messages
 
-When extraction fails for certain domains (e.g., rate-limited sites), you can configure per-domain fallback messages to return custom text to the LLM instead of empty or failed content.
+When extraction fails for certain domains (e.g., rate-limited sites), you can configure per-domain fallback messages to
+return custom text to the LLM instead of empty or failed content.
 
 ### Post-Extract Fallback
 
-Triggered when the Kagi API returns empty content (`markdown: null`, empty string, or whitespace-only) for a matched domain. The configured message is substituted into the result.
+Triggered when the Kagi API returns empty content (`markdown: null`, empty string, or whitespace-only) for a matched
+domain. The configured message is substituted into the result.
 
 ```bash
 kagi-mcp --fallback-message github.com="Use github-mcp instead"
@@ -161,7 +163,8 @@ kagi-mcp --fallback-message github.com="Use github-mcp instead"
 
 ### Pre-Extract Skip (Always Block)
 
-Skips the Kagi API call entirely for matched domains and returns the fallback message immediately. Useful for domains that should never be extracted.
+Skips the Kagi API call entirely for matched domains and returns the fallback message immediately. Useful for domains
+that should never be extracted.
 
 ```bash
 kagi-mcp --fallback-always github.com --fallback-message github.com="Use github-mcp instead"
@@ -179,6 +182,10 @@ kagi-mcp
 
 ### Domain Matching
 
-Domains are matched using eTLD+1 (registrable domain) extraction. Subdomains are automatically resolved to their registrable domain (e.g., `www.github.com` matches `github.com`). Matching is case-insensitive.
+Domains are matched using eTLD+1 (registrable domain) extraction. Subdomains are automatically resolved to their
+registrable domain (e.g., `www.github.com` matches `github.com`). Matching is case-insensitive.
 
+## Known Issues
 
+- The Kagi Extract API uses a cumulative timeout, not per-page. If the cumulative timeout is exceeded during a
+  multipage extraction, a blank result may be returned. This has been reported to Kagi.
