@@ -78,7 +78,6 @@ async fn main() -> anyhow::Result<()> {
         .with_limit(config.limit)
         .with_safe_search(config.safe_search)
         .with_region(config.region)
-        .with_split_extract_requests(config.split_extract_requests)
         .with_cache_store(Some(cache_store))
         .with_fallback_rules(fallback_rules);
 

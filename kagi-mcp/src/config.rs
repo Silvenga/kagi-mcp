@@ -41,15 +41,6 @@ pub struct Config {
     )]
     pub safe_search: bool,
 
-    #[arg(
-        long,
-        env = "KAGI_SPLIT_EXTRACT_REQUESTS",
-        default_missing_value = "true",
-        num_args = 0..=1,
-        default_value_t = true,
-    )]
-    pub split_extract_requests: bool,
-
     #[arg(long, env = "KAGI_REGION", value_parser = parse_region)]
     pub region: Option<String>,
 
@@ -204,7 +195,6 @@ mod tests {
         assert_eq!(config.retries, 3);
         assert_eq!(config.limit, 10);
         assert!(config.safe_search);
-        assert!(config.split_extract_requests);
         assert_eq!(config.region, None);
         assert!(config.cache_dir.is_none());
         assert_eq!(config.cache_size_gb, 5.0);
@@ -231,8 +221,6 @@ mod tests {
             "25",
             "--safe-search",
             "false",
-            "--split-extract-requests",
-            "false",
             "--region",
             "us-west",
             "--cache-dir",
@@ -252,7 +240,6 @@ mod tests {
         assert_eq!(config.retries, 5);
         assert_eq!(config.limit, 25);
         assert!(!config.safe_search);
-        assert!(!config.split_extract_requests);
         assert_eq!(config.region.as_deref(), Some("us-west"));
         assert_eq!(config.cache_dir, Some(PathBuf::from("/custom/cache/dir")));
         assert_eq!(config.cache_size_gb, 10.0);
@@ -332,33 +319,6 @@ mod tests {
             Config::try_parse_from(["kagi-mcp", "--api-key", "test-key", "--cache-size-gb", "0"]);
 
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn when_split_extract_requests_cli_flag_false_then_should_override_default() {
-        let config = Config::try_parse_from([
-            "kagi-mcp",
-            "--api-key",
-            "test-key",
-            "--split-extract-requests",
-            "false",
-        ])
-        .unwrap();
-
-        assert!(!config.split_extract_requests);
-    }
-
-    #[test]
-    fn when_split_extract_requests_flag_provided_without_value_then_should_default_to_true() {
-        let config = Config::try_parse_from([
-            "kagi-mcp",
-            "--api-key",
-            "test-key",
-            "--split-extract-requests",
-        ])
-        .unwrap();
-
-        assert!(config.split_extract_requests);
     }
 
     #[test]

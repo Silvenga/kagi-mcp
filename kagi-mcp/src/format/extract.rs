@@ -114,6 +114,7 @@ mod tests {
             data: Some(vec![ExtractData {
                 url: "https://example.com".to_owned(),
                 markdown: Some("# Hello\nWorld".to_owned()),
+                error: None,
             }]),
             errors: None,
         };
@@ -167,6 +168,7 @@ mod tests {
             data: Some(vec![ExtractData {
                 url: "https://example.com/ok".to_owned(),
                 markdown: Some("Successful content.".to_owned()),
+                error: None,
             }]),
             errors: Some(vec![ExtractError {
                 url: "https://example.com/bad".to_owned(),
@@ -189,10 +191,12 @@ mod tests {
                 ExtractData {
                     url: "https://example.com/a".to_owned(),
                     markdown: Some("Content A.".to_owned()),
+                    error: None,
                 },
                 ExtractData {
                     url: "https://example.com/b".to_owned(),
                     markdown: Some("Content B.".to_owned()),
+                    error: None,
                 },
             ]),
             errors: None,
@@ -211,6 +215,7 @@ mod tests {
             data: Some(vec![ExtractData {
                 url: "https://example.com/empty".to_owned(),
                 markdown: None,
+                error: None,
             }]),
             errors: None,
         };
@@ -230,6 +235,7 @@ mod tests {
                 markdown: Some(
                     "This URL could not be extracted. The content was not available.".to_owned(),
                 ),
+                error: None,
             }]),
             errors: None,
         };

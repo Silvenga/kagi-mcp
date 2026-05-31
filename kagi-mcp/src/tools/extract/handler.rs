@@ -1,5 +1,4 @@
 use crate::cache::CacheStore;
-use crate::tools::errors::map_kagi_error;
 use crate::tools::extract::batch::extract_batch;
 use crate::tools::extract::errors::kagi_error_to_extract_error;
 use crate::tools::extract::fallback::FallbackRules;
@@ -7,7 +6,6 @@ use crate::tools::extract::pipeline::{
     cache_results, classify_urls, render_results, ClassifiedUrl, ExtractFatalError,
     ExtractUrlResult,
 };
-use crate::tools::extract::split::extract_split;
 use crate::tools::extract::validation::{validate_extract_pages_count, validate_extract_urls};
 use crate::tools::extract::ExtractParams;
 use kagi_api::{ExtractPage, KagiApi};
@@ -29,7 +27,6 @@ pub async fn extract_handler(
     params: ExtractParams,
     ctx: &RequestContext<RoleServer>,
     extract_timeout: f64,
-    split_extract_requests: bool,
     cache_store: Option<&CacheStore>,
     fallback_rules: Option<&FallbackRules>,
 ) -> Result<CallToolResult, ErrorData> {
@@ -53,12 +50,7 @@ pub async fn extract_handler(
 
     let url_count = validated_urls.len();
     let start = Instant::now();
-    tracing::info!(
-        url_count,
-        split = split_extract_requests,
-        cache = params.cache,
-        "extract started"
-    );
+    tracing::info!(url_count, cache = params.cache, "extract started");
 
     let pages: Vec<ExtractPage> = validated_urls
         .into_iter()
@@ -79,16 +71,6 @@ pub async fn extract_handler(
 
     let mut extracted_results: Vec<ExtractUrlResult> = if extract_pages.is_empty() {
         Vec::new()
-    } else if split_extract_requests {
-        match extract_split(client, ctx, extract_timeout, extract_pages).await {
-            Ok(results) => results,
-            Err(ExtractFatalError::Cancelled) => {
-                return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
-            }
-            Err(ExtractFatalError::Api(kagi_err)) => {
-                return Err(map_kagi_error(kagi_err));
-            }
-        }
     } else {
         match extract_batch(client, ctx, extract_timeout, extract_pages).await {
             Ok(results) => results,
@@ -143,8 +125,8 @@ pub async fn extract_handler(
             }
             ClassifiedUrl::Extract { url, .. } => {
                 // Pull the corresponding result from extracted_results.
-                // Since classify_urls preserves order and extract_split/extract_batch
-                // return results in the same order as the input pages, we can drain
+                // Since classify_urls preserves order and extract_batch
+                // returns results in the same order as the input pages, we can drain
                 // sequentially.
                 if let Some(result) = extracted_results.first() {
                     if extract_result_url(result).trim_end_matches('/') == url.trim_end_matches('/')
@@ -222,7 +204,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, true, None, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -243,7 +225,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, true, None, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -264,6 +246,7 @@ mod tests {
                 data: Some(vec![ExtractData {
                     url: "https://example.com".to_owned(),
                     markdown: Some("# Hello\nWorld".to_owned()),
+                    error: None,
                 }]),
                 errors: None,
             })
@@ -276,7 +259,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -298,6 +281,7 @@ mod tests {
                 data: Some(vec![ExtractData {
                     url: "https://example.com".to_owned(),
                     markdown: Some("content".to_owned()),
+                    error: None,
                 }]),
                 errors: None,
             })
@@ -310,7 +294,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -329,7 +313,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, true, None, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -351,7 +335,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -366,6 +350,7 @@ mod tests {
                 vec![ExtractData {
                     url: "https://ok.com".to_owned(),
                     markdown: Some("Good content".to_owned()),
+                    error: None,
                 }],
                 vec![ExtractError {
                     url: "https://fail.com".to_owned(),
@@ -382,7 +367,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -416,169 +401,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
         assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn when_split_extract_two_urls_then_api_called_twice_with_single_page_requests() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(2)
-            .withf(|req| req.pages().len() == 1)
-            .returning(|req| {
-                let url = &req.pages()[0].url;
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_owned(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: url.clone(),
-                        markdown: Some(format!("Content from {url}")),
-                    }]),
-                    errors: None,
-                })
-            });
-
-        let params = ExtractParams {
-            pages: vec!["https://a.com".to_owned(), "https://b.com".to_owned()],
-            output_format: OutputFormat::Markdown,
-            cache: false,
-        };
-        let ctx = fake_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("https://a.com"));
-        assert!(text.contains("Content from https://a.com"));
-        assert!(text.contains("https://b.com"));
-        assert!(text.contains("Content from https://b.com"));
-    }
-
-    #[tokio::test]
-    async fn when_split_extract_one_fails_then_error_appears_in_output() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract().times(2).returning(|req| {
-            let url = &req.pages()[0].url;
-            if url == "https://fail.com/" {
-                Err(kagi_api::KagiError::ServerError)
-            } else {
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_owned(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: url.clone(),
-                        markdown: Some(format!("Content from {url}")),
-                    }]),
-                    errors: None,
-                })
-            }
-        });
-
-        let params = ExtractParams {
-            pages: vec!["https://ok.com".to_owned(), "https://fail.com".to_owned()],
-            output_format: OutputFormat::Markdown,
-            cache: false,
-        };
-        let ctx = fake_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Content from https://ok.com/"));
-        assert!(text.contains("https://fail.com"));
-        assert!(text.contains("server error"));
-    }
-
-    #[tokio::test]
-    async fn when_split_extract_results_maintain_input_order() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract().times(3).returning(|req| {
-            let url = &req.pages()[0].url;
-            Ok(ExtractResponse {
-                meta: Meta {
-                    trace: "test".to_owned(),
-                    node: None,
-                    ms: None,
-                },
-                data: Some(vec![ExtractData {
-                    url: url.clone(),
-                    markdown: Some(url.clone()),
-                }]),
-                errors: None,
-            })
-        });
-
-        let params = ExtractParams {
-            pages: vec![
-                "https://first.com".to_owned(),
-                "https://second.com".to_owned(),
-                "https://third.com".to_owned(),
-            ],
-            output_format: OutputFormat::Json,
-            cache: false,
-        };
-        let ctx = fake_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        let first_pos = text.find("https://first.com/").unwrap();
-        let second_pos = text.find("https://second.com/").unwrap();
-        let third_pos = text.find("https://third.com/").unwrap();
-        assert!(first_pos < second_pos);
-        assert!(second_pos < third_pos);
-    }
-
-    #[tokio::test]
-    async fn when_split_enabled_then_should_call_api_per_url() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(3)
-            .withf(|req| req.pages().len() == 1)
-            .returning(|req| {
-                let url = &req.pages()[0].url;
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_owned(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: url.clone(),
-                        markdown: Some(format!("Content from {url}")),
-                    }]),
-                    errors: None,
-                })
-            });
-
-        let params = ExtractParams {
-            pages: vec![
-                "https://a.com".to_owned(),
-                "https://b.com".to_owned(),
-                "https://c.com".to_owned(),
-            ],
-            output_format: OutputFormat::Markdown,
-            cache: false,
-        };
-        let ctx = fake_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Content from https://a.com/"));
-        assert!(text.contains("Content from https://b.com/"));
-        assert!(text.contains("Content from https://c.com/"));
     }
 
     #[tokio::test]
@@ -598,14 +422,17 @@ mod tests {
                         ExtractData {
                             url: "https://a.com/".to_owned(),
                             markdown: Some("Content A".to_owned()),
+                            error: None,
                         },
                         ExtractData {
                             url: "https://b.com/".to_owned(),
                             markdown: Some("Content B".to_owned()),
+                            error: None,
                         },
                         ExtractData {
                             url: "https://c.com/".to_owned(),
                             markdown: Some("Content C".to_owned()),
+                            error: None,
                         },
                     ]),
                     errors: None,
@@ -623,92 +450,13 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, false, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("Content A"));
         assert!(text.contains("Content B"));
         assert!(text.contains("Content C"));
-    }
-
-    #[tokio::test]
-    async fn when_split_enabled_with_partial_failure_then_should_aggregate_successes_and_errors() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract().times(3).returning(|req| {
-            let url = &req.pages()[0].url;
-            if url == "https://fail.com/" {
-                Err(kagi_api::KagiError::ServerError)
-            } else {
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_owned(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: url.clone(),
-                        markdown: Some(format!("Content from {url}")),
-                    }]),
-                    errors: None,
-                })
-            }
-        });
-
-        let params = ExtractParams {
-            pages: vec![
-                "https://ok1.com".to_owned(),
-                "https://fail.com".to_owned(),
-                "https://ok2.com".to_owned(),
-            ],
-            output_format: OutputFormat::Markdown,
-            cache: false,
-        };
-        let ctx = fake_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Content from https://ok1.com/"));
-        assert!(text.contains("Content from https://ok2.com/"));
-        assert!(text.contains("https://fail.com"));
-        assert!(text.contains("server error"));
-    }
-
-    #[tokio::test]
-    async fn when_single_url_with_split_enabled_then_should_call_api_once() {
-        let mut mock = MockKagiApi::new();
-        mock.expect_extract()
-            .times(1)
-            .withf(|req| req.pages().len() == 1)
-            .returning(|_| {
-                Ok(ExtractResponse {
-                    meta: Meta {
-                        trace: "test".to_owned(),
-                        node: None,
-                        ms: None,
-                    },
-                    data: Some(vec![ExtractData {
-                        url: "https://only.com/".to_owned(),
-                        markdown: Some("Single content".to_owned()),
-                    }]),
-                    errors: None,
-                })
-            });
-
-        let params = ExtractParams {
-            pages: vec!["https://only.com".to_owned()],
-            output_format: OutputFormat::Markdown,
-            cache: false,
-        };
-        let ctx = fake_request_context().await;
-
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
-
-        assert!(result.is_ok());
-        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
-        assert!(text.contains("Single content"));
     }
 
     #[tokio::test]
@@ -730,8 +478,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result =
-            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -756,6 +503,7 @@ mod tests {
                     data: Some(vec![ExtractData {
                         url: url.clone(),
                         markdown: Some(format!("Content from {url}")),
+                        error: None,
                     }]),
                     errors: None,
                 })
@@ -780,8 +528,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result =
-            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -817,7 +564,6 @@ mod tests {
             params,
             &ctx,
             10.0,
-            true,
             Some(&store),
             Some(&rules),
         )
@@ -848,6 +594,7 @@ mod tests {
                 data: Some(vec![ExtractData {
                     url: "https://fallback.com/page".to_owned(),
                     markdown: None,
+                    error: None,
                 }]),
                 errors: None,
             })
@@ -868,8 +615,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result =
-            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -889,6 +635,7 @@ mod tests {
                 data: Some(vec![ExtractData {
                     url: "https://fallback.com/page".to_owned(),
                     markdown: Some("".to_owned()),
+                    error: None,
                 }]),
                 errors: None,
             })
@@ -909,8 +656,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result =
-            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -930,6 +676,7 @@ mod tests {
                 data: Some(vec![ExtractData {
                     url: "https://fallback.com/page".to_owned(),
                     markdown: Some("  \n  ".to_owned()),
+                    error: None,
                 }]),
                 errors: None,
             })
@@ -950,8 +697,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result =
-            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -971,6 +717,7 @@ mod tests {
                 data: Some(vec![ExtractData {
                     url: "https://fallback.com/page".to_owned(),
                     markdown: Some("Real content".to_owned()),
+                    error: None,
                 }]),
                 errors: None,
             })
@@ -991,8 +738,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result =
-            extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, Some(&rules)).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1014,6 +760,7 @@ mod tests {
                 data: Some(vec![ExtractData {
                     url: "https://example.com/page".to_owned(),
                     markdown: None,
+                    error: None,
                 }]),
                 errors: None,
             })
@@ -1026,7 +773,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, true, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1041,6 +788,7 @@ mod tests {
             data: ExtractData {
                 url: "https://fallback.com/page".to_owned(),
                 markdown: None,
+                error: None,
             },
         };
         let cache_key = ExtractCacheKey {
@@ -1073,7 +821,6 @@ mod tests {
             params,
             &ctx,
             10.0,
-            true,
             Some(&store),
             Some(&rules),
         )
@@ -1106,16 +853,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(
-            Arc::new(mock),
-            params,
-            &ctx,
-            10.0,
-            false,
-            None,
-            Some(&rules),
-        )
-        .await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1136,10 +874,12 @@ mod tests {
                     ExtractData {
                         url: "https://normal.com/page".to_owned(),
                         markdown: Some("Normal content".to_owned()),
+                        error: None,
                     },
                     ExtractData {
                         url: "https://other.com/page".to_owned(),
                         markdown: Some("Other content".to_owned()),
+                        error: None,
                     },
                 ]),
                 errors: None,
@@ -1166,16 +906,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(
-            Arc::new(mock),
-            params,
-            &ctx,
-            10.0,
-            false,
-            None,
-            Some(&rules),
-        )
-        .await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1202,10 +933,12 @@ mod tests {
                     ExtractData {
                         url: "https://normal.com/page".to_owned(),
                         markdown: Some("Normal content".to_owned()),
+                        error: None,
                     },
                     ExtractData {
                         url: "https://fallback.com/page".to_owned(),
                         markdown: None,
+                        error: None,
                     },
                 ]),
                 errors: None,
@@ -1230,16 +963,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(
-            Arc::new(mock),
-            params,
-            &ctx,
-            10.0,
-            false,
-            None,
-            Some(&rules),
-        )
-        .await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1261,14 +985,17 @@ mod tests {
                     ExtractData {
                         url: "https://first.com/page".to_owned(),
                         markdown: Some("First content".to_owned()),
+                        error: None,
                     },
                     ExtractData {
                         url: "https://second.com/page".to_owned(),
                         markdown: Some("Second content".to_owned()),
+                        error: None,
                     },
                     ExtractData {
                         url: "https://fourth.com/page".to_owned(),
                         markdown: Some("Fourth content".to_owned()),
+                        error: None,
                     },
                 ]),
                 errors: None,
@@ -1295,16 +1022,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(
-            Arc::new(mock),
-            params,
-            &ctx,
-            10.0,
-            false,
-            None,
-            Some(&rules),
-        )
-        .await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1345,7 +1063,6 @@ mod tests {
             params,
             &ctx,
             10.0,
-            false,
             Some(&store),
             Some(&rules),
         )
@@ -1367,6 +1084,40 @@ mod tests {
             .await;
         assert!(cached1.is_none(), "fallback result should not be cached");
         assert!(cached2.is_none(), "fallback result should not be cached");
+    }
+
+    #[tokio::test]
+    async fn when_api_returns_per_url_error_then_handler_outputs_error() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![ExtractData {
+                    url: "https://fail.com".to_owned(),
+                    markdown: None,
+                    error: Some("Request timed out after 10s".to_owned()),
+                }]),
+                errors: None,
+            })
+        });
+
+        let params = ExtractParams {
+            pages: vec!["https://fail.com".to_owned()],
+            output_format: OutputFormat::Markdown,
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+
+        assert!(result.is_ok());
+        let text = result.unwrap().content[0].as_text().unwrap().text.clone();
+        assert!(text.contains("https://fail.com"));
+        assert!(text.contains("Request timed out after 10s"));
     }
 
     pub async fn fake_request_context() -> RequestContext<RoleServer> {

@@ -17,9 +17,12 @@ pub struct ExtractResponse {
 pub struct ExtractData {
     /// The URL of the extracted page
     pub url: String,
-    /// Extracted markdown content of the page
+    /// Extracted markdown content of the page. Will be absent if extraction fails.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub markdown: Option<String>,
+    /// Per-URL error message returned when extraction fails for a specific page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// An error that occurred during extraction for a specific page.
