@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.0](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.2.2...kagi-mcp-v0.3.0) (2026-05-31)
+
+
+### Features
+
+* add panic logging via log-panics ([#58](https://github.com/Silvenga/kagi-mcp/issues/58)) ([63ab05e](https://github.com/Silvenga/kagi-mcp/commit/63ab05efc0126103e90d21baddff90d2b5442b99))
+* add tracing-based logging with daily rotation ([#55](https://github.com/Silvenga/kagi-mcp/issues/55)) ([319ab4f](https://github.com/Silvenga/kagi-mcp/commit/319ab4f2ce310a5f826c59da480f51722938e84e))
+* **api:** sync with latest Kagi API spec and add per-URL error handling ([#69](https://github.com/Silvenga/kagi-mcp/issues/69)) ([fa10acb](https://github.com/Silvenga/kagi-mcp/commit/fa10acb68faf32f120833a54937e8b35c49527be))
+* **extract:** add per-domain fallback messages for extract tool ([#45](https://github.com/Silvenga/kagi-mcp/issues/45)) ([1e33074](https://github.com/Silvenga/kagi-mcp/commit/1e33074c9e637edbae11caeda1678ef6e26db44a))
+* use OutputFormat enum instead of raw string ([#62](https://github.com/Silvenga/kagi-mcp/issues/62)) ([74cc0af](https://github.com/Silvenga/kagi-mcp/commit/74cc0afc425e25ea16a91dc3ad847747b4149e37))
+
+
+### Bug Fixes
+
+* **api:** allow null title in SearchResult to handle Kagi API bug ([#72](https://github.com/Silvenga/kagi-mcp/issues/72)) ([d96a087](https://github.com/Silvenga/kagi-mcp/commit/d96a0877efa9fd860580685047f0c23c2e892072))
+* propagate template render error instead of unwrapping ([#63](https://github.com/Silvenga/kagi-mcp/issues/63)) ([49bb1ba](https://github.com/Silvenga/kagi-mcp/commit/49bb1baab9f42634ed784deff06969f637787d2e))
+* use generic truncation notice instead of search-specific advice ([#65](https://github.com/Silvenga/kagi-mcp/issues/65)) ([14c5efc](https://github.com/Silvenga/kagi-mcp/commit/14c5efcff0299d3e408d180c8d3ada39351ac132))
+* validate after/before date params match YYYY-MM-DD format ([#67](https://github.com/Silvenga/kagi-mcp/issues/67)) ([3adc69a](https://github.com/Silvenga/kagi-mcp/commit/3adc69aefdd97077bd7767675077825cc0838769))
+
 ## [0.2.2](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.2.1...kagi-mcp-v0.2.2) (2026-05-17)
 
 
