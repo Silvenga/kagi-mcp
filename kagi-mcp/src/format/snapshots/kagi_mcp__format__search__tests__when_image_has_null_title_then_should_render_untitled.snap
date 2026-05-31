@@ -1,0 +1,8 @@
+---
+source: kagi-mcp/src/format/search.rs
+expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\n\")"
+---
+## Images
+
+1. **[(untitled)](https://example.com/page)**
+   - Image: https://example.com/image.jpg (800x600)
