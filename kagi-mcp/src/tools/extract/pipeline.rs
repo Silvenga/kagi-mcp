@@ -132,6 +132,7 @@ pub async fn cache_results(results: &[ExtractUrlResult], cache_store: Option<&Ca
                 data: ExtractData {
                     url: url.clone(),
                     markdown: markdown.clone(),
+                    error: None,
                 },
             };
             let _ = store.set_extract_result(&key, &cached).await;
@@ -166,7 +167,11 @@ pub fn render_results(
                         }
                     }
                 }
-                data.push(ExtractData { url, markdown });
+                data.push(ExtractData {
+                    url,
+                    markdown,
+                    error: None,
+                });
             }
             ExtractUrlResult::Err { error, .. } => {
                 errors.push(error);
@@ -278,6 +283,7 @@ mod tests {
             data: ExtractData {
                 url: url.to_owned(),
                 markdown: Some("cached content".to_owned()),
+                error: None,
             },
         };
         store.set_extract_result(&key, &cached).await.unwrap();
@@ -374,6 +380,7 @@ mod tests {
             data: ExtractData {
                 url: url.to_owned(),
                 markdown: Some("cached".to_owned()),
+                error: None,
             },
         };
         store.set_extract_result(&key, &cached).await.unwrap();
@@ -423,6 +430,7 @@ mod tests {
             data: ExtractData {
                 url: url.to_owned(),
                 markdown: Some("cached".to_owned()),
+                error: None,
             },
         };
         store.set_extract_result(&key, &cached).await.unwrap();
@@ -568,5 +576,26 @@ mod tests {
             _ => panic!("expected text content"),
         };
         assert!(!content.contains("https://"));
+    }
+
+    #[test]
+    fn when_err_result_rendered_then_error_appears_in_output() {
+        let results = vec![ExtractUrlResult::Err {
+            url: "https://fail.com".to_owned(),
+            error: ExtractError {
+                url: "https://fail.com".to_owned(),
+                code: "timeout".to_owned(),
+                message: Some("Request timed out after 10s".to_owned()),
+            },
+        }];
+
+        let call_result = render_results(results, None, &OutputFormat::Markdown).unwrap();
+
+        let content = match &call_result.content[0].raw {
+            RawContent::Text(t) => t.text.clone(),
+            _ => panic!("expected text content"),
+        };
+        assert!(content.contains("https://fail.com"));
+        assert!(content.contains("Request timed out after 10s"));
     }
 }

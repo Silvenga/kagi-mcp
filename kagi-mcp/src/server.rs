@@ -13,7 +13,6 @@ const DEFAULT_SEARCH_TIMEOUT: f64 = 4.0;
 const DEFAULT_EXTRACT_TIMEOUT: f64 = 10.0;
 const DEFAULT_LIMIT: u32 = 10;
 const DEFAULT_SAFE_SEARCH: bool = true;
-const DEFAULT_SPLIT_EXTRACT_REQUESTS: bool = true;
 
 #[derive(Clone)]
 pub struct KagiMcpServer {
@@ -23,7 +22,6 @@ pub struct KagiMcpServer {
     pub limit: u32,
     pub safe_search: bool,
     pub region: Option<String>,
-    pub split_extract_requests: bool,
     pub cache_store: Option<Arc<CacheStore>>,
     pub fallback_rules: Option<FallbackRules>,
 }
@@ -38,7 +36,6 @@ impl KagiMcpServer {
             limit: DEFAULT_LIMIT,
             safe_search: DEFAULT_SAFE_SEARCH,
             region: None,
-            split_extract_requests: DEFAULT_SPLIT_EXTRACT_REQUESTS,
             cache_store: None,
             fallback_rules: None,
         }
@@ -74,12 +71,6 @@ impl KagiMcpServer {
         self
     }
 
-    /// Enable or disable splitting extract requests per URL.
-    pub fn with_split_extract_requests(mut self, split: bool) -> Self {
-        self.split_extract_requests = split;
-        self
-    }
-
     /// Set the cache store.
     pub fn with_cache_store(mut self, cache_store: Option<Arc<CacheStore>>) -> Self {
         self.cache_store = cache_store;
@@ -101,7 +92,6 @@ impl KagiMcpServer {
             limit: DEFAULT_LIMIT,
             safe_search: DEFAULT_SAFE_SEARCH,
             region: None,
-            split_extract_requests: DEFAULT_SPLIT_EXTRACT_REQUESTS,
             cache_store: None,
             fallback_rules: None,
         }
@@ -145,7 +135,6 @@ impl KagiMcpServer {
             params,
             &ctx,
             self.extract_timeout,
-            self.split_extract_requests,
             self.cache_store.as_deref(),
             self.fallback_rules.as_ref(),
         )

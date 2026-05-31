@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-MCP `extract` tool: validates URLs, optionally splits per-URL, calls Kagi Extract API, applies per-domain fallback
+MCP `extract` tool: validates URLs, calls Kagi Extract API in batch mode, applies per-domain fallback
 rules, renders Markdown.
 
 ## STRUCTURE
@@ -14,7 +14,6 @@ extract/
 ├── fallback.rs   # FallbackRules + eTLD+1 matching
 ├── handler.rs    # Main extract handler
 ├── params.rs     # ExtractParams JSON Schema
-├── split.rs      # Per-URL split extraction
 └── validation.rs # URL + count validation
 ```
 
@@ -22,16 +21,14 @@ extract/
 
 | Task                 | Location                | Notes                                      |
 |----------------------|-------------------------|--------------------------------------------|
-| Change extract logic | `handler.rs`            | Cache → split vs batch dispatch → fallback |
-| Change params        | `params.rs`             | `pages` array, max 10 URLs                 |
-| Per-domain fallback  | `fallback.rs`           | eTLD+1 matching, `always_block`            |
-| Split vs batch       | `split.rs` / `batch.rs` | `--split-extract-requests` toggle          |
-| URL validation       | `validation.rs`         | HTTPS only, count limits                   |
+| Change extract logic | `handler.rs`            | Cache → batch dispatch → fallback |
+| Change params        | `params.rs`             | `pages` array, max 10 URLs          |
+| Per-domain fallback  | `fallback.rs`           | eTLD+1 matching, `always_block`     |
+| URL validation       | `validation.rs`         | HTTPS only, count limits            |
 
 ## CONVENTIONS
 
-- Handler: `extract_handler(client, params, ctx, timeout, split, cache, fallback)`
-- `split` = individual API call per URL; `batch` = single call
+- Handler: `extract_handler(client, params, ctx, timeout, cache, fallback)`
 - Fallbacks: if API returns empty content, substitute a configured message
 - `--fallback-always` skips API entirely for matched domains
 

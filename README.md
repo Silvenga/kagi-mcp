@@ -88,7 +88,6 @@ But you likely want to configure it in your MCP client:
 | `--limit` / `KAGI_LIMIT`                                   | Default result limit for search                   | `10`                   |
 | `--safe-search` / `KAGI_SAFE_SEARCH`                       | Enable safe search                                | `true`                 |
 | `--region` / `KAGI_REGION`                                 | Default region filter (ISO 3166-1 alpha-2)        | *none*                 |
-| `--split-extract-requests` / `KAGI_SPLIT_EXTRACT_REQUESTS` | Extract each URL individually instead of batching | `true`                 |
 | `--cache-dir` / `KAGI_CACHE_DIR`                           | Directory for the local response cache            | *See below*            |
 | `--cache-size-gb` / `KAGI_CACHE_SIZE_GB`                   | Maximum cache size in gigabytes                   | `5.0`                  |
 | `--cache-ttl-days` / `KAGI_CACHE_TTL_DAYS`                 | Cache entry TTL in days                           | `7`                    |
@@ -182,7 +181,4 @@ kagi-mcp
 
 Domains are matched using eTLD+1 (registrable domain) extraction. Subdomains are automatically resolved to their registrable domain (e.g., `www.github.com` matches `github.com`). Matching is case-insensitive.
 
-## Known Issues
 
-- The Kagi Extract API uses a cumulative timeout, not per-page. If the cumulative timeout is exceeded during a
-  multi-page extraction, a blank result may be returned. This has been reported to Kagi.

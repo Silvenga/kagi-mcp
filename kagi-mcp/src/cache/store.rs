@@ -433,6 +433,7 @@ mod tests {
             data: ExtractData {
                 url: "https://example.com".to_owned(),
                 markdown: Some("# Hello\n\nWorld.".to_owned()),
+                error: None,
             },
         };
 
