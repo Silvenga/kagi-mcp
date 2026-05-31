@@ -1,2 +1,3 @@
 /target
 *.log
+.opencode/snippet/kagi-token.md
