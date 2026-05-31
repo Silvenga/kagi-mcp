@@ -21,3 +21,9 @@ Kagi Search/Extract HTTP API client library. Flat public API with builder-patter
 ## ANTI-PATTERNS
 - Never import from `kagi_api::client` or `kagi_api::types` — use root
 - Test-only constructors (e.g., `open_in_memory`) → use `#[cfg(test)]` visibility
+
+## SPEC DIVERGENCES
+
+Known differences between the OpenAPI spec (`docs/openapi.yaml`) and actual API behavior:
+
+- **`SearchResult.title`**: The spec defines `title` as a required `string`, but the API returns `null` for image results. The field is typed `Option<String>` with `#[serde(skip_serializing_if = "Option::is_none")]` to handle this. Expected to be fixed by Kagi; when confirmed resolved, revert to `String` (required field).

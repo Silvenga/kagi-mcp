@@ -89,6 +89,13 @@ fn extract_string_prop(props: &Option<serde_json::Value>, key: &str) -> Option<S
         .map(|s| s.to_owned())
 }
 
+fn format_title(title: &Option<String>) -> String {
+    title
+        .as_deref()
+        .map(|t| decode_entities(&normalize_title_whitespace(t)))
+        .unwrap_or_else(|| "(untitled)".to_owned())
+}
+
 pub fn format_search_markdown(response: &SearchResponse) -> Result<String, FormatError> {
     let data = &response.data;
     let mut has_results = false;
@@ -131,7 +138,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
 
                             GeneralItem {
                                 index: i + 1,
-                                title: decode_entities(&normalize_title_whitespace(&r.title)),
+                                title: format_title(&r.title),
                                 url: r.url.clone(),
                                 snippet: r
                                     .snippet
@@ -181,7 +188,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                         .map_or_else(|| "?".to_owned(), |h| h.to_string());
                     ImageItem {
                         index: i + 1,
-                        title: decode_entities(&normalize_title_whitespace(&r.title)),
+                        title: format_title(&r.title),
                         url: r.url.clone(),
                         image_url: r
                             .image
@@ -260,7 +267,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                         }
                     }
                     InfoboxItem {
-                        title: decode_entities(&normalize_title_whitespace(&r.title)),
+                        title: format_title(&r.title),
                         url: r.url.clone(),
                         snippet: r
                             .snippet
@@ -280,7 +287,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
             results
                 .iter()
                 .map(|r| RelatedSearchItem {
-                    title: decode_entities(&normalize_title_whitespace(&r.title)),
+                    title: format_title(&r.title),
                 })
                 .collect()
         }
@@ -387,7 +394,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: Some("2023-01-01".to_owned()),
                 image: None,
@@ -403,7 +410,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: None,
                 time: None,
                 image: None,
@@ -419,7 +426,7 @@ mod tests {
         let response = make_response(SearchData {
             image: Some(vec![SearchResult {
                 url: "https://example.com/page".to_owned(),
-                title: "Example Image".to_owned(),
+                title: Some("Example Image".to_owned()),
                 snippet: None,
                 time: None,
                 image: Some(Image {
@@ -439,7 +446,7 @@ mod tests {
         let response = make_response(SearchData {
             image: Some(vec![SearchResult {
                 url: "https://example.com/page".to_owned(),
-                title: "Image No Size".to_owned(),
+                title: Some("Image No Size".to_owned()),
                 snippet: None,
                 time: None,
                 image: Some(Image {
@@ -455,11 +462,31 @@ mod tests {
     }
 
     #[test]
+    fn when_image_has_null_title_then_should_render_untitled() {
+        let response = make_response(SearchData {
+            image: Some(vec![SearchResult {
+                url: "https://example.com/page".to_owned(),
+                title: None,
+                snippet: None,
+                time: None,
+                image: Some(Image {
+                    url: "https://example.com/image.jpg".to_owned(),
+                    width: Some(800),
+                    height: Some(600),
+                }),
+                props: None,
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response).unwrap());
+    }
+
+    #[test]
     fn when_search_has_mixed_results_then_should_format_all_sections() {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -467,7 +494,7 @@ mod tests {
             }]),
             weather: Some(vec![SearchResult {
                 url: "".to_owned(),
-                title: "".to_owned(),
+                title: Some("".to_owned()),
                 snippet: Some("Sunny, 25C".to_owned()),
                 time: None,
                 image: None,
@@ -483,7 +510,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Foo &amp; Bar &quot;baz&quot;".to_owned(),
+                title: Some("Foo &amp; Bar &quot;baz&quot;".to_owned()),
                 snippet: None,
                 time: None,
                 image: None,
@@ -499,7 +526,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("It&#39;s great &amp; amazing.".to_owned()),
                 time: None,
                 image: None,
@@ -515,7 +542,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: None,
                 time: Some("2024-03-15T10:30:00Z".to_owned()),
                 image: None,
@@ -531,7 +558,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("foo ... ... ... bar".to_owned()),
                 time: None,
                 image: None,
@@ -546,7 +573,7 @@ mod tests {
     fn when_search_has_all_8_web_categories_then_each_should_have_distinct_header() {
         let mk = |title: &str| SearchResult {
             url: "https://example.com".to_owned(),
-            title: title.to_owned(),
+            title: Some(title.to_owned()),
             snippet: None,
             time: None,
             image: None,
@@ -572,7 +599,7 @@ mod tests {
         let response = make_response(SearchData {
             infobox: Some(vec![SearchResult {
                 url: "https://example.com/entity".to_owned(),
-                title: "Entity Name".to_owned(),
+                title: Some("Entity Name".to_owned()),
                 snippet: Some("A well-known entity.".to_owned()),
                 time: None,
                 image: None,
@@ -594,7 +621,7 @@ mod tests {
         let response = make_response(SearchData {
             infobox: Some(vec![SearchResult {
                 url: "https://example.com/place".to_owned(),
-                title: "Place Name".to_owned(),
+                title: Some("Place Name".to_owned()),
                 snippet: None,
                 time: None,
                 image: None,
@@ -615,7 +642,7 @@ mod tests {
         let response = make_response(SearchData {
             infobox: Some(vec![SearchResult {
                 url: "https://example.com/plain".to_owned(),
-                title: "Plain Info".to_owned(),
+                title: Some("Plain Info".to_owned()),
                 snippet: Some("Just text.".to_owned()),
                 time: None,
                 image: None,
@@ -631,7 +658,7 @@ mod tests {
         let response = make_response(SearchData {
             adjacent_question: Some(vec![SearchResult {
                 url: "https://example.com/answer".to_owned(),
-                title: "Answer Page".to_owned(),
+                title: Some("Answer Page".to_owned()),
                 snippet: Some("The answer is 42.".to_owned()),
                 time: None,
                 image: None,
@@ -647,7 +674,7 @@ mod tests {
         let response = make_response(SearchData {
             adjacent_question: Some(vec![SearchResult {
                 url: "https://example.com/faq".to_owned(),
-                title: "FAQ Page".to_owned(),
+                title: Some("FAQ Page".to_owned()),
                 snippet: Some("Some answer text.".to_owned()),
                 time: None,
                 image: None,
@@ -663,7 +690,7 @@ mod tests {
         let response = make_response(SearchData {
             direct_answer: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Answer".to_owned(),
+                title: Some("Answer".to_owned()),
                 snippet: Some("The direct answer is 42.".to_owned()),
                 time: None,
                 image: None,
@@ -680,7 +707,7 @@ mod tests {
             direct_answer: Some(vec![
                 SearchResult {
                     url: "https://example.com/a1".to_owned(),
-                    title: "Answer 1".to_owned(),
+                    title: Some("Answer 1".to_owned()),
                     snippet: Some("First direct answer.".to_owned()),
                     time: None,
                     image: None,
@@ -688,7 +715,7 @@ mod tests {
                 },
                 SearchResult {
                     url: "https://example.com/a2".to_owned(),
-                    title: "Answer 2".to_owned(),
+                    title: Some("Answer 2".to_owned()),
                     snippet: Some("Second direct answer.".to_owned()),
                     time: None,
                     image: None,
@@ -705,7 +732,7 @@ mod tests {
         let response = make_response(SearchData {
             weather: Some(vec![SearchResult {
                 url: "".to_owned(),
-                title: "".to_owned(),
+                title: Some("".to_owned()),
                 snippet: Some("Sunny, 25°C".to_owned()),
                 time: None,
                 image: None,
@@ -722,7 +749,7 @@ mod tests {
             weather: Some(vec![
                 SearchResult {
                     url: "".to_owned(),
-                    title: "".to_owned(),
+                    title: Some("".to_owned()),
                     snippet: Some("Monday: Sunny, 25°C".to_owned()),
                     time: None,
                     image: None,
@@ -730,7 +757,7 @@ mod tests {
                 },
                 SearchResult {
                     url: "".to_owned(),
-                    title: "".to_owned(),
+                    title: Some("".to_owned()),
                     snippet: Some("Tuesday: Cloudy, 20°C".to_owned()),
                     time: None,
                     image: None,
@@ -747,7 +774,7 @@ mod tests {
         let response = make_response(SearchData {
             package_tracking: Some(vec![SearchResult {
                 url: "https://track.example.com/1".to_owned(),
-                title: "Package".to_owned(),
+                title: Some("Package".to_owned()),
                 snippet: None,
                 time: None,
                 image: None,
@@ -763,7 +790,7 @@ mod tests {
         let response = make_response(SearchData {
             related_search: Some(vec![SearchResult {
                 url: "".to_owned(),
-                title: "Related Topic".to_owned(),
+                title: Some("Related Topic".to_owned()),
                 snippet: None,
                 time: None,
                 image: None,
@@ -779,7 +806,7 @@ mod tests {
         let response = make_response(SearchData {
             news: Some(vec![SearchResult {
                 url: "https://example.com/story".to_owned(),
-                title: "Breaking Story".to_owned(),
+                title: Some("Breaking Story".to_owned()),
                 snippet: Some("Latest updates.".to_owned()),
                 time: None,
                 image: None,
@@ -795,7 +822,7 @@ mod tests {
         let response = make_response(SearchData {
             listicle: Some(vec![SearchResult {
                 url: "https://example.com/top10".to_owned(),
-                title: "Top 10 List".to_owned(),
+                title: Some("Top 10 List".to_owned()),
                 snippet: None,
                 time: Some("2024-05-01".to_owned()),
                 image: None,
@@ -878,7 +905,7 @@ mod tests {
         let response = make_response(SearchData {
             podcast_creator: Some(vec![SearchResult {
                 url: "https://example.com/creator1".to_owned(),
-                title: "Creator One".to_owned(),
+                title: Some("Creator One".to_owned()),
                 snippet: Some("A great podcast creator.".to_owned()),
                 time: Some("2024-01-15".to_owned()),
                 image: None,
@@ -894,7 +921,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -910,7 +937,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -926,7 +953,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -942,7 +969,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -958,7 +985,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -974,7 +1001,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -990,7 +1017,7 @@ mod tests {
         let response = make_response(SearchData {
             podcast: Some(vec![SearchResult {
                 url: "https://example.com/podcast".to_owned(),
-                title: "Great Podcast".to_owned(),
+                title: Some("Great Podcast".to_owned()),
                 snippet: Some("An amazing episode.".to_owned()),
                 time: None,
                 image: None,
@@ -1006,7 +1033,7 @@ mod tests {
         let response = make_response(SearchData {
             video: Some(vec![SearchResult {
                 url: "https://example.com/video".to_owned(),
-                title: "Great Video".to_owned(),
+                title: Some("Great Video".to_owned()),
                 snippet: Some("An amazing video.".to_owned()),
                 time: None,
                 image: None,
@@ -1022,7 +1049,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -1038,7 +1065,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -1054,7 +1081,7 @@ mod tests {
         let response = make_response(SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("This is an example.".to_owned()),
                 time: None,
                 image: None,
@@ -1074,7 +1101,7 @@ mod tests {
         let response = make_response(SearchData {
             news: Some(vec![SearchResult {
                 url: "https://example.com/story".to_owned(),
-                title: "Breaking Story".to_owned(),
+                title: Some("Breaking Story".to_owned()),
                 snippet: Some("Latest updates.".to_owned()),
                 time: Some("2024-06-01".to_owned()),
                 image: None,

@@ -45,7 +45,10 @@ async fn when_search_succeeds_then_should_return_results() {
 
     let response = client.search(search_request()).await.unwrap();
     assert_eq!(response.meta.trace, "test-trace");
-    assert_eq!(response.data.search.unwrap()[0].title, "Example");
+    assert_eq!(
+        response.data.search.unwrap()[0].title,
+        Some("Example".to_owned())
+    );
 }
 
 #[tokio::test]
@@ -225,7 +228,10 @@ async fn when_search_returns_429_once_then_retry_should_succeed() {
 
     let response = client.search(search_request()).await.unwrap();
     assert_eq!(response.meta.trace, "retry-trace");
-    assert_eq!(response.data.search.unwrap()[0].title, "Retry Success");
+    assert_eq!(
+        response.data.search.unwrap()[0].title,
+        Some("Retry Success".to_owned())
+    );
 }
 
 #[tokio::test]
@@ -260,7 +266,10 @@ async fn when_search_returns_500_once_then_retry_should_succeed() {
 
     let response = client.search(search_request()).await.unwrap();
     assert_eq!(response.meta.trace, "retry-trace");
-    assert_eq!(response.data.search.unwrap()[0].title, "Retry Success");
+    assert_eq!(
+        response.data.search.unwrap()[0].title,
+        Some("Retry Success".to_owned())
+    );
 }
 
 #[tokio::test]
@@ -327,4 +336,31 @@ async fn when_custom_user_agent_then_should_send_custom_value() {
         .get("user-agent")
         .expect("user-agent header should be present");
     assert_eq!(user_agent.to_str().unwrap(), "my-custom-agent/1.0");
+}
+
+#[tokio::test]
+async fn when_search_result_has_null_title_then_should_deserialize_as_none() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "meta": { "trace": "null-title-test", "node": "test-node", "ms": 100 },
+            "data": {
+                "search": [
+                    { "url": "https://example.com", "title": null }
+                ]
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    let client = KagiClientBuilder::new()
+        .with_api_key("test-key")
+        .with_base_url(server.uri())
+        .with_retries(0)
+        .build()
+        .unwrap();
+
+    let response = client.search(search_request()).await.unwrap();
+    assert_eq!(response.data.search.unwrap()[0].title, None);
 }

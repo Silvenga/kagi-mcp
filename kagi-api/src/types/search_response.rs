@@ -55,8 +55,9 @@ pub struct SearchData {
 pub struct SearchResult {
     /// The location of the result. This is the direct URL to the resource that matches the query
     pub url: String,
-    /// This is the title of the resource. For HTML documents, it reflects `<title>`. For videos, it is the name that would be displayed on the video site.
-    pub title: String,
+    /// This is the title of the resource. For HTML documents, it reflects `<title>`. For videos, it is the name that would be displayed on the video site. Can be `None` for image results.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// A short summary of the contents of the resource
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
