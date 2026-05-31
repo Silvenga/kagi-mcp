@@ -216,7 +216,7 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(fake_search_response(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: Some("Snippet text".to_owned()),
                 time: Some("2023-01-01".to_owned()),
                 image: None,
@@ -259,7 +259,7 @@ mod tests {
                 data: SearchData {
                     podcast_creator: Some(vec![SearchResult {
                         url: "https://example.com/pc".to_owned(),
-                        title: "Podcast Creator".to_owned(),
+                        title: Some("Podcast Creator".to_owned()),
                         snippet: Some("Top creator".to_owned()),
                         time: Some("2024-06-01".to_owned()),
                         image: None,
@@ -297,7 +297,7 @@ mod tests {
         mock.expect_search().times(1).returning(|_| {
             Ok(fake_search_response(vec![SearchResult {
                 url: "https://example.com".to_owned(),
-                title: "Example".to_owned(),
+                title: Some("Example".to_owned()),
                 snippet: None,
                 time: None,
                 image: None,
@@ -510,7 +510,7 @@ mod tests {
                 data: SearchData {
                     search: Some(vec![SearchResult {
                         url: "https://example.com/s1".to_owned(),
-                        title: "Search 1".to_owned(),
+                        title: Some("Search 1".to_owned()),
                         snippet: None,
                         time: None,
                         image: None,
@@ -518,7 +518,7 @@ mod tests {
                     }]),
                     news: Some(vec![SearchResult {
                         url: "https://example.com/n1".to_owned(),
-                        title: "News 1".to_owned(),
+                        title: Some("News 1".to_owned()),
                         snippet: None,
                         time: None,
                         image: None,
@@ -559,7 +559,7 @@ mod tests {
             Ok(fake_search_response(vec![
                 SearchResult {
                     url: "https://a.com/1".to_owned(),
-                    title: "A1".to_owned(),
+                    title: Some("A1".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,
@@ -567,7 +567,7 @@ mod tests {
                 },
                 SearchResult {
                     url: "https://b.com/1".to_owned(),
-                    title: "B1".to_owned(),
+                    title: Some("B1".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,
@@ -575,7 +575,7 @@ mod tests {
                 },
                 SearchResult {
                     url: "https://a.com/2".to_owned(),
-                    title: "A2".to_owned(),
+                    title: Some("A2".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,
@@ -616,7 +616,7 @@ mod tests {
             Ok(fake_search_response(vec![
                 SearchResult {
                     url: "https://blog.example.com/1".to_owned(),
-                    title: "Blog 1".to_owned(),
+                    title: Some("Blog 1".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,
@@ -624,7 +624,7 @@ mod tests {
                 },
                 SearchResult {
                     url: "https://www.example.com/1".to_owned(),
-                    title: "Main 1".to_owned(),
+                    title: Some("Main 1".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,
@@ -632,7 +632,7 @@ mod tests {
                 },
                 SearchResult {
                     url: "https://blog.example.com/2".to_owned(),
-                    title: "Blog 2".to_owned(),
+                    title: Some("Blog 2".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,
@@ -673,7 +673,7 @@ mod tests {
             Ok(fake_search_response(vec![
                 SearchResult {
                     url: "https://a.com/1".to_owned(),
-                    title: "A1".to_owned(),
+                    title: Some("A1".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,
@@ -681,7 +681,7 @@ mod tests {
                 },
                 SearchResult {
                     url: "https://b.com/1".to_owned(),
-                    title: "B1".to_owned(),
+                    title: Some("B1".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,
@@ -689,7 +689,7 @@ mod tests {
                 },
                 SearchResult {
                     url: "https://c.com/1".to_owned(),
-                    title: "C1".to_owned(),
+                    title: Some("C1".to_owned()),
                     snippet: None,
                     time: None,
                     image: None,

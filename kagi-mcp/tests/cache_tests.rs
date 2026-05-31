@@ -189,7 +189,7 @@ fn fake_search_response(title: &str, snippet: &str) -> SearchResponse {
         data: SearchData {
             search: Some(vec![SearchResult {
                 url: "https://example.com/".into(),
-                title: title.into(),
+                title: Some(title.into()),
                 snippet: Some(snippet.into()),
                 time: None,
                 image: None,

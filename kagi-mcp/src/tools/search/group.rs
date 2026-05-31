@@ -30,7 +30,7 @@ mod tests {
     fn when_props_has_group_id_then_extract_should_return_it() {
         let result = SearchResult {
             url: "https://www.example.com/page".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -46,7 +46,7 @@ mod tests {
     fn when_props_group_id_is_empty_string_then_extract_should_fallback_to_etld1() {
         let result = SearchResult {
             url: "https://www.example.com/page".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -62,7 +62,7 @@ mod tests {
     fn when_props_group_id_is_non_string_then_extract_should_fallback_to_etld1() {
         let result = SearchResult {
             url: "https://www.example.com/page".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -78,7 +78,7 @@ mod tests {
     fn when_props_is_none_then_extract_should_fallback_to_etld1() {
         let result = SearchResult {
             url: "https://www.example.com/page".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -94,7 +94,7 @@ mod tests {
     fn when_url_has_subdomain_then_extract_should_return_etld1() {
         let result = SearchResult {
             url: "https://sub.www.example.com/page".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -110,7 +110,7 @@ mod tests {
     fn when_url_has_no_host_then_extract_should_return_none() {
         let result = SearchResult {
             url: "mailto:user@example.com".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -126,7 +126,7 @@ mod tests {
     fn when_url_is_ip_address_then_extract_should_return_host() {
         let result = SearchResult {
             url: "http://192.0.2.1/index.html".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -142,7 +142,7 @@ mod tests {
     fn when_url_is_ipv6_address_then_extract_should_return_host() {
         let result = SearchResult {
             url: "http://[::1]/index.html".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -158,7 +158,7 @@ mod tests {
     fn when_url_is_malformed_then_extract_should_return_none() {
         let result = SearchResult {
             url: "not-a-valid-url".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -174,7 +174,7 @@ mod tests {
     fn when_two_subdomains_of_same_etld1_then_both_keys_should_be_equal() {
         let result_a = SearchResult {
             url: "https://blog.example.com/post1".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -182,7 +182,7 @@ mod tests {
         };
         let result_b = SearchResult {
             url: "https://www.example.com/post2".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
@@ -200,7 +200,7 @@ mod tests {
     fn when_url_uses_public_suffix_like_co_uk_then_extract_should_handle_correctly() {
         let result = SearchResult {
             url: "https://sub.example.co.uk/page".into(),
-            title: String::new(),
+            title: None,
             snippet: None,
             time: None,
             image: None,
