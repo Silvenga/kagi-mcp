@@ -97,7 +97,7 @@ impl MetricsStore {
         }
     }
 
-    pub async fn increment_extract_cache_hits(&self, count: i64) {
+    pub async fn increment_extract_cache_hits(&self, count: u32) {
         let now = chrono::Utc::now();
         let year = now.year() as u32;
         let month = now.month();
@@ -118,7 +118,7 @@ impl MetricsStore {
         }
     }
 
-    pub async fn increment_extract_failures(&self, count: i64) {
+    pub async fn increment_extract_failures(&self, count: u32) {
         let now = chrono::Utc::now();
         let year = now.year() as u32;
         let month = now.month();
@@ -162,7 +162,7 @@ impl MetricsStore {
         year: u32,
         month: u32,
         day: u32,
-        value: i64,
+        value: u32,
         sql: &'static str,
     ) -> Result<(), MetricsError> {
         let mut conn = self.open_connection().await?;

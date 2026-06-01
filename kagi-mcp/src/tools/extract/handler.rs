@@ -65,7 +65,7 @@ pub async fn extract_handler(
     let cached_count = classified
         .iter()
         .filter(|c| matches!(c, ClassifiedUrl::Cached { .. }))
-        .count() as i64;
+        .count() as u32;
     if cached_count > 0 {
         if let Some(ms) = metrics_store {
             ms.increment_extract_cache_hits(cached_count).await;
@@ -181,7 +181,7 @@ pub async fn extract_handler(
                 .map(|m| m.trim().is_empty())
                 .unwrap_or(true),
         })
-        .count() as i64;
+        .count() as u32;
     if failure_count > 0 {
         if let Some(ms) = metrics_store {
             ms.increment_extract_failures(failure_count).await;

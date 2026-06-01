@@ -12,19 +12,19 @@ struct UsageResultsTemplate {
 
 struct UsageRow {
     day: u32,
-    extract_reqs: i64,
-    search_reqs: i64,
-    cached_extracts: i64,
-    cached_searches: i64,
-    failed_extracts: i64,
+    extract_reqs: u32,
+    search_reqs: u32,
+    cached_extracts: u32,
+    cached_searches: u32,
+    failed_extracts: u32,
 }
 
 struct UsageTotals {
-    extract_reqs: i64,
-    search_reqs: i64,
-    cached_extracts: i64,
-    cached_searches: i64,
-    failed_extracts: i64,
+    extract_reqs: u32,
+    search_reqs: u32,
+    cached_extracts: u32,
+    cached_searches: u32,
+    failed_extracts: u32,
 }
 
 pub fn format_usage_markdown(
