@@ -1,4 +1,5 @@
 use crate::cache::CacheStore;
+use crate::metrics::MetricsStore;
 use crate::tools::extract::batch::extract_batch;
 use crate::tools::extract::errors::kagi_error_to_extract_error;
 use crate::tools::extract::fallback::FallbackRules;
@@ -29,6 +30,7 @@ pub async fn extract_handler(
     extract_timeout: f64,
     cache_store: Option<&CacheStore>,
     fallback_rules: Option<&FallbackRules>,
+    metrics_store: Option<&MetricsStore>,
 ) -> Result<CallToolResult, ErrorData> {
     // Step 1: Pre-validation
     if let Err(e) = validate_extract_pages_count(&params.pages) {
@@ -60,6 +62,16 @@ pub async fn extract_handler(
     // Step 2: Classify
     let classified = classify_urls(&pages, params.cache, cache_store, fallback_rules).await;
 
+    let cached_count = classified
+        .iter()
+        .filter(|c| matches!(c, ClassifiedUrl::Cached { .. }))
+        .count() as i64;
+    if cached_count > 0 {
+        if let Some(ms) = metrics_store {
+            ms.increment_extract_cache_hits(cached_count).await;
+        }
+    }
+
     // Step 3: Extract
     let extract_pages: Vec<ExtractPage> = classified
         .iter()
@@ -73,7 +85,12 @@ pub async fn extract_handler(
         Vec::new()
     } else {
         match extract_batch(client, ctx, extract_timeout, extract_pages).await {
-            Ok(results) => results,
+            Ok(results) => {
+                if let Some(ms) = metrics_store {
+                    ms.increment_extract_request().await;
+                }
+                results
+            }
             Err(ExtractFatalError::Cancelled) => {
                 return Err(ErrorData::new(ErrorCode(-32800), "Cancelled", None));
             }
@@ -155,6 +172,22 @@ pub async fn extract_handler(
         }
     }
 
+    let failure_count = merged_results
+        .iter()
+        .filter(|r| match r {
+            ExtractUrlResult::Err { .. } => true,
+            ExtractUrlResult::Ok { markdown, .. } => markdown
+                .as_ref()
+                .map(|m| m.trim().is_empty())
+                .unwrap_or(true),
+        })
+        .count() as i64;
+    if failure_count > 0 {
+        if let Some(ms) = metrics_store {
+            ms.increment_extract_failures(failure_count).await;
+        }
+    }
+
     tracing::info!(
         url_count,
         elapsed_ms = start.elapsed().as_millis(),
@@ -172,6 +205,7 @@ mod tests {
     use crate::cache::{ExtractCacheKey, ExtractCachedResult};
     use crate::config::FallbackRule;
     use crate::tools::output_format::OutputFormat;
+    use chrono::Datelike;
     use kagi_api::{ExtractData, ExtractError, Meta};
     use kagi_api::{ExtractResponse, MockKagiApi};
     use rmcp::model::ErrorCode;
@@ -204,7 +238,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -225,7 +259,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -259,7 +293,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -294,7 +328,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -313,7 +347,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(mock, params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(mock, params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -335,7 +369,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -367,7 +401,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -401,7 +435,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None, None).await;
         assert!(result.is_ok());
     }
 
@@ -450,7 +484,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -478,7 +512,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -528,7 +563,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -566,6 +602,7 @@ mod tests {
             10.0,
             Some(&store),
             Some(&rules),
+            None,
         )
         .await;
 
@@ -615,7 +652,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -656,7 +694,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -697,7 +736,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -738,7 +778,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -773,7 +814,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -823,6 +864,7 @@ mod tests {
             10.0,
             Some(&store),
             Some(&rules),
+            None,
         )
         .await;
 
@@ -853,7 +895,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -906,7 +949,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -963,7 +1007,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1022,7 +1067,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules)).await;
+        let result =
+            extract_handler(Arc::new(mock), params, &ctx, 10.0, None, Some(&rules), None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -1065,6 +1111,7 @@ mod tests {
             10.0,
             Some(&store),
             Some(&rules),
+            None,
         )
         .await;
 
@@ -1112,12 +1159,187 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None).await;
+        let result = extract_handler(Arc::new(mock), params, &ctx, 10.0, None, None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert!(text.contains("https://fail.com"));
         assert!(text.contains("Request timed out after 10s"));
+    }
+
+    #[tokio::test]
+    async fn when_extract_api_called_then_total_extract_requests_increments() {
+        let metrics = MetricsStore::open_in_memory().await.unwrap();
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![
+                    ExtractData {
+                        url: "https://a.com/".to_owned(),
+                        markdown: Some("A".to_owned()),
+                        error: None,
+                    },
+                    ExtractData {
+                        url: "https://b.com/".to_owned(),
+                        markdown: Some("B".to_owned()),
+                        error: None,
+                    },
+                    ExtractData {
+                        url: "https://c.com/".to_owned(),
+                        markdown: Some("C".to_owned()),
+                        error: None,
+                    },
+                ]),
+                errors: None,
+            })
+        });
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://a.com".to_owned(),
+                "https://b.com".to_owned(),
+                "https://c.com".to_owned(),
+            ],
+            output_format: OutputFormat::Markdown,
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            None,
+            None,
+            Some(&metrics),
+        )
+        .await;
+
+        assert!(result.is_ok());
+
+        let now = chrono::Utc::now();
+        let daily = metrics
+            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .await
+            .unwrap();
+        assert_eq!(daily.len(), 1);
+        assert_eq!(daily[0].total_extract_requests, 1);
+    }
+
+    #[tokio::test]
+    async fn when_extract_urls_from_cache_then_total_extract_urls_from_cache_increments() {
+        let metrics = MetricsStore::open_in_memory().await.unwrap();
+        let store = CacheStore::open_in_memory().await.expect("cache");
+
+        let cached_result = ExtractCachedResult {
+            data: ExtractData {
+                url: "https://cached.com/".to_owned(),
+                markdown: Some("cached content".to_owned()),
+                error: None,
+            },
+        };
+        let cache_key = ExtractCacheKey {
+            url: "https://cached.com/".to_owned(),
+        };
+        store
+            .set_extract_result(&cache_key, &cached_result)
+            .await
+            .unwrap();
+
+        let mock = MockKagiApi::new();
+
+        let params = ExtractParams {
+            pages: vec!["https://cached.com".to_owned()],
+            output_format: OutputFormat::Markdown,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            Some(&store),
+            None,
+            Some(&metrics),
+        )
+        .await;
+
+        assert!(result.is_ok());
+
+        let now = chrono::Utc::now();
+        let daily = metrics
+            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .await
+            .unwrap();
+        assert_eq!(daily.len(), 1);
+        assert_eq!(daily[0].total_extract_urls_from_cache, 1);
+    }
+
+    #[tokio::test]
+    async fn when_extract_fails_then_failed_extract_urls_increments() {
+        let metrics = MetricsStore::open_in_memory().await.unwrap();
+        let mut mock = MockKagiApi::new();
+        mock.expect_extract().times(1).returning(|_| {
+            Ok(ExtractResponse {
+                meta: Meta {
+                    trace: "test".to_owned(),
+                    node: None,
+                    ms: None,
+                },
+                data: Some(vec![
+                    ExtractData {
+                        url: "https://fail.com".to_owned(),
+                        markdown: None,
+                        error: Some("timeout".to_owned()),
+                    },
+                    ExtractData {
+                        url: "https://empty.com".to_owned(),
+                        markdown: Some("".to_owned()),
+                        error: None,
+                    },
+                ]),
+                errors: None,
+            })
+        });
+
+        let params = ExtractParams {
+            pages: vec![
+                "https://fail.com".to_owned(),
+                "https://empty.com".to_owned(),
+            ],
+            output_format: OutputFormat::Markdown,
+            cache: false,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = extract_handler(
+            Arc::new(mock),
+            params,
+            &ctx,
+            10.0,
+            None,
+            None,
+            Some(&metrics),
+        )
+        .await;
+
+        assert!(result.is_ok());
+
+        let now = chrono::Utc::now();
+        let daily = metrics
+            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .await
+            .unwrap();
+        assert_eq!(daily.len(), 1);
+        assert_eq!(daily[0].failed_extract_urls, 2);
     }
 
     pub async fn fake_request_context() -> RequestContext<RoleServer> {

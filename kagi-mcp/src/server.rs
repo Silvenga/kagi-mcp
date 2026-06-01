@@ -1,6 +1,8 @@
 use crate::cache::CacheStore;
+use crate::metrics::MetricsStore;
 use crate::tools::extract::{extract_handler, ExtractParams, FallbackRules};
 use crate::tools::search::{search_handler, SearchConfig, SearchParams};
+use crate::tools::usage::{usage_handler, UsageParams};
 use kagi_api::{KagiApi, KagiClient};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
@@ -23,6 +25,7 @@ pub struct KagiMcpServer {
     pub safe_search: bool,
     pub region: Option<String>,
     pub cache_store: Option<Arc<CacheStore>>,
+    pub metrics_store: Option<Arc<MetricsStore>>,
     pub fallback_rules: Option<FallbackRules>,
 }
 
@@ -37,6 +40,7 @@ impl KagiMcpServer {
             safe_search: DEFAULT_SAFE_SEARCH,
             region: None,
             cache_store: None,
+            metrics_store: None,
             fallback_rules: None,
         }
     }
@@ -77,6 +81,12 @@ impl KagiMcpServer {
         self
     }
 
+    /// Set the metrics store.
+    pub fn with_metrics_store(mut self, metrics_store: Option<Arc<MetricsStore>>) -> Self {
+        self.metrics_store = metrics_store;
+        self
+    }
+
     /// Set the fallback rules.
     pub fn with_fallback_rules(mut self, fallback_rules: Option<FallbackRules>) -> Self {
         self.fallback_rules = fallback_rules;
@@ -93,6 +103,7 @@ impl KagiMcpServer {
             safe_search: DEFAULT_SAFE_SEARCH,
             region: None,
             cache_store: None,
+            metrics_store: None,
             fallback_rules: None,
         }
     }
@@ -120,6 +131,7 @@ impl KagiMcpServer {
             &ctx,
             &config,
             self.cache_store.as_deref(),
+            self.metrics_store.as_deref(),
         )
         .await
     }
@@ -137,8 +149,19 @@ impl KagiMcpServer {
             self.extract_timeout,
             self.cache_store.as_deref(),
             self.fallback_rules.as_ref(),
+            self.metrics_store.as_deref(),
         )
         .await
+    }
+
+    #[tool(
+        description = "View usage metrics for API requests, cache hits, and extraction failures. Returns a markdown table with per-day breakdown."
+    )]
+    async fn usage(
+        &self,
+        Parameters(params): Parameters<UsageParams>,
+    ) -> Result<CallToolResult, McpError> {
+        usage_handler(self.metrics_store.as_deref(), params).await
     }
 }
 

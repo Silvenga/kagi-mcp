@@ -43,10 +43,14 @@ async fn when_list_tools_then_returns_search_and_extract() {
         names.contains(&"extract"),
         "tools should contain 'extract', got: {names:?}"
     );
+    assert!(
+        names.contains(&"usage"),
+        "tools should contain 'usage', got: {names:?}"
+    );
     assert_eq!(
         tools.tools.len(),
-        2,
-        "expected exactly 2 tools, got: {names:?}"
+        3,
+        "expected exactly 3 tools, got: {names:?}"
     );
 
     harness.cleanup().await;
@@ -360,6 +364,29 @@ async fn when_extract_fails_transiently_then_retries_and_succeeds() {
     let text = result.content[0].as_text().unwrap().text.clone();
     assert!(text.contains("https://www.rust-lang.org"));
     assert!(text.contains("Performance"));
+
+    harness.cleanup().await;
+}
+
+#[tokio::test]
+async fn when_usage_tool_called_then_should_return_markdown_table() {
+    let mock_server = MockServer::start().await;
+    let harness = spawn_server(&mock_server.uri(), &[]).await;
+
+    let arguments = json!({"month": "2024-01"}).as_object().unwrap().clone();
+    let params = CallToolRequestParams::new("usage").with_arguments(arguments);
+
+    let result = harness
+        .running
+        .peer()
+        .call_tool(params)
+        .await
+        .expect("usage call_tool should succeed");
+
+    let text = result.content[0].as_text().unwrap().text.clone();
+    assert!(text.contains("Usage for 2024-01"));
+    assert!(text.contains("| Day |"));
+    assert!(text.contains("|-----|"));
 
     harness.cleanup().await;
 }

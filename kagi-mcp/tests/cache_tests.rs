@@ -124,7 +124,15 @@ async fn when_cache_hit_then_api_should_not_be_called() {
         cache: true,
     };
 
-    let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), Some(&store)).await;
+    let result = search_handler(
+        &mock,
+        params,
+        &ctx,
+        &SearchConfig::default(),
+        Some(&store),
+        None,
+    )
+    .await;
 
     assert!(result.is_ok());
     let text = result.unwrap().content[0].as_text().unwrap().text.clone();

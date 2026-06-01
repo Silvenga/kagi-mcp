@@ -1,5 +1,6 @@
 use crate::cache::{CacheError, CacheStore, SearchCacheKey, SearchCachedResult};
 use crate::format::{format_json, format_search_markdown};
+use crate::metrics::MetricsStore;
 use crate::tools::errors::map_kagi_error;
 use crate::tools::output_format::OutputFormat;
 use crate::tools::progress::send_progress;
@@ -38,6 +39,7 @@ pub async fn search_handler(
     ctx: &RequestContext<RoleServer>,
     config: &SearchConfig,
     cache_store: Option<&CacheStore>,
+    metrics_store: Option<&MetricsStore>,
 ) -> Result<CallToolResult, ErrorData> {
     validate_date(&params.after, "after")?;
     validate_date(&params.before, "before")?;
@@ -75,6 +77,10 @@ pub async fn search_handler(
             let key = SearchCacheKey::from_request(&request);
             if let Some(mut cached_response) = store.get_search_result(&key).await {
                 tracing::info!(query = %params.query, cache_hit = true, "search completed from cache");
+                if let Some(ms) = metrics_store {
+                    ms.increment_search_request().await;
+                    ms.increment_search_cache_hit().await;
+                }
                 let lpd = params.limit_per_domain.unwrap_or(u32::MAX);
                 dedup_by_domain(&mut cached_response.response.data, lpd, config.limit);
                 let content = if params.output_format == OutputFormat::Json {
@@ -117,6 +123,9 @@ pub async fn search_handler(
 
     match result {
         Ok(mut response) => {
+            if let Some(ms) = metrics_store {
+                ms.increment_search_request().await;
+            }
             if let Some(store) = cache_store {
                 let key = SearchCacheKey::from_request(&request);
                 let cached_result = SearchCachedResult {
@@ -187,7 +196,9 @@ fn build_filters(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::CacheStore;
     use crate::server::KagiMcpServer;
+    use chrono::Datelike;
     use kagi_api::MockKagiApi;
     use kagi_api::{KagiError, Meta, SearchData, SearchResponse, SearchResult};
     use rmcp::model::{ClientInfo, RequestId};
@@ -235,7 +246,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
 
         assert!(result.is_ok());
         let content = result.unwrap().content;
@@ -281,7 +293,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -316,7 +329,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -349,7 +363,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
 
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
@@ -374,7 +389,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -400,7 +416,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -427,7 +444,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -455,7 +473,8 @@ mod tests {
         let ctx = fake_request_context().await;
         ctx.ct.cancel();
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -493,7 +512,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
+        let result = search_handler(&mock, params, &ctx, &config, None, None).await;
         assert!(result.is_ok());
     }
 
@@ -544,7 +563,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
+        let result = search_handler(&mock, params, &ctx, &config, None, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -599,7 +618,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
+        let result = search_handler(&mock, params, &ctx, &config, None, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -656,7 +675,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
+        let result = search_handler(&mock, params, &ctx, &config, None, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -715,7 +734,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
+        let result = search_handler(&mock, params, &ctx, &config, None, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -754,7 +773,7 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &config, None).await;
+        let result = search_handler(&mock, params, &ctx, &config, None, None).await;
         assert!(result.is_ok());
         let text = result.unwrap().content[0].as_text().unwrap().text.clone();
         assert_eq!(text, "No results found.");
@@ -781,7 +800,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
         assert!(result.is_ok());
     }
 
@@ -806,7 +826,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
         assert!(result.is_ok());
     }
 
@@ -825,7 +846,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
@@ -849,7 +871,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
@@ -870,7 +893,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
@@ -891,7 +915,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
@@ -912,7 +937,8 @@ mod tests {
         };
         let ctx = fake_request_context().await;
 
-        let result = search_handler(&mock, params, &ctx, &SearchConfig::default(), None).await;
+        let result =
+            search_handler(&mock, params, &ctx, &SearchConfig::default(), None, None).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, ErrorCode::INVALID_PARAMS);
@@ -957,5 +983,112 @@ mod tests {
             listicle: None,
             web_archive: None,
         }
+    }
+
+    #[tokio::test]
+    async fn when_search_api_called_then_total_search_requests_increments() {
+        let mut mock = MockKagiApi::new();
+        mock.expect_search().times(1).returning(|_| {
+            Ok(fake_search_response(vec![SearchResult {
+                url: "https://example.com".to_owned(),
+                title: Some("Example".to_owned()),
+                snippet: Some("Snippet text".to_owned()),
+                time: Some("2023-01-01".to_owned()),
+                image: None,
+                props: None,
+            }]))
+        });
+
+        let metrics = MetricsStore::open_in_memory().await.unwrap();
+
+        let params = SearchParams {
+            query: "test query".to_owned(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: OutputFormat::Markdown,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(
+            &mock,
+            params,
+            &ctx,
+            &SearchConfig::default(),
+            None,
+            Some(&metrics),
+        )
+        .await;
+
+        assert!(result.is_ok());
+
+        let now = chrono::Utc::now();
+        let monthly = metrics
+            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .await
+            .unwrap();
+        assert_eq!(monthly.len(), 1);
+        assert_eq!(monthly[0].total_search_requests, 1);
+        assert_eq!(monthly[0].total_search_requests_from_cache, 0);
+    }
+
+    #[tokio::test]
+    async fn when_search_served_from_cache_then_total_search_requests_from_cache_increments() {
+        let cache = CacheStore::open_in_memory().await.unwrap();
+        let metrics = MetricsStore::open_in_memory().await.unwrap();
+
+        let response = fake_search_response(vec![SearchResult {
+            url: "https://example.com".to_owned(),
+            title: Some("Cached Example".to_owned()),
+            snippet: Some("Cached snippet".to_owned()),
+            time: Some("2023-01-01".to_owned()),
+            image: None,
+            props: None,
+        }]);
+
+        let request = SearchRequest::new("test query".to_owned())
+            .with_format("json".to_owned())
+            .with_timeout_seconds(4.0)
+            .with_limit(1024)
+            .with_safe_search(true);
+        let key = SearchCacheKey::from_request(&request);
+        cache
+            .set_search_result(&key, &SearchCachedResult { response })
+            .await
+            .unwrap();
+
+        let params = SearchParams {
+            query: "test query".to_owned(),
+            workflow: None,
+            after: None,
+            before: None,
+            output_format: OutputFormat::Markdown,
+            limit_per_domain: None,
+            cache: true,
+        };
+        let ctx = fake_request_context().await;
+
+        let result = search_handler(
+            &MockKagiApi::new(),
+            params,
+            &ctx,
+            &SearchConfig::default(),
+            Some(&cache),
+            Some(&metrics),
+        )
+        .await;
+
+        assert!(result.is_ok());
+
+        let now = chrono::Utc::now();
+        let monthly = metrics
+            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .await
+            .unwrap();
+        assert_eq!(monthly.len(), 1);
+        assert_eq!(monthly[0].total_search_requests, 1);
+        assert_eq!(monthly[0].total_search_requests_from_cache, 1);
     }
 }
