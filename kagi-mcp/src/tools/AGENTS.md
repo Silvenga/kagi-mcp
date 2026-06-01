@@ -10,6 +10,7 @@ MCP tool handlers: `search` and `extract`. Each tool has its own AGENTS.md.
 |------------|---------------------|
 | `search/`  | `search/AGENTS.md`  |
 | `extract/` | `extract/AGENTS.md` |
+| `usage/`   | `usage/AGENTS.md`   |
 
 ## SHARED HELPERS
 

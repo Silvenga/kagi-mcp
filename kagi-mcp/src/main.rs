@@ -1,11 +1,13 @@
 mod cache;
 mod config;
 mod format;
+mod metrics;
 mod server;
 mod tools;
 
 use crate::cache::CacheStore;
 use crate::config::{Config, TransportMode};
+use crate::metrics::MetricsStore;
 use crate::tools::extract::FallbackRules;
 use axum::Router;
 use clap::Parser;
@@ -72,6 +74,11 @@ async fn main() -> anyhow::Result<()> {
             })?,
     );
 
+    let metrics_store = Arc::new(MetricsStore::new(&cache_dir).await.map_err(|e| {
+        tracing::error!(error = %e, "failed to initialize metrics store");
+        anyhow::anyhow!("failed to initialize metrics: {e}")
+    })?);
+
     let server = KagiMcpServer::new(client)
         .with_search_timeout(config.search_timeout)
         .with_extract_timeout(config.extract_timeout)
@@ -79,6 +86,7 @@ async fn main() -> anyhow::Result<()> {
         .with_safe_search(config.safe_search)
         .with_region(config.region)
         .with_cache_store(Some(cache_store))
+        .with_metrics_store(Some(metrics_store))
         .with_fallback_rules(fallback_rules);
 
     match config.transport {

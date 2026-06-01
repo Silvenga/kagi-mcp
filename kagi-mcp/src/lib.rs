@@ -6,6 +6,7 @@
 
 pub mod cache;
 pub mod logging;
+pub mod metrics;
 pub mod tools;
 
 mod config;
