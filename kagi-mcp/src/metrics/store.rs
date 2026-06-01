@@ -1,5 +1,3 @@
-#[cfg(test)]
-use crate::cache::CacheStore;
 use crate::metrics::{DailyMetrics, MetricsError};
 use chrono::Datelike;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
@@ -25,6 +23,8 @@ impl MetricsStore {
 
     #[cfg(test)]
     pub async fn open_in_memory() -> Result<Self, MetricsError> {
+        use crate::cache::CacheStore;
+
         let tmp = Box::leak(Box::new(tempfile::tempdir()?));
         let cache_dir = tmp.path().join("cache");
         let _cache_store = CacheStore::new(&cache_dir, 1.0, 1)
@@ -39,9 +39,9 @@ impl MetricsStore {
 
     pub async fn increment_search_request(&self) {
         let now = chrono::Utc::now();
-        let year = now.year() as i64;
-        let month = now.month() as i64;
-        let day = now.day() as i64;
+        let year = now.year() as u32;
+        let month = now.month();
+        let day = now.day();
 
         if let Err(e) = self
             .upsert_counter_literal(
@@ -59,9 +59,9 @@ impl MetricsStore {
 
     pub async fn increment_search_cache_hit(&self) {
         let now = chrono::Utc::now();
-        let year = now.year() as i64;
-        let month = now.month() as i64;
-        let day = now.day() as i64;
+        let year = now.year() as u32;
+        let month = now.month();
+        let day = now.day();
 
         if let Err(e) = self
             .upsert_counter_literal(
@@ -79,9 +79,9 @@ impl MetricsStore {
 
     pub async fn increment_extract_request(&self) {
         let now = chrono::Utc::now();
-        let year = now.year() as i64;
-        let month = now.month() as i64;
-        let day = now.day() as i64;
+        let year = now.year() as u32;
+        let month = now.month();
+        let day = now.day();
 
         if let Err(e) = self
             .upsert_counter_literal(
@@ -99,9 +99,9 @@ impl MetricsStore {
 
     pub async fn increment_extract_cache_hits(&self, count: i64) {
         let now = chrono::Utc::now();
-        let year = now.year() as i64;
-        let month = now.month() as i64;
-        let day = now.day() as i64;
+        let year = now.year() as u32;
+        let month = now.month();
+        let day = now.day();
 
         if let Err(e) = self
             .upsert_counter_literal_with_bind(
@@ -120,9 +120,9 @@ impl MetricsStore {
 
     pub async fn increment_extract_failures(&self, count: i64) {
         let now = chrono::Utc::now();
-        let year = now.year() as i64;
-        let month = now.month() as i64;
-        let day = now.day() as i64;
+        let year = now.year() as u32;
+        let month = now.month();
+        let day = now.day();
 
         if let Err(e) = self
             .upsert_counter_literal_with_bind(
@@ -141,9 +141,9 @@ impl MetricsStore {
 
     async fn upsert_counter_literal(
         &self,
-        year: i64,
-        month: i64,
-        day: i64,
+        year: u32,
+        month: u32,
+        day: u32,
         sql: &'static str,
     ) -> Result<(), MetricsError> {
         let mut conn = self.open_connection().await?;
@@ -159,9 +159,9 @@ impl MetricsStore {
 
     async fn upsert_counter_literal_with_bind(
         &self,
-        year: i64,
-        month: i64,
-        day: i64,
+        year: u32,
+        month: u32,
+        day: u32,
         value: i64,
         sql: &'static str,
     ) -> Result<(), MetricsError> {
@@ -180,8 +180,8 @@ impl MetricsStore {
 
     pub async fn get_monthly_metrics(
         &self,
-        year: i64,
-        month: i64,
+        year: u32,
+        month: u32,
     ) -> Result<Vec<DailyMetrics>, MetricsError> {
         let mut conn = self.open_connection().await?;
         let rows: Vec<DailyMetrics> = sqlx::query_as(
@@ -210,7 +210,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let metrics = store
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(metrics.len(), 1);
@@ -225,7 +225,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let metrics = store
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(metrics.len(), 1);
@@ -240,7 +240,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let metrics = store
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(metrics.len(), 1);
@@ -255,7 +255,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let metrics = store
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(metrics.len(), 1);
@@ -270,7 +270,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let metrics = store
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(metrics.len(), 1);
@@ -286,7 +286,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let metrics = store
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(metrics.len(), 1);
@@ -302,7 +302,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let metrics = store
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(metrics.len(), 1);
@@ -330,7 +330,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let metrics = store
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(metrics.len(), 1);

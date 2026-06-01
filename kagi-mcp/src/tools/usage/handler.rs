@@ -20,10 +20,10 @@ pub async fn usage_handler(
         }
         let parts: Vec<&str> = month_str.split('-').collect();
         let year = parts[0]
-            .parse::<i64>()
+            .parse::<u32>()
             .map_err(|_| ErrorData::invalid_params("Invalid year in month", None))?;
         let month = parts[1]
-            .parse::<i64>()
+            .parse::<u32>()
             .map_err(|_| ErrorData::invalid_params("Invalid month in month", None))?;
         if !(1..=12).contains(&month) {
             return Err(ErrorData::invalid_params(
@@ -34,7 +34,7 @@ pub async fn usage_handler(
         (year, month)
     } else {
         let now = chrono::Utc::now();
-        (now.year() as i64, now.month() as i64)
+        (now.year() as u32, now.month())
     };
 
     let metrics_store = match metrics_store {

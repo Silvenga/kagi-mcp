@@ -11,7 +11,7 @@ struct UsageResultsTemplate {
 }
 
 struct UsageRow {
-    day: i64,
+    day: u32,
     extract_reqs: i64,
     search_reqs: i64,
     cached_extracts: i64,
@@ -42,7 +42,7 @@ pub fn format_usage_markdown(
     };
 
     for day in 1..=days_in_month {
-        let metrics = daily.iter().find(|m| m.day == day as i64);
+        let metrics = daily.iter().find(|m| m.day == day);
         let row = if let Some(m) = metrics {
             totals.extract_reqs += m.total_extract_requests;
             totals.search_reqs += m.total_search_requests;
@@ -50,7 +50,7 @@ pub fn format_usage_markdown(
             totals.cached_searches += m.total_search_requests_from_cache;
             totals.failed_extracts += m.failed_extract_urls;
             UsageRow {
-                day: day as i64,
+                day,
                 extract_reqs: m.total_extract_requests,
                 search_reqs: m.total_search_requests,
                 cached_extracts: m.total_extract_urls_from_cache,
@@ -59,7 +59,7 @@ pub fn format_usage_markdown(
             }
         } else {
             UsageRow {
-                day: day as i64,
+                day,
                 extract_reqs: 0,
                 search_reqs: 0,
                 cached_extracts: 0,

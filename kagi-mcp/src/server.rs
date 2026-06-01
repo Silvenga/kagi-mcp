@@ -155,7 +155,7 @@ impl KagiMcpServer {
     }
 
     #[tool(
-        description = "View usage metrics for API requests, cache hits, and extraction failures. Returns a markdown table with per-day breakdown."
+        description = "View usage metrics for API requests, cache hits, and extraction failures."
     )]
     async fn usage(
         &self,

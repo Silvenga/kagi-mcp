@@ -1026,7 +1026,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let monthly = metrics
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(monthly.len(), 1);
@@ -1084,7 +1084,7 @@ mod tests {
 
         let now = chrono::Utc::now();
         let monthly = metrics
-            .get_monthly_metrics(now.year() as i64, now.month() as i64)
+            .get_monthly_metrics(now.year() as u32, now.month())
             .await
             .unwrap();
         assert_eq!(monthly.len(), 1);
