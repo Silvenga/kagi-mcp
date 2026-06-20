@@ -51,7 +51,8 @@ impl KagiError {
         let message = body
             .as_ref()
             .map(|b| b.format_message())
-            .unwrap_or_default();
+            .filter(|m| !m.is_empty())
+            .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
 
         match status {
             StatusCode::BAD_REQUEST => Self::InvalidRequest { message },
@@ -135,12 +136,23 @@ mod tests {
     }
 
     #[test]
+    fn when_http_400_with_no_body_then_should_include_status_code() {
+        let err = KagiError::from_http_status(StatusCode::BAD_REQUEST, None);
+        assert!(
+            matches!(err, KagiError::InvalidRequest { .. }),
+            "expected InvalidRequest, got {err}"
+        );
+        assert_eq!(err.to_string(), "invalid request: HTTP 400");
+    }
+
+    #[test]
     fn when_http_418_then_api_variant_should_return() {
         let err = KagiError::from_http_status(StatusCode::IM_A_TEAPOT, None);
         assert!(
             matches!(err, KagiError::Api { status: 418, .. }),
             "expected Api(418), got {err}"
         );
+        assert_eq!(err.to_string(), "API error (HTTP 418): HTTP 418");
     }
 
     #[tokio::test]
