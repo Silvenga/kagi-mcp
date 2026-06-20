@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.3.0...kagi-mcp-v0.4.0) (2026-06-20)
+
+
+### Features
+
+* **usage:** add usage metrics tool with MetricsStore ([#73](https://github.com/Silvenga/kagi-mcp/issues/73)) ([d012116](https://github.com/Silvenga/kagi-mcp/commit/d012116637c13a01a600c76d326418a6ddeacbff))
+
 ## [0.3.0](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.2.2...kagi-mcp-v0.3.0) (2026-05-31)
 
 
