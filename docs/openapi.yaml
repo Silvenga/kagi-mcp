@@ -1543,7 +1543,7 @@ components:
               summary: Response with unauthorized error
               value:
                 meta:
-                  id: 69c3f5c4168f66b860e951c585550f1c
+                  trace: 69c3f5c4168f66b860e951c585550f1c
                   node: us-central1
                   ms: 213
                 data: null
