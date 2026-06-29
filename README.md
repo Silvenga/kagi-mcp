@@ -10,6 +10,10 @@ An MCP (Model Context Protocol) server for the [Kagi Search API](https://kagi.co
 - MCP Featureful: Supports MCP features like cancellation and notifications.
 - Robust: Automatic retries, automatic truncation of long responses, and graceful error handling.
 
+## Agent Skill
+
+A complementary agent skill is included at [`.agents/skills/kagi/SKILL.md`](.agents/skills/kagi/SKILL.md), designed to help AI agents use this MCP server efficiently. It teaches cost-aware search behavior (search budgeting, serialized queries, batched extraction) and documents all Kagi search operators and extract failure modes. Install it by copying the `.agents/skills/kagi/` directory into your project's `.agents/skills/` or `~/.config/opencode/skills/`.
+
 ## Installation
 
 Linux and Windows binaries can be downloaded from [releases](https://github.com/Silvenga/kagi-mcp/releases).
