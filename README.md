@@ -10,10 +10,6 @@ An MCP (Model Context Protocol) server for the [Kagi Search API](https://kagi.co
 - MCP Featureful: Supports MCP features like cancellation and notifications.
 - Robust: Automatic retries, automatic truncation of long responses, and graceful error handling.
 
-## Agent Skill
-
-A complementary agent skill is included at [`.agents/skills/kagi/SKILL.md`](.agents/skills/kagi/SKILL.md), designed to help AI agents use this MCP server efficiently. It teaches cost-aware search behavior (search budgeting, serialized queries, batched extraction) and documents all Kagi search operators and extract failure modes. Install it by copying the `.agents/skills/kagi/` directory into your project's `.agents/skills/` or `~/.config/opencode/skills/`.
-
 ## Installation
 
 Linux and Windows binaries can be downloaded from [releases](https://github.com/Silvenga/kagi-mcp/releases).
@@ -46,6 +42,21 @@ And building from source is always possible:
 ```bash
 cargo install --git https://github.com/Silvenga/kagi-mcp.git
 ```
+
+### Agent Skill
+
+An optimized skill to instruct an agent on the ideal use of Kagi. It teaches cost-aware search behavior (search
+budgeting, serialized queries, batched extraction) and documents all Kagi search operators and failure modes. Install it
+by copying the `.agents/skills/kagi/` directory into your `~/.agents/skills/` directory.
+
+Or better (supports common agents):
+
+```bash
+npx skills add --global Silvenga/kagi-mcp --skill kagi
+```
+
+Tested on GLM 5.2 and Deepseek V4 Pro, but I would suspect success with Kimi, Claude, and GPT models. I just haven't had
+success with Gemini 3.1 Pro tool calling.
 
 ## Usage
 
@@ -134,6 +145,15 @@ Extract clean Markdown content from URLs.
 - `output_format` - `markdown` (default) or `json`
 - `cache` - Whether to use cached results. Default: `true`.
 
+### `usage`
+
+View usage metrics for API requests, cache hits, and extraction failures. Returns a per-day Markdown table for the
+queried month with a total row.
+
+**Parameters:**
+
+- `month` - Month to query (format: `YYYY-MM`). Defaults to the current month.
+
 ## Additional Metadata in Markdown Output
 
 When using the default Markdown output, the server enriches results with additional metadata to help LLMs interpret the
@@ -188,8 +208,3 @@ kagi-mcp
 
 Domains are matched using eTLD+1 (registrable domain) extraction. Subdomains are automatically resolved to their
 registrable domain (e.g., `www.github.com` matches `github.com`). Matching is case-insensitive.
-
-## Known Issues
-
-- The Kagi Extract API uses a cumulative timeout, not per-page. If the cumulative timeout is exceeded during a
-  multipage extraction, a blank result may be returned. This has been reported to Kagi.
