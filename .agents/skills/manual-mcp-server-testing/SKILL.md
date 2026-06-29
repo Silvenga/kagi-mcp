@@ -1,9 +1,12 @@
 ---
 name: manual-mcp-server-testing
-description: Manually test an MCP server binary end-to-end using the official MCP Inspector CLI against a live API. Covers token handling, release builds, and comprehensive tool verification.
+description: >
+  Manually test an MCP server binary end-to-end using the official MCP Inspector CLI against a live API. 
+  Covers token handling, release builds, and comprehensive tool verification.
 ---
 
-End-to-end manual QA of an MCP server binary using the official `@modelcontextprotocol/inspector` CLI tool against a live API.
+End-to-end manual QA of an MCP server binary using the official `@modelcontextprotocol/inspector` CLI tool against a
+live API.
 
 ## Pre-Flight Checklist
 
@@ -24,18 +27,24 @@ Before running any commands, confirm:
 
 Prompt the user with something like:
 
-> "To run end-to-end tests against the live API, I need an API token. Please paste a temporary token. I will not write it to disk or commit it."
+> "To run end-to-end tests against the live API, I need an API token. Please paste a temporary token. I will not write
+> it to disk or commit it."
 
 When the user provides the token:
 
 - **Only pass it via the `-e` flag** to the inspector process (environment variable injection).
 - **Never write it to a file.** Do not save it to `.env`, config files, or scripts.
 - **Never include it in commit messages, logs, or skill artifacts.**
-- If you need it in multiple commands, ask the user again rather than persisting it.
+
+## Step 2: Load the Kagi Skill
+
+Load the Kagi skill, both to review it for correctness and to understand how to use the Kagi tools.
+
+If you are unable to load a Kagi skill, don't have a tool to load the Kagi skill, tell the user, and do not proceed.
 
 ## Phase 2: Build the Release Binary
 
-### Step 2: Compile in Release Mode
+### Step 3: Compile in Release Mode
 
 Run the release build for the workspace (or crate):
 
@@ -47,7 +56,7 @@ Confirm the binary exists at the expected path (e.g., `./target/release/<binary-
 
 ## Phase 3: Inspector CLI Basics
 
-### Step 3: Verify the Inspector is Available
+### Step 4: Verify the Inspector is Available
 
 The inspector package does not support `--version`. Use `--cli --help` to confirm the CLI binary is reachable:
 
@@ -55,9 +64,10 @@ The inspector package does not support `--version`. Use `--cli --help` to confir
 npx @modelcontextprotocol/inspector --cli --help
 ```
 
-If this prints usage information, the inspector is installed and ready. If it prompts to install, allow it. Do not use `--version` — it is not a recognized flag and will hang.
+If this prints usage information, the inspector is installed and ready. If it prompts to install, allow it. Do not use
+`--version` — it is not a recognized flag and will hang.
 
-### Step 4: Discover Available Tools
+### Step 5: Discover Available Tools
 
 List the tools the server exposes. This confirms the binary starts and the MCP protocol handshake works.
 
@@ -67,13 +77,15 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
   --method tools/list
 ```
 
-Replace `<ENV_VAR_NAME>` with whatever the server reads (e.g., `KAGI_API_KEY`), and `<path/to/binary>` with the compiled binary path.
+Replace `<ENV_VAR_NAME>` with whatever the server reads (e.g., `KAGI_API_KEY`), and `<path/to/binary>` with the compiled
+binary path.
 
 ### Common CLI Mistakes
 
 **Rule:** Everything before `--` is for the inspector. Everything after `--` is the server command.
 
 **❌ WRONG — Using `--params` (this is not valid inspector syntax):**
+
 ```bash
 npx @modelcontextprotocol/inspector --cli --transport stdio \
   -e KAGI_API_KEY=$TOKEN -- ./target/release/kagi-mcp \
@@ -81,6 +93,7 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
 ```
 
 **❌ WRONG — `-e` after `--` (env vars are inspector flags, not server flags):**
+
 ```bash
 npx @modelcontextprotocol/inspector --cli --transport stdio \
   -- ./target/release/kagi-mcp \
@@ -89,6 +102,7 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
 ```
 
 **✅ CORRECT:**
+
 ```bash
 npx @modelcontextprotocol/inspector --cli --transport stdio \
   -e KAGI_API_KEY=$TOKEN -- ./target/release/kagi-mcp \
@@ -97,16 +111,18 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
 
 ## Phase 4: Configure Test Environment
 
-Before running tests, set up an isolated cache and log directory. This ensures a clean state and lets you verify logging afterward.
+Before running tests, set up an isolated cache and log directory. This ensures a clean state and lets you verify logging
+afterward.
 
-### Step 5: Create a Temporary Directory
+### Step 6: Create a Temporary Directory
 
 ```bash
 TEST_DIR="/tmp/manual-test-$(date +%s)"
 mkdir -p "$TEST_DIR"
 ```
 
-Pass this directory to the server via the cache-dir flag or environment variable. Use the same directory for every inspector invocation in this session.
+Pass this directory to the server via the cache-dir flag or environment variable. Use the same directory for every
+inspector invocation in this session.
 
 ```bash
 npx @modelcontextprotocol/inspector --cli --transport stdio \
@@ -130,8 +146,10 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
 
 Once all tests are complete, inspect the contents of `$TEST_DIR`:
 
-1. **Check that log files exist.** Look for files like `kagi-mcp.log` or dated logs (`kagi-mcp.log.YYYY-MM-DD`) in `$TEST_DIR`.
-2. **Verify the API token does not appear in logs.** Search the log files for the token value or fragments of it. If found, flag as a security issue.
+1. **Check that log files exist.** Look for files like `kagi-mcp.log` or dated logs (`kagi-mcp.log.YYYY-MM-DD`) in
+   `$TEST_DIR`.
+2. **Verify the API token does not appear in logs.** Search the log files for the token value or fragments of it. If
+   found, flag as a security issue.
    ```bash
    grep -r "<token-fragment>" "$TEST_DIR" || echo "Token not found in logs"
    ```
@@ -139,7 +157,8 @@ Once all tests are complete, inspect the contents of `$TEST_DIR`:
    ```bash
    grep -E "ERROR|WARN" "$TEST_DIR"/*.log
    ```
-4. **Confirm expected log entries.** Verify that successful tool calls produced INFO-level entries (e.g., "search started", "extract completed").
+4. **Confirm expected log entries.** Verify that successful tool calls produced INFO-level entries (e.g., "search
+   started", "extract completed").
 
 Record any anomalies in the final report.
 
@@ -152,26 +171,26 @@ For each tool, determine which tests apply by checking its schema:
 ### Decision Tree
 
 1. **Does the tool have required parameters?**
-   - Test: Omit one required parameter → expect error `-32602` (Invalid params).
+    - Test: Omit one required parameter → expect error `-32602` (Invalid params).
 
 2. **Does the tool accept `output_format`?**
-   - Test: Call with `output_format=markdown` → expect markdown content.
-   - Test: Call with `output_format=json` → expect JSON content.
+    - Test: Call with `output_format=markdown` → expect markdown content.
+    - Test: Call with `output_format=json` → expect JSON content.
 
 3. **Does the tool accept URLs or domains?**
-   - Test: Pass `192.168.1.1` or `10.0.0.1` → expect rejection (SSRF guard).
+    - Test: Pass `192.168.1.1` or `10.0.0.1` → expect rejection (SSRF guard).
 
 4. **Does the tool have a `workflow` parameter?**
-   - Test: Each documented workflow value (images, news, videos, podcasts).
+    - Test: Each documented workflow value (images, news, videos, podcasts).
 
 5. **Does the tool accept an array parameter?**
-   - Test: Empty array → expect error.
-   - Test: Single item → expect success.
-   - Test: Maximum allowed items → expect success.
-   - Test: Exceeding maximum → expect error.
+    - Test: Empty array → expect error.
+    - Test: Single item → expect success.
+    - Test: Maximum allowed items → expect success.
+    - Test: Exceeding maximum → expect error.
 
 6. **Happy path**
-   - Test: All required params with valid values → expect success.
+    - Test: All required params with valid values → expect success.
 
 ### Syntax for Calling a Tool
 
@@ -184,21 +203,27 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
   --tool-arg <param2>=<value2>
 ```
 
-**Important:** Use `--tool-arg` for each parameter. For JSON/array values, pass the raw JSON string as the value (e.g., `--tool-arg pages='["https://example.com/"]'`).
+**Important:** Use `--tool-arg` for each parameter. For JSON/array values, pass the raw JSON string as the value (e.g.,
+`--tool-arg pages='["https://example.com/"]'`).
 
 ### Expected Output Patterns
 
 **Success:**
+
 ```json
 {
   "content": [
-    { "type": "text", "text": "..." }
+    {
+      "type": "text",
+      "text": "..."
+    }
   ],
   "isError": false
 }
 ```
 
 **Parameter error:**
+
 ```json
 {
   "error": {
@@ -209,6 +234,7 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
 ```
 
 **Internal error (opaque, indicates a bug):**
+
 ```json
 {
   "error": {
@@ -220,11 +246,13 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
 
 ### Workflow-Specific Tests
 
-Run the workflow-specific tests from the decision tree above. If a workflow returns an unexpected failure, record the exact error in the report. **Do not investigate the root cause.**
+Run the workflow-specific tests from the decision tree above. If a workflow returns an unexpected failure, record the
+exact error in the report. **Do not investigate the root cause.**
 
 ## Phase 6: Report
 
-After running all tests, provide a concise QA summary. **Do not attempt to diagnose or fix failures.** Record them and let the user decide if they want you to investigate.
+After running all tests, provide a concise QA summary. **Do not attempt to diagnose or fix failures.** Record them and
+let the user decide if they want you to investigate.
 
 ```text
 ## QA Report: <server-name> v<version>
@@ -242,12 +270,14 @@ After running all tests, provide a concise QA summary. **Do not attempt to diagn
 
 If any documented feature is broken, mark **NOT READY** and describe the observed behavior.
 
-> **STOP:** Do not proceed to debugging or root cause analysis unless the user explicitly asks for it. They may want to review the failures themselves first.
+> **STOP:** Do not proceed to debugging or root cause analysis unless the user explicitly asks for it. They may want to
+> review the failures themselves first.
 
 ## Escalation Triggers
 
 Stop and ask the user if:
+
 - The inspector CLI itself crashes (not an MCP error from the server).
 - You are tempted to write a bash wrapper script around the inspector.
 - You want to switch from `stdio` to `streamable-http` or `sse` to "work around" a CLI issue.
-- The same test fails 3 times with identical errors — this indicates a real bug, not a transient issue.
+- The same test fails three times with identical errors — this indicates a real bug, not a transient issue.
