@@ -2,7 +2,7 @@ use crate::format::format_usage_markdown;
 use crate::metrics::MetricsStore;
 use crate::tools::usage::UsageParams;
 use chrono::Datelike;
-use rmcp::model::{CallToolResult, Content, ErrorData};
+use rmcp::model::{CallToolResult, ContentBlock, ErrorData};
 
 pub async fn usage_handler(
     metrics_store: Option<&MetricsStore>,
@@ -53,7 +53,7 @@ pub async fn usage_handler(
     let markdown = format_usage_markdown(&month_str, &daily_metrics)
         .map_err(|e| ErrorData::internal_error(format!("Failed to format metrics: {e}"), None))?;
 
-    Ok(CallToolResult::success(vec![Content::text(markdown)]))
+    Ok(CallToolResult::success(vec![ContentBlock::text(markdown)]))
 }
 
 #[cfg(test)]
