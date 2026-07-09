@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.4.0...kagi-mcp-v0.4.1) (2026-07-09)
+
+
+### Bug Fixes
+
+* **deps:** bump rmcp from 1.7.0 to 2.1.0 ([#97](https://github.com/Silvenga/kagi-mcp/issues/97)) ([3375f8a](https://github.com/Silvenga/kagi-mcp/commit/3375f8a792fe082e04cde4e16ae53ffa81e213c2))
+
 ## [0.4.0](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.3.0...kagi-mcp-v0.4.0) (2026-06-20)
 
 
