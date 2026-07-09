@@ -9,7 +9,7 @@ use crate::tools::search::validate_date::validate_date;
 use crate::tools::search::SearchParams;
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use kagi_api::{Filters, KagiApi, KagiError, SearchRequest};
-use rmcp::model::{CallToolResult, Content, ErrorCode, ErrorData};
+use rmcp::model::{CallToolResult, ContentBlock, ErrorCode, ErrorData};
 use rmcp::service::RequestContext;
 use rmcp::RoleServer;
 use std::time::Instant;
@@ -94,7 +94,7 @@ pub async fn search_handler(
                     })?
                 };
                 let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-                return Ok(CallToolResult::success(vec![Content::text(truncated)]));
+                return Ok(CallToolResult::success(vec![ContentBlock::text(truncated)]));
             }
             tracing::debug!(query = %params.query, "cache miss, calling Kagi API");
         }
@@ -157,7 +157,7 @@ pub async fn search_handler(
                 })?
             };
             let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-            Ok(CallToolResult::success(vec![Content::text(truncated)]))
+            Ok(CallToolResult::success(vec![ContentBlock::text(truncated)]))
         }
         Err(e) => {
             match &e {

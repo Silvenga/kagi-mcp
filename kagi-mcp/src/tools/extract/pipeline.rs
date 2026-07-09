@@ -4,7 +4,7 @@ use crate::tools::extract::fallback::{FallbackMatch, FallbackRules};
 use crate::tools::output_format::OutputFormat;
 use crate::tools::truncate::{truncate_response, DEFAULT_MAX_RESPONSE_BYTES};
 use kagi_api::{ExtractData, ExtractError, ExtractPage, ExtractResponse, KagiError};
-use rmcp::model::{CallToolResult, Content, ErrorData};
+use rmcp::model::{CallToolResult, ContentBlock, ErrorData};
 use std::collections::HashSet;
 
 /// The result of extracting a single URL.
@@ -204,7 +204,7 @@ pub fn render_results(
         })?
     };
     let truncated = truncate_response(&content, DEFAULT_MAX_RESPONSE_BYTES);
-    Ok(CallToolResult::success(vec![Content::text(truncated)]))
+    Ok(CallToolResult::success(vec![ContentBlock::text(truncated)]))
 }
 
 #[cfg(test)]
@@ -212,7 +212,7 @@ mod tests {
     use super::*;
     use crate::cache::CacheStore;
     use crate::config::FallbackRule;
-    use rmcp::model::RawContent;
+    use rmcp::model::ContentBlock;
 
     fn make_rule(domain: &str, always_block: bool, message: &str) -> FallbackRule {
         FallbackRule {
@@ -310,8 +310,8 @@ mod tests {
 
         let call_result = render_results(results, Some(&rules), &OutputFormat::Markdown).unwrap();
 
-        let content = match &call_result.content[0].raw {
-            RawContent::Text(t) => t.text.clone(),
+        let content = match &call_result.content[0] {
+            ContentBlock::Text(t) => t.text.clone(),
             _ => panic!("expected text content"),
         };
         assert!(content.contains("use github-mcp"));
@@ -496,8 +496,8 @@ mod tests {
 
         let call_result = render_results(results, None, &OutputFormat::Markdown).unwrap();
 
-        let content = match &call_result.content[0].raw {
-            RawContent::Text(t) => t.text.clone(),
+        let content = match &call_result.content[0] {
+            ContentBlock::Text(t) => t.text.clone(),
             _ => panic!("expected text content"),
         };
         assert!(content.contains("https://example.com"));
@@ -513,8 +513,8 @@ mod tests {
 
         let call_result = render_results(results, None, &OutputFormat::Json).unwrap();
 
-        let content = match &call_result.content[0].raw {
-            RawContent::Text(t) => t.text.clone(),
+        let content = match &call_result.content[0] {
+            ContentBlock::Text(t) => t.text.clone(),
             _ => panic!("expected text content"),
         };
         assert!(content.contains("\"data\""));
@@ -530,8 +530,8 @@ mod tests {
 
         let call_result = render_results(results, Some(&rules), &OutputFormat::Markdown).unwrap();
 
-        let content = match &call_result.content[0].raw {
-            RawContent::Text(t) => t.text.clone(),
+        let content = match &call_result.content[0] {
+            ContentBlock::Text(t) => t.text.clone(),
             _ => panic!("expected text content"),
         };
         assert!(content.contains("real content"));
@@ -557,8 +557,8 @@ mod tests {
 
         let call_result = render_results(results, None, &OutputFormat::Markdown).unwrap();
 
-        let content = match &call_result.content[0].raw {
-            RawContent::Text(t) => t.text.clone(),
+        let content = match &call_result.content[0] {
+            ContentBlock::Text(t) => t.text.clone(),
             _ => panic!("expected text content"),
         };
         assert!(content.contains("https://ok.com"));
@@ -571,8 +571,8 @@ mod tests {
 
         let call_result = render_results(results, None, &OutputFormat::Markdown).unwrap();
 
-        let content = match &call_result.content[0].raw {
-            RawContent::Text(t) => t.text.clone(),
+        let content = match &call_result.content[0] {
+            ContentBlock::Text(t) => t.text.clone(),
             _ => panic!("expected text content"),
         };
         assert!(!content.contains("https://"));
@@ -591,8 +591,8 @@ mod tests {
 
         let call_result = render_results(results, None, &OutputFormat::Markdown).unwrap();
 
-        let content = match &call_result.content[0].raw {
-            RawContent::Text(t) => t.text.clone(),
+        let content = match &call_result.content[0] {
+            ContentBlock::Text(t) => t.text.clone(),
             _ => panic!("expected text content"),
         };
         assert!(content.contains("https://fail.com"));
