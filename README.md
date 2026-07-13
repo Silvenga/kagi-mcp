@@ -40,7 +40,7 @@ docker run -it \
 And building from source is always possible:
 
 ```bash
-cargo install --git https://github.com/Silvenga/kagi-mcp.git
+cargo install --git https://github.com/Silvenga/kagi-mcp.git --locked
 ```
 
 ### Agent Skill
