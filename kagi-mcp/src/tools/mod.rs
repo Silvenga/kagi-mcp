@@ -5,5 +5,6 @@ pub mod search;
 pub mod usage;
 
 mod errors;
+mod param_serde;
 mod progress;
 mod truncate;
