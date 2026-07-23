@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.4.1...kagi-mcp-v0.4.2) (2026-07-23)
+
+
+### Bug Fixes
+
+* **tools:** coerce empty strings to None for optional tool params ([#106](https://github.com/Silvenga/kagi-mcp/issues/106)) ([05716e6](https://github.com/Silvenga/kagi-mcp/commit/05716e6717596a619152fc2b789d547960acb43b))
+
 ## [0.4.1](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.4.0...kagi-mcp-v0.4.1) (2026-07-09)
 
 
