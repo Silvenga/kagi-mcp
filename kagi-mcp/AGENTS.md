@@ -30,6 +30,7 @@ src/
 ## CONVENTIONS
 - Error propagation: `anyhow` at top level, `map_err` to add context
 - Tool params derive `schemars::JsonSchema` for MCP schema
+- All `Option<String>` tool params must use `deserialize_optional_string_non_empty` — GPT models emit `""` for omitted optional params, which is coerced to `None` at the parse boundary.
 - Askama templates in `templates/` for Markdown output
 - Test helpers: `#[cfg(test)] mod tests` at bottom of file, AAA style
 
