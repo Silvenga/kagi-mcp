@@ -8,6 +8,7 @@ metadata:
   author: pbakaus
   version: "1.0.2"
   homepage: https://github.com/pbakaus/agent-reviews
+  internal: true
 ---
 
 Automatically resolve human review comments on the current PR. Fetches unanswered human feedback, evaluates each comment, applies fixes where appropriate, and replies to every comment with the outcome.

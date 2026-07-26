@@ -3,6 +3,8 @@ name: manual-mcp-server-testing
 description: >
   Manually test an MCP server binary end-to-end using the official MCP Inspector CLI against a live API. 
   Covers token handling, release builds, and comprehensive tool verification.
+metadata:
+   internal: true
 ---
 
 End-to-end manual QA of an MCP server binary using the official `@modelcontextprotocol/inspector` CLI tool against a
