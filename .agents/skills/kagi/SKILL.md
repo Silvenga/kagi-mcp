@@ -3,7 +3,7 @@ name: kagi
 description: >
   Use the Kagi search and extract tools to find current web information and read URLs into clean markdown. Load this 
   skill when you need to find current web information or download a web pages from the internet - even if "Kagi" isn't 
-  named. Loading this skill must preempt using the kagi tools.
+  named. Allways load this skill before using a kagi tool.
 license: MIT
 ---
 
@@ -22,18 +22,19 @@ Web search and page extraction via the Kagi tools. Every call bills the User.
 
 - The answer is in context or the local codebase - read those first.
 - Static, well-known knowledge (language syntax, standard library APIs). Don't bill the User to confirm what you already
-  know.
-- You need a file the User pointed you at - download it directly instead of extracting.
+  know and is unlikely to have changed since your knowledge cut-off.
+- You need a file the User pointed you at, or the file is likely to be a non-HTML file - download the file directly
+  instead of extracting.
 
 ## Cost model
 
 Every API request bills the User. Search is priced at 3:1, compared to extract.
 
-- Craft one strong query. Read its full response before searching again - another search without digesting the first is
-  wasted money. Real thinking is required between search calls: analyze the results you got, identify what's still
-  unanswered, then decide whether another search is justified. Multiple searches issued together without reasoning
-  between them multiplies cost without multiplying insight.
-- Extract batches 1–10 URLs per call. Extraction is much cheaper than search, so an extra extract call is a minor cost -
+- Issue one strong search at a time, searching serially. The next search depends on what the previous search returned.
+  Parallel searches prevent maximizing the value of every search.
+- Real thinking is required before each search call: analyze the results you got and identify what's still unanswered.
+  Each search must be justified.
+- Extract batches 1–10 URLs per call. Extraction is cheaper than search, so an extra extract call is a minor cost -
   but batching URLs you already plan to read into one call saves money. Delay extraction until you've gathered the URLs
   you need when practical, but don't avoid extraction entirely just to batch.
 - Caching is on by default; repeat queries are free. Don't disable caching unless the User accepts the cost of
@@ -42,7 +43,7 @@ Every API request bills the User. Search is priced at 3:1, compared to extract.
 ### Search budget
 
 Each task has a search budget. When you hit the limit, you must ask the User before searching further. Classify the task
-into one of three tiers at the start:
+into one of three tiers at the start and notify the user of the tier and your budget:
 
 | Tier     | When to use                                                                        | Budget      |
 |----------|------------------------------------------------------------------------------------|-------------|
@@ -50,8 +51,8 @@ into one of three tiers at the start:
 | Moderate | Comparing options, investigating one system, or a question with a few sub-angles.  | 12 searches |
 | Deep     | Multi-system research, architecture exploration, or a question with many unknowns. | 30 searches |
 
-Re-classify upward only if the task's scope genuinely grows. When you reach the budget, tell the User how many searches
-you've used, what you've found, and ask whether to continue.
+Re-classify upward only if the task's scope genuinely grows. Notify the User when changing your selected tier. When you
+reach the budget, tell the User how many searches you've used, what you've found, and ask whether to continue.
 
 ## Tools
 
@@ -163,13 +164,13 @@ best * ever
 
 1. **Decide if you need to search.** Can context, the codebase, or stable knowledge answer it? If yes, don't.
 2. **Craft one strong query.** Use operators to narrow before broadening.
-3. **Run the search. Read the full response** before considering another search.
+3. **Run the single search query.** Read the full response before considering another search.
 4. **If it didn't answer it, refine the operators** (`site:`, `-exclude`, date window) and search again. A refined query
    beats another unrefined one - but each additional search costs the User, so only continue if the previous response
    shows a refinement would help.
 5. **If you need content from specific result URLs, extract them in one call when practical.** Only extract URLs you'll
    actually use - don't extract just because results were returned. Batch URLs into one call when it's easy to do so,
-   but don't avoid extraction just to batch - extraction is much cheaper than search.
+   but don't avoid extraction just to batch - extraction is cheaper than search.
 6. **Read and synthesize.** If a page came back empty, see below before re-attempting.
 7. **Run `usage` only when the User asks** about spend.
 
@@ -198,6 +199,8 @@ be used there.
 - **Using `output_format: json` unless asked.** Markdown is smaller and optimized for your consumption.
 - **Searching to confirm stable knowledge.** If training data covers it, don't bill the User.
 - **Treating an empty extract as "no content".** It typically means blocked, dead, or non-HTML - tell the User.
+- **Executing parallel searches.** It's expensive and unlikely to yield better results than executing searches one at a
+  time. Execute searches serially - the goal is to maximize the value of every search.
 
 ## Safety
 
