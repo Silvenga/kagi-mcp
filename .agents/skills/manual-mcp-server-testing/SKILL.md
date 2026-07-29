@@ -66,48 +66,68 @@ The inspector package does not support `--version`. Use `--cli --help` to confir
 npx @modelcontextprotocol/inspector --cli --help
 ```
 
-If this prints usage information, the inspector is installed and ready. If it prompts to install, allow it. Do not use
-`--version` — it is not a recognized flag and will hang.
+If this prints usage information, the inspector is installed and ready. If it prompts to install, allow it.
+
+**Do not use `--version`** — it is not a recognized flag and will hang.
+
+**Always pass `--cli`** — without it, the inspector launches a web UI server and blocks indefinitely waiting for a
+browser connection. The `--cli` flag routes to the headless CLI mode required for automated testing.
 
 ### Step 5: Discover Available Tools
 
 List the tools the server exposes. This confirms the binary starts and the MCP protocol handshake works.
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport stdio \
-  -e <ENV_VAR_NAME>=<token> -- <path/to/binary> \
+npx @modelcontextprotocol/inspector --cli \
+  <path/to/binary> \
+  -e <ENV_VAR_NAME>=<token> \
   --method tools/list
 ```
 
 Replace `<ENV_VAR_NAME>` with whatever the server reads (e.g., `KAGI_API_KEY`), and `<path/to/binary>` with the compiled
-binary path.
+binary path. The `--transport stdio` flag is unnecessary — the inspector auto-detects stdio from command targets.
 
 ### Common CLI Mistakes
 
-**Rule:** Everything before `--` is for the inspector. Everything after `--` is the server command.
+**Rule:** In inspector v2.0.0+, the target (server command) is a **positional argument** that comes **before** the
+options. Do not use `--` to separate the inspector options from the server command — the `--` separator is not
+supported and causes the target to be missed.
+
+**❌ WRONG — Using `--` to separate options from the target (inspector v2.0.0+):**
+
+```bash
+npx @modelcontextprotocol/inspector --cli --transport stdio \
+  -e KAGI_API_KEY=$TOKEN -- ./target/release/kagi-mcp \
+  --method tools/list
+```
+
+This fails with `spawn --transport ENOENT` or `spawn -e ENOENT` because `--` and the flags after it are not parsed
+correctly.
 
 **❌ WRONG — Using `--params` (this is not valid inspector syntax):**
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport stdio \
-  -e KAGI_API_KEY=$TOKEN -- ./target/release/kagi-mcp \
+npx @modelcontextprotocol/inspector --cli \
+  ./target/release/kagi-mcp \
+  -e KAGI_API_KEY=$TOKEN \
   --params '{"name":"search","arguments":{"query":"test"}}'
 ```
 
-**❌ WRONG — `-e` after `--` (env vars are inspector flags, not server flags):**
+**❌ WRONG — `-e` placed before the target (env vars are inspector options, but the target must come first):**
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport stdio \
-  -- ./target/release/kagi-mcp \
+npx @modelcontextprotocol/inspector --cli \
   -e KAGI_API_KEY=$TOKEN \
+  ./target/release/kagi-mcp \
   --method tools/list
 ```
 
-**✅ CORRECT:**
+**✅ CORRECT — Target first, then options:**
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport stdio \
-  -e KAGI_API_KEY=$TOKEN -- ./target/release/kagi-mcp \
+npx @modelcontextprotocol/inspector --cli \
+  ./target/release/kagi-mcp \
+  -e KAGI_API_KEY=$TOKEN \
   --method tools/list
 ```
 
@@ -127,24 +147,23 @@ Pass this directory to the server via the cache-dir flag or environment variable
 inspector invocation in this session.
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport stdio \
+npx @modelcontextprotocol/inspector --cli \
+  ./target/release/kagi-mcp --cache-dir "$TEST_DIR" \
   -e KAGI_API_KEY=$TOKEN \
-  -- ./target/release/kagi-mcp \
-  --cache-dir "$TEST_DIR" \
   --method tools/list
 ```
 
 If the server uses an environment variable for the cache directory instead of a flag, pass it via `-e`:
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport stdio \
+npx @modelcontextprotocol/inspector --cli \
+  ./target/release/kagi-mcp \
   -e KAGI_API_KEY=$TOKEN \
   -e KAGI_CACHE_DIR="$TEST_DIR" \
-  -- ./target/release/kagi-mcp \
   --method tools/list
 ```
 
-### Step 6: Verify Logging After Tests
+### Step 7: Verify Logging After Tests
 
 Once all tests are complete, inspect the contents of `$TEST_DIR`:
 
@@ -173,14 +192,18 @@ For each tool, determine which tests apply by checking its schema:
 ### Decision Tree
 
 1. **Does the tool have required parameters?**
-    - Test: Omit one required parameter → expect error `-32602` (Invalid params).
+    - Test: Omit one required parameter → expect `isError: true` with a text content block describing the missing
+      field (e.g., `"failed to deserialize parameters: missing field \`query\`"`). The server returns tool errors as
+      content, not as JSON-RPC error codes.
 
 2. **Does the tool accept `output_format`?**
     - Test: Call with `output_format=markdown` → expect markdown content.
     - Test: Call with `output_format=json` → expect JSON content.
 
 3. **Does the tool accept URLs or domains?**
-    - Test: Pass `192.168.1.1` or `10.0.0.1` → expect rejection (SSRF guard).
+    - Test: Pass `https://192.168.1.1` or `https://10.0.0.1` → expect rejection (SSRF guard). Use the `https://`
+      scheme so the HTTPS scheme check passes and the private-IP guard is actually exercised. Passing `http://` will
+      be rejected for the wrong reason (scheme check fires before the IP check).
 
 4. **Does the tool have a `workflow` parameter?**
     - Test: Each documented workflow value (images, news, videos, podcasts).
@@ -197,8 +220,9 @@ For each tool, determine which tests apply by checking its schema:
 ### Syntax for Calling a Tool
 
 ```bash
-npx @modelcontextprotocol/inspector --cli --transport stdio \
-  -e <ENV_VAR_NAME>=<token> -- <path/to/binary> \
+npx @modelcontextprotocol/inspector --cli \
+  <path/to/binary> \
+  -e <ENV_VAR_NAME>=<token> \
   --method tools/call \
   --tool-name <tool-name> \
   --tool-arg <param1>=<value1> \
@@ -224,16 +248,38 @@ npx @modelcontextprotocol/inspector --cli --transport stdio \
 }
 ```
 
-**Parameter error:**
+**Parameter error (returned as tool content):**
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "failed to deserialize parameters: missing field `query`"
+    }
+  ],
+  "isError": true
+}
+```
+
+**Validation error (returned as a top-level JSON-RPC error object):**
+
+The server returns a JSON-RPC protocol error. The `code` is the standard JSON-RPC
+error code — `-32602` for invalid params (e.g., page-count violations) and `-32600`
+for invalid request (e.g., URL/SSRF validation failures):
 
 ```json
 {
   "error": {
     "code": -32602,
-    "message": "..."
+    "message": "Pages validation failed: Pages must be between 1 and 10, got 0"
   }
 }
 ```
+
+> **Note:** The inspector CLI may wrap protocol errors as `{"error":{"code":"error","message":"..."}}`
+> in its terminal output. The underlying JSON-RPC response uses the numeric codes shown above.
+> Assert against the `message` field, not the `code` field, for portability across inspector versions.
 
 **Internal error (opaque, indicates a bug):**
 
