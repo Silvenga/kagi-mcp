@@ -23,6 +23,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{stdin, stdout};
 use tokio::net::TcpListener;
+use tokio::signal::ctrl_c;
+#[cfg(unix)]
+use tokio::signal::unix::{signal, SignalKind};
+use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -92,8 +96,17 @@ async fn main() -> anyhow::Result<()> {
     match config.transport {
         TransportMode::Stdio => {
             let transport = (stdin(), stdout());
-            let service = server.serve(transport).await?;
-            service.waiting().await?;
+            let ct = CancellationToken::new();
+            let service = server.serve_with_ct(transport, ct.clone()).await?;
+            tokio::select! {
+                result = service.waiting() => {
+                    result?;
+                }
+                _ = shutdown_signal() => {
+                    tracing::info!("shutdown signal received, stopping stdio server");
+                    drop(ct);
+                }
+            }
         }
         TransportMode::StreamableHttp => {
             let addr: SocketAddr = config.bind.parse()?;
@@ -106,9 +119,33 @@ async fn main() -> anyhow::Result<()> {
                 http_config,
             );
             let app = Router::new().route_service("/mcp", service);
-            axum::serve(listener, app).await?;
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
         }
     }
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let interrupt = async {
+        ctrl_c().await.expect("installing Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal(SignalKind::terminate())
+            .expect("installing SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = interrupt => {},
+        _ = terminate => {},
+    }
 }
