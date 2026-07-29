@@ -262,16 +262,24 @@ npx @modelcontextprotocol/inspector --cli \
 }
 ```
 
-**Validation error (returned as a top-level error object):**
+**Validation error (returned as a top-level JSON-RPC error object):**
+
+The server returns a JSON-RPC protocol error. The `code` is the standard JSON-RPC
+error code — `-32602` for invalid params (e.g., page-count violations) and `-32600`
+for invalid request (e.g., URL/SSRF validation failures):
 
 ```json
 {
   "error": {
-    "code": "error",
+    "code": -32602,
     "message": "Pages validation failed: Pages must be between 1 and 10, got 0"
   }
 }
 ```
+
+> **Note:** The inspector CLI may wrap protocol errors as `{"error":{"code":"error","message":"..."}}`
+> in its terminal output. The underlying JSON-RPC response uses the numeric codes shown above.
+> Assert against the `message` field, not the `code` field, for portability across inspector versions.
 
 **Internal error (opaque, indicates a bug):**
 
