@@ -1,6 +1,6 @@
 use super::ellipsis::collapse_snippet_ellipses;
 use super::text_helpers::{
-    decode_entities, normalize_title_whitespace, strip_html_tags, trim_iso_date,
+    decode_entities, dedup_passages, normalize_title_whitespace, strip_html_tags, trim_iso_date,
 };
 use crate::format::FormatError;
 use askama::Template;
@@ -143,7 +143,9 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                                 title: format_title(&r.title),
                                 url: r.url.clone(),
                                 snippet: r.snippet.as_ref().map(|s| {
-                                    decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s)))
+                                    decode_entities(&dedup_passages(&collapse_snippet_ellipses(
+                                        &strip_html_tags(s),
+                                    )))
                                 }),
                                 time: r.time.as_ref().map(|t| trim_iso_date(t)),
                                 paywalled,
@@ -222,7 +224,9 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                         question: decode_entities(&normalize_title_whitespace(question)),
                         url: r.url.clone(),
                         snippet: r.snippet.as_ref().map(|s| {
-                            decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s)))
+                            decode_entities(&dedup_passages(&collapse_snippet_ellipses(
+                                &strip_html_tags(s),
+                            )))
                         }),
                     }
                 })
@@ -238,7 +242,9 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                 .iter()
                 .filter_map(|r| {
                     r.snippet.as_ref().map(|s| DirectAnswerItem {
-                        snippet: decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s))),
+                        snippet: decode_entities(&dedup_passages(&collapse_snippet_ellipses(
+                            &strip_html_tags(s),
+                        ))),
                     })
                 })
                 .collect()
@@ -270,7 +276,9 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                         title: format_title(&r.title),
                         url: r.url.clone(),
                         snippet: r.snippet.as_ref().map(|s| {
-                            decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s)))
+                            decode_entities(&dedup_passages(&collapse_snippet_ellipses(
+                                &strip_html_tags(s),
+                            )))
                         }),
                         properties,
                     }
@@ -300,7 +308,9 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                 .iter()
                 .filter_map(|r| {
                     r.snippet.as_ref().map(|s| WeatherItem {
-                        snippet: decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s))),
+                        snippet: decode_entities(&dedup_passages(&collapse_snippet_ellipses(
+                            &strip_html_tags(s),
+                        ))),
                     })
                 })
                 .collect()
@@ -1162,6 +1172,27 @@ mod tests {
                 time: None,
                 image: None,
                 props: Some(serde_json::json!({"question": "What is Paris known for?"})),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response).unwrap());
+    }
+
+    #[test]
+    fn when_search_has_consecutive_duplicate_passages_then_should_dedup() {
+        let dup_passage = "<strong>Paris</strong>, city and capital of <strong>France</strong>, \
+             located along the Seine River, in the north-central part of the country. \
+             <strong>Paris</strong> is one of the world's most important and attractive \
+             cities, famed for its gastronomy, haute couture, painting, literature, and \
+             intellectual community. Learn more about <strong>Paris</strong> in this article.";
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://www.britannica.com/place/Paris".to_owned(),
+                title: Some("<strong>Paris</strong>".to_owned()),
+                snippet: Some(format!("{dup_passage} ... {dup_passage}")),
+                time: None,
+                image: None,
+                props: None,
             }]),
             ..empty_search_data()
         });

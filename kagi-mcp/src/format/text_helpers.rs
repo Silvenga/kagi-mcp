@@ -12,6 +12,27 @@ pub fn strip_html_tags(s: &str) -> String {
     HTML_TAG_RE.replace_all(s, "").into_owned()
 }
 
+/// Drop consecutive duplicate passages separated by ` ... `, keeping non-adjacent repeats.
+pub fn dedup_passages(s: &str) -> String {
+    if !s.contains(" ... ") {
+        return s.to_owned();
+    }
+    let passages: Vec<&str> = s.split(" ... ").collect();
+    if passages.len() <= 1 {
+        return s.to_owned();
+    }
+    let mut kept: Vec<&str> = Vec::with_capacity(passages.len());
+    let mut prev_key: Option<String> = None;
+    for &passage in &passages {
+        let key = normalize_title_whitespace(passage).to_lowercase();
+        if prev_key.as_deref() != Some(key.as_str()) {
+            kept.push(passage);
+            prev_key = Some(key);
+        }
+    }
+    kept.join(" ... ")
+}
+
 pub fn decode_entities(s: &str) -> String {
     if !s.contains('&') {
         return s.to_owned();
@@ -125,6 +146,77 @@ mod tests {
                 r#"<span data-wiki-article="/wiki/X" data-wiki-locale="en">word</span>"#
             ),
             "word",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_exact_consecutive_duplicate_then_should_drop_second() {
+        assert_eq!(
+            dedup_passages(
+                "Paris, city and capital of France. ... Paris, city and capital of France."
+            ),
+            "Paris, city and capital of France.",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_no_ellipsis_then_should_return_unchanged() {
+        assert_eq!(
+            dedup_passages("single passage no separator"),
+            "single passage no separator",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_distinct_passages_then_should_preserve_all() {
+        assert_eq!(
+            dedup_passages("first passage ... second passage ... third passage"),
+            "first passage ... second passage ... third passage",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_non_adjacent_duplicate_then_should_preserve_both() {
+        assert_eq!(
+            dedup_passages("same fact ... different context ... same fact"),
+            "same fact ... different context ... same fact",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_whitespace_difference_then_should_treat_as_duplicate() {
+        assert_eq!(
+            dedup_passages("Paris,  city  of  France. ... Paris, city of France."),
+            "Paris,  city  of  France.",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_case_difference_then_should_treat_as_duplicate() {
+        assert_eq!(
+            dedup_passages("Paris is great. ... PARIS IS GREAT."),
+            "Paris is great.",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_single_separator_then_should_preserve_both() {
+        assert_eq!(
+            dedup_passages("first ... ... second"),
+            "first ... ... second",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_empty_then_should_return_empty() {
+        assert_eq!(dedup_passages(""), "");
+    }
+
+    #[test]
+    fn when_dedup_passages_preserves_original_whitespace_in_kept_passage() {
+        assert_eq!(
+            dedup_passages("Paris,  city of France. ... Paris,  city of France."),
+            "Paris,  city of France.",
         );
     }
 
