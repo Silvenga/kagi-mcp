@@ -2,10 +2,12 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_appender::rolling::daily;
+use tracing_appender::rolling::{daily, RollingFileAppender, RollingWriter};
 use tracing_subscriber::fmt;
+use tracing_subscriber::fmt::writer::MakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
@@ -15,8 +17,14 @@ const DEFAULT_LOG_RETENTION_DAYS: u64 = 30;
 /// The result of building a subscriber — contains the guard and metadata about the layers.
 #[derive(Debug)]
 pub struct SubscriberLayers {
-    /// The non-blocking writer guard that must be kept alive for the duration of logging.
-    pub guard: WorkerGuard,
+    /// The non-blocking writer guard.
+    ///
+    /// `Some` for the streamable-http transport, where a long-lived process benefits from
+    /// non-blocking writes. `None` for stdio, which uses a synchronous appender instead (see
+    /// [`build_subscriber`]) so that every event is flushed before the short-lived process
+    /// exits — the non-blocking worker can be starved during rapid stdio teardown and drop
+    /// buffered events.
+    pub guard: Option<WorkerGuard>,
     /// Whether the file layer has ANSI escape codes disabled.
     pub file_layer_ansi_enabled: bool,
     /// Whether a stdout layer was added (true for StreamableHttp, false for Stdio).
@@ -28,8 +36,12 @@ pub struct SubscriberLayers {
 /// The cache directory is created if it does not exist. Returns an error when the directory
 /// cannot be created.
 ///
-/// When `is_streamable_http` is true, a stdout layer is added alongside the file layer.
-/// When false, only the file layer is used (appropriate for stdio transport).
+/// When `is_streamable_http` is true, a stdout layer is added alongside the file layer, and a
+/// non-blocking file appender is used (a long-lived process tolerates deferred flushes).
+/// When false, only the file layer is used (appropriate for stdio transport) backed by a
+/// synchronous appender. The stdio transport spawns a fresh process per request, so a
+/// non-blocking appender's background worker can be starved during teardown and lose events;
+/// a synchronous writer flushes on every event instead.
 pub fn build_subscriber(
     is_streamable_http: bool,
     cache_dir: &Path,
@@ -43,17 +55,16 @@ pub fn build_subscriber(
 
     cleanup_old_logs(cache_dir, DEFAULT_LOG_RETENTION_DAYS);
 
-    let appender = daily(cache_dir, "kagi-mcp.log");
-    let (non_blocking, guard) = tracing_appender::non_blocking(appender);
     let pid = process::id();
-
-    let file_layer = fmt::layer()
-        .with_ansi(false)
-        .with_writer(move || PidLineWriter::new(pid, non_blocking.clone()));
 
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
-    let has_stdout_layer = if is_streamable_http {
+    if is_streamable_http {
+        let appender = daily(cache_dir, "kagi-mcp.log");
+        let (non_blocking, guard) = tracing_appender::non_blocking(appender);
+        let file_layer = fmt::layer()
+            .with_ansi(false)
+            .with_writer(move || PidLineWriter::new(pid, non_blocking.clone()));
         let stdout_layer = fmt::layer()
             .with_ansi(false)
             .with_writer(move || PidLineWriter::new(pid, io::stdout()));
@@ -62,20 +73,27 @@ pub fn build_subscriber(
             .with(file_layer)
             .with(stdout_layer)
             .try_init();
-        true
+        Ok(SubscriberLayers {
+            guard: Some(guard),
+            file_layer_ansi_enabled: false,
+            has_stdout_layer: true,
+        })
     } else {
+        let appender = Arc::new(daily(cache_dir, "kagi-mcp.log"));
+        let file_layer = fmt::layer().with_ansi(false).with_writer(SyncPidAppender {
+            appender,
+            prefix: format!("[pid={pid}] ").into_bytes(),
+        });
         let _ = tracing_subscriber::registry()
             .with(filter)
             .with(file_layer)
             .try_init();
-        false
-    };
-
-    Ok(SubscriberLayers {
-        guard,
-        file_layer_ansi_enabled: false,
-        has_stdout_layer,
-    })
+        Ok(SubscriberLayers {
+            guard: None,
+            file_layer_ansi_enabled: false,
+            has_stdout_layer: false,
+        })
+    }
 }
 
 fn cleanup_old_logs(log_dir: &Path, max_age_days: u64) {
@@ -111,6 +129,23 @@ struct PidLineWriter<W: Write> {
     prefix: Vec<u8>,
     buf: Vec<u8>,
     inner: W,
+}
+
+struct SyncPidAppender {
+    appender: Arc<RollingFileAppender>,
+    prefix: Vec<u8>,
+}
+
+impl<'a> MakeWriter<'a> for SyncPidAppender {
+    type Writer = PidLineWriter<RollingWriter<'a>>;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        PidLineWriter {
+            prefix: self.prefix.clone(),
+            buf: Vec::new(),
+            inner: self.appender.make_writer(),
+        }
+    }
 }
 
 impl<W: Write> PidLineWriter<W> {
