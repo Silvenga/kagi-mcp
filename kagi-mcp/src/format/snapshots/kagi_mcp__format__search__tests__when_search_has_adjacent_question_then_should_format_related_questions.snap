@@ -4,5 +4,5 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Related Questions
 
-1. **What is the meaning of life?**
+1. What is the meaning of life?
     - [Answer](https://example.com/answer): The answer is 42.

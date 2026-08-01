@@ -4,6 +4,6 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Infobox
 
-**[Plain Info](https://example.com/plain)**
+[Plain Info](https://example.com/plain)
 
 Just text.

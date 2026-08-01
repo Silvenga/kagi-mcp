@@ -4,5 +4,5 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Listicles
 
-1. **[Top 10 List](https://example.com/top10)**
+1. [Top 10 List](https://example.com/top10)
    - Published: 2024-05-01

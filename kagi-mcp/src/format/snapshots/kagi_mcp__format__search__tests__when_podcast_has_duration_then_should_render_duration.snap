@@ -4,6 +4,6 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Podcasts
 
-1. **[Great Podcast](https://example.com/podcast)**
+1. [Great Podcast](https://example.com/podcast)
    - Snippet: An amazing episode.
    - Duration: 1:10:14

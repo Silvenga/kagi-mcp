@@ -4,7 +4,7 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Infobox
 
-**[Place Name](https://example.com/place)**
+[Place Name](https://example.com/place)
 
 Country: USA
 Population: 8M

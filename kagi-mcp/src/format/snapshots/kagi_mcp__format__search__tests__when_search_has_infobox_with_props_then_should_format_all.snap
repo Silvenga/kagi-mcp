@@ -4,7 +4,7 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Infobox
 
-**[Entity Name](https://example.com/entity)**
+[Entity Name](https://example.com/entity)
 
 A well-known entity.
 

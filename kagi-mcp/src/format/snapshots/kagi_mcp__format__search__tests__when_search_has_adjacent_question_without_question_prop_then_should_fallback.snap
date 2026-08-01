@@ -4,5 +4,5 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Related Questions
 
-1. **Unknown Question**
+1. Unknown Question
     - [Answer](https://example.com/faq): Some answer text.

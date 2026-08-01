@@ -4,5 +4,5 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Images
 
-1. **[Image No Size](https://example.com/page)**
+1. [Image No Size](https://example.com/page)
    - Image: https://example.com/img.jpg (?x?)

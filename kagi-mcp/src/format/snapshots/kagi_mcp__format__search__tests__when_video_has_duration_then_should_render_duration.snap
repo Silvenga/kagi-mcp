@@ -4,6 +4,6 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Videos
 
-1. **[Great Video](https://example.com/video)**
+1. [Great Video](https://example.com/video)
    - Snippet: An amazing video.
    - Duration: 45:30

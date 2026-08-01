@@ -4,5 +4,5 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Web Results
 
-1. **[Example](https://example.com)**
+1. [Example](https://example.com)
    - Published: 2024-03-15

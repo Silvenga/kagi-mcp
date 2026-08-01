@@ -4,6 +4,6 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Podcast Creators
 
-1. **[Creator One](https://example.com/creator1)**
+1. [Creator One](https://example.com/creator1)
    - Snippet: A great podcast creator.
    - Published: 2024-01-15

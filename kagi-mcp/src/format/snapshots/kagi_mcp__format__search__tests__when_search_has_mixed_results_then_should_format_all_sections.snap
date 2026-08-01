@@ -4,7 +4,7 @@ expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\
 ---
 ## Web Results
 
-1. **[Example](https://example.com)**
+1. [Example](https://example.com)
    - Snippet: This is an example.
 
 ## Weather
