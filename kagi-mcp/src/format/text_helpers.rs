@@ -1,3 +1,38 @@
+use std::sync::LazyLock;
+
+use regex::Regex;
+
+static HTML_TAG_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<[^>]+>").unwrap());
+
+/// Strip HTML tags (`<...>`) from a string, preserving text content.
+pub fn strip_html_tags(s: &str) -> String {
+    if !s.contains('<') {
+        return s.to_owned();
+    }
+    HTML_TAG_RE.replace_all(s, "").into_owned()
+}
+
+/// Drop consecutive duplicate passages separated by ` ... `, keeping non-adjacent repeats.
+pub fn dedup_passages(s: &str) -> String {
+    if !s.contains(" ... ") {
+        return s.to_owned();
+    }
+    let passages: Vec<&str> = s.split(" ... ").collect();
+    if passages.len() <= 1 {
+        return s.to_owned();
+    }
+    let mut kept: Vec<&str> = Vec::with_capacity(passages.len());
+    let mut prev_key: Option<String> = None;
+    for &passage in &passages {
+        let key = normalize_title_whitespace(passage).to_lowercase();
+        if prev_key.as_deref() != Some(key.as_str()) {
+            kept.push(passage);
+            prev_key = Some(key);
+        }
+    }
+    kept.join(" ... ")
+}
+
 pub fn decode_entities(s: &str) -> String {
     if !s.contains('&') {
         return s.to_owned();
@@ -21,6 +56,169 @@ pub fn trim_iso_date(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn when_strip_tags_with_strong_then_should_remove() {
+        assert_eq!(strip_html_tags("<strong>2026</strong>"), "2026");
+    }
+
+    #[test]
+    fn when_strip_tags_with_anchor_and_attributes_then_should_remove_tag_keep_text() {
+        assert_eq!(
+            strip_html_tags(
+                r#"<a href="https://en.wikipedia.org/wiki/Paris" data-wiki-article="/wiki/Paris">Paris</a>"#
+            ),
+            "Paris",
+        );
+    }
+
+    #[test]
+    fn when_strip_tags_with_nested_then_should_remove_all_tags_keep_inner_text() {
+        assert_eq!(strip_html_tags("<a><strong>text</strong></a>"), "text",);
+    }
+
+    #[test]
+    fn when_strip_tags_with_self_closing_br_then_should_remove() {
+        assert_eq!(strip_html_tags("foo<br/>bar"), "foobar");
+    }
+
+    #[test]
+    fn when_strip_tags_with_no_angle_bracket_then_should_return_unchanged() {
+        assert_eq!(strip_html_tags("no tags here"), "no tags here");
+    }
+
+    #[test]
+    fn when_strip_tags_with_empty_then_should_return_empty() {
+        assert_eq!(strip_html_tags(""), "");
+    }
+
+    #[test]
+    fn when_strip_tags_with_text_only_inside_tags_then_should_preserve_text() {
+        assert_eq!(
+            strip_html_tags("<strong>Paris</strong>, city and capital of <strong>France</strong>"),
+            "Paris, city and capital of France",
+        );
+    }
+
+    #[test]
+    fn when_strip_tags_with_entities_in_text_then_should_preserve_undecoded() {
+        assert_eq!(
+            strip_html_tags("It&#39;s <strong>great</strong> &amp; amazing"),
+            "It&#39;s great &amp; amazing",
+        );
+    }
+
+    #[test]
+    fn when_strip_tags_with_entities_in_attribute_then_should_discard_with_tag() {
+        assert_eq!(
+            strip_html_tags(r#"<a href="/wiki/Beneficiary">heiress</a>"#),
+            "heiress",
+        );
+    }
+
+    #[test]
+    fn when_strip_tags_with_multiple_tags_in_sequence_then_should_remove_all() {
+        assert_eq!(
+            strip_html_tags("<b>foo</b> <i>bar</i> <u>baz</u>"),
+            "foo bar baz",
+        );
+    }
+
+    #[test]
+    fn when_strip_tags_with_unclosed_tag_at_end_then_should_preserve_unchanged() {
+        assert_eq!(strip_html_tags("text <unterminated"), "text <unterminated");
+    }
+
+    #[test]
+    fn when_strip_tags_with_trailing_angle_bracket_only_then_should_preserve() {
+        assert_eq!(strip_html_tags("3 < 5"), "3 < 5");
+    }
+
+    #[test]
+    fn when_strip_tags_with_only_tags_then_should_return_empty() {
+        assert_eq!(strip_html_tags("<strong></strong>"), "");
+    }
+
+    #[test]
+    fn when_strip_tags_with_data_attributes_then_should_remove_all_attributes() {
+        assert_eq!(
+            strip_html_tags(
+                r#"<span data-wiki-article="/wiki/X" data-wiki-locale="en">word</span>"#
+            ),
+            "word",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_exact_consecutive_duplicate_then_should_drop_second() {
+        assert_eq!(
+            dedup_passages(
+                "Paris, city and capital of France. ... Paris, city and capital of France."
+            ),
+            "Paris, city and capital of France.",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_no_ellipsis_then_should_return_unchanged() {
+        assert_eq!(
+            dedup_passages("single passage no separator"),
+            "single passage no separator",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_distinct_passages_then_should_preserve_all() {
+        assert_eq!(
+            dedup_passages("first passage ... second passage ... third passage"),
+            "first passage ... second passage ... third passage",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_non_adjacent_duplicate_then_should_preserve_both() {
+        assert_eq!(
+            dedup_passages("same fact ... different context ... same fact"),
+            "same fact ... different context ... same fact",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_whitespace_difference_then_should_treat_as_duplicate() {
+        assert_eq!(
+            dedup_passages("Paris,  city  of  France. ... Paris, city of France."),
+            "Paris,  city  of  France.",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_case_difference_then_should_treat_as_duplicate() {
+        assert_eq!(
+            dedup_passages("Paris is great. ... PARIS IS GREAT."),
+            "Paris is great.",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_single_separator_then_should_preserve_both() {
+        assert_eq!(
+            dedup_passages("first ... ... second"),
+            "first ... ... second",
+        );
+    }
+
+    #[test]
+    fn when_dedup_passages_with_empty_then_should_return_empty() {
+        assert_eq!(dedup_passages(""), "");
+    }
+
+    #[test]
+    fn when_dedup_passages_preserves_original_whitespace_in_kept_passage() {
+        assert_eq!(
+            dedup_passages("Paris,  city of France. ... Paris,  city of France."),
+            "Paris,  city of France.",
+        );
+    }
 
     #[test]
     fn when_decode_entities_with_known_entities_then_should_decode_them() {

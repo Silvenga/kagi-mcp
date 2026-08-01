@@ -1,0 +1,23 @@
+---
+source: kagi-mcp/src/format/search.rs
+expression: "format_search_markdown(&response).unwrap().replace(\"\\r\\n\", \"\\n\")"
+---
+## Web Results
+
+1. [Paris](https://en.wikipedia.org/wiki/Paris)
+   - Snippet: Paris, city and capital of France, located along the Seine River.
+
+## Related Questions
+
+1. What is Paris known for?
+    - [Answer](https://example.com/answer): Paris is known for its gastronomy and haute couture.
+
+## Infobox
+
+[Paris](https://en.wikipedia.org/wiki/Paris)
+
+Paris, Not France is a 2008 documentary film following American heiress and entertainer Paris Hilton.
+
+Country: France
+Founded: 3rd century BC
+Population: 2.1M
