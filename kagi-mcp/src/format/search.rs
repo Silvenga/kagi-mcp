@@ -1,5 +1,7 @@
 use super::ellipsis::collapse_snippet_ellipses;
-use super::text_helpers::{decode_entities, normalize_title_whitespace, trim_iso_date};
+use super::text_helpers::{
+    decode_entities, normalize_title_whitespace, strip_html_tags, trim_iso_date,
+};
 use crate::format::FormatError;
 use askama::Template;
 use kagi_api::{SearchResponse, SearchResult};
@@ -92,7 +94,7 @@ fn extract_string_prop(props: &Option<serde_json::Value>, key: &str) -> Option<S
 fn format_title(title: &Option<String>) -> String {
     title
         .as_deref()
-        .map(|t| decode_entities(&normalize_title_whitespace(t)))
+        .map(|t| decode_entities(&normalize_title_whitespace(&strip_html_tags(t))))
         .unwrap_or_else(|| "(untitled)".to_owned())
 }
 
@@ -140,10 +142,9 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                                 index: i + 1,
                                 title: format_title(&r.title),
                                 url: r.url.clone(),
-                                snippet: r
-                                    .snippet
-                                    .as_ref()
-                                    .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+                                snippet: r.snippet.as_ref().map(|s| {
+                                    decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s)))
+                                }),
                                 time: r.time.as_ref().map(|t| trim_iso_date(t)),
                                 paywalled,
                                 ai_content,
@@ -220,10 +221,9 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                         index: i + 1,
                         question: decode_entities(&normalize_title_whitespace(question)),
                         url: r.url.clone(),
-                        snippet: r
-                            .snippet
-                            .as_ref()
-                            .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+                        snippet: r.snippet.as_ref().map(|s| {
+                            decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s)))
+                        }),
                     }
                 })
                 .collect()
@@ -238,7 +238,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                 .iter()
                 .filter_map(|r| {
                     r.snippet.as_ref().map(|s| DirectAnswerItem {
-                        snippet: decode_entities(&collapse_snippet_ellipses(s)),
+                        snippet: decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s))),
                     })
                 })
                 .collect()
@@ -259,7 +259,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                                 for (key, value) in obj {
                                     let val_str = value
                                         .as_str()
-                                        .map(|s| s.to_owned())
+                                        .map(|s| decode_entities(&strip_html_tags(s)))
                                         .unwrap_or_else(|| value.to_string());
                                     properties.push((key.clone(), val_str));
                                 }
@@ -269,10 +269,9 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                     InfoboxItem {
                         title: format_title(&r.title),
                         url: r.url.clone(),
-                        snippet: r
-                            .snippet
-                            .as_ref()
-                            .map(|s| decode_entities(&collapse_snippet_ellipses(s))),
+                        snippet: r.snippet.as_ref().map(|s| {
+                            decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s)))
+                        }),
                         properties,
                     }
                 })
@@ -301,7 +300,7 @@ pub fn format_search_markdown(response: &SearchResponse) -> Result<String, Forma
                 .iter()
                 .filter_map(|r| {
                     r.snippet.as_ref().map(|s| WeatherItem {
-                        snippet: decode_entities(&collapse_snippet_ellipses(s)),
+                        snippet: decode_entities(&collapse_snippet_ellipses(&strip_html_tags(s))),
                     })
                 })
                 .collect()
@@ -1109,6 +1108,60 @@ mod tests {
                     "paywalled": true,
                     "language": "de"
                 })),
+            }]),
+            ..empty_search_data()
+        });
+        assert_snapshot!(format_search_markdown(&response).unwrap());
+    }
+
+    #[test]
+    fn when_search_has_html_tags_in_title_snippet_and_infobox_then_should_strip_all() {
+        let response = make_response(SearchData {
+            search: Some(vec![SearchResult {
+                url: "https://en.wikipedia.org/wiki/Paris".to_owned(),
+                title: Some("<strong>Paris</strong>".to_owned()),
+                snippet: Some(
+                    "<strong>Paris</strong>, city and capital of <strong>France</strong>, \
+                     located along the Seine River."
+                        .to_owned(),
+                ),
+                time: None,
+                image: None,
+                props: None,
+            }]),
+            infobox: Some(vec![SearchResult {
+                url: "https://en.wikipedia.org/wiki/Paris".to_owned(),
+                title: Some("<strong>Paris</strong>".to_owned()),
+                snippet: Some(
+                    "Paris, Not France is a 2008 documentary film following American \
+                     <a href=\"https://en.wikipedia.org/wiki/Beneficiary\" \
+                     data-wiki-article=\"/wiki/Beneficiary\" \
+                     data-wiki-locale=\"en\">heiress</a> and \
+                     <a href=\"https://en.wikipedia.org/wiki/Entertainer\">entertainer</a> \
+                     <a href=\"https://en.wikipedia.org/wiki/Paris_Hilton\">Paris Hilton</a>."
+                        .to_owned(),
+                ),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({
+                    "infobox": {
+                        "Country": "<a href=\"/wiki/France\">France</a>",
+                        "Population": "2.1M",
+                        "Founded": "<strong>3rd</strong> century BC"
+                    }
+                })),
+            }]),
+            adjacent_question: Some(vec![SearchResult {
+                url: "https://example.com/answer".to_owned(),
+                title: Some("<strong>What is Paris known for?</strong>".to_owned()),
+                snippet: Some(
+                    "Paris is known for its <strong>gastronomy</strong> and \
+                     <strong>haute couture</strong>."
+                        .to_owned(),
+                ),
+                time: None,
+                image: None,
+                props: Some(serde_json::json!({"question": "What is Paris known for?"})),
             }]),
             ..empty_search_data()
         });
