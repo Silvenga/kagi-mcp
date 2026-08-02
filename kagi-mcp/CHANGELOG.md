@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.4.2...kagi-mcp-v0.5.0) (2026-08-01)
+
+
+### Features
+
+* **format:** optimize search markdown output for agent consumption ([#119](https://github.com/Silvenga/kagi-mcp/issues/119)) ([b28c496](https://github.com/Silvenga/kagi-mcp/commit/b28c4961ee85c434f3d64828e095751282a59fce))
+
+
+### Bug Fixes
+
+* handle SIGTERM/SIGINT for graceful container shutdown ([#117](https://github.com/Silvenga/kagi-mcp/issues/117)) ([f028f50](https://github.com/Silvenga/kagi-mcp/commit/f028f50f8c5a1e6aa9d95976296628fb6fa59227))
+
 ## [0.4.2](https://github.com/Silvenga/kagi-mcp/compare/kagi-mcp-v0.4.1...kagi-mcp-v0.4.2) (2026-07-23)
 
 
